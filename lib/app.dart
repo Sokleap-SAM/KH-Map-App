@@ -1,9 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:kh_map_app/screens/map_screen.dart';
+import 'package:kh_map_app/screens/bookmark_screen.dart';
+import 'package:kh_map_app/screens/contribute_screen.dart';
+import 'package:kh_map_app/screens/account_screen.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
 import 'utils/theme/theme.dart';
 
-class App extends StatelessWidget {
+class App extends StatefulWidget {
   const App({super.key});
+
+  @override
+  State<App> createState() => _AppState();
+}
+
+class _AppState extends State<App> {
+  int _currentIndex = 0;
+
+  final List<Widget> _screens = const [
+    MapScreen(),
+    BookmarkScreen(),
+    ContributeScreen(),
+    AccountScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -13,13 +31,38 @@ class App extends StatelessWidget {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       home: Scaffold(
-        body: Center(
-          child: Text(
-            'Clicked',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.clickedTextColor),
-          ),
+        body: IndexedStack(index: _currentIndex, children: _screens),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (index) => setState(() => _currentIndex = index),
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: AppColors.primaryColor,
+          selectedItemColor: AppColors.secondaryColor,
+          unselectedItemColor: AppColors.secondaryTextColor,
+          selectedFontSize: 12,
+          unselectedFontSize: 12,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.location_on_outlined),
+              activeIcon: Icon(Icons.location_on),
+              label: 'ផែនទី',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.bookmark_border),
+              activeIcon: Icon(Icons.bookmark),
+              label: 'ចំណាំ',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.add_circle_outline),
+              activeIcon: Icon(Icons.add_circle),
+              label: 'ចូលរួម',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: 'គណនី',
+            ),
+          ],
         ),
       ),
     );
