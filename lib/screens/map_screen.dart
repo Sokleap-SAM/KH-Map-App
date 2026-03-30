@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -10,33 +13,86 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  static const LatLng _defaultCenter = LatLng(11.5564, 104.9282);
-
   GoogleMapController? _mapController;
   LatLng? _currentPosition;
+  Set<Marker> _markers = {};
+  StreamSubscription<Position>? _positionSubscription;
+  bool _locationError = false;
+  bool _followUser = true;
 
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
+    _initLocationTracking();
   }
 
-  Future<void> _getCurrentLocation() async {
+  Future<void> _initLocationTracking() async {
     final hasPermission = await _handleLocationPermission();
-    if (!hasPermission) return;
+    if (!hasPermission) {
+      setState(() => _locationError = true);
+      return;
+    }
 
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
+    // Get initial position
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+        ),
+      );
+      print(
+        '📍 Initial position: lat=${position.latitude}, lng=${position.longitude}',
+      );
+      final latLng = LatLng(position.latitude, position.longitude);
+      setState(() {
+        _currentPosition = latLng;
+        _markers = {_buildCurrentLocationMarker(latLng)};
+      });
+    } catch (e) {
+      print('📍 Error getting initial position: $e');
+      setState(() => _locationError = true);
+      return;
+    }
 
-    setState(() {
-      _currentPosition = LatLng(position.latitude, position.longitude);
-    });
+    // Listen for continuous position updates
+    late LocationSettings locationSettings;
+    if (Platform.isAndroid) {
+      locationSettings = AndroidSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 0,
+        intervalDuration: const Duration(seconds: 1),
+      );
+    } else {
+      locationSettings = const LocationSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 0,
+      );
+    }
 
-    _mapController?.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(target: _currentPosition!, zoom: 15),
-      ),
+    _positionSubscription =
+        Geolocator.getPositionStream(
+          locationSettings: locationSettings,
+        ).listen((position) {
+          print(
+            '📍 Updated position: lat=${position.latitude}, lng=${position.longitude}',
+          );
+          final latLng = LatLng(position.latitude, position.longitude);
+          setState(() {
+            _currentPosition = latLng;
+            _markers = {_buildCurrentLocationMarker(latLng)};
+          });
+          if (_followUser) {
+            _mapController?.animateCamera(CameraUpdate.newLatLng(latLng));
+          }
+        });
+  }
+
+  Marker _buildCurrentLocationMarker(LatLng position) {
+    return Marker(
+      markerId: const MarkerId('current_location'),
+      position: position,
+      infoWindow: const InfoWindow(title: 'You are here'),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
     );
   }
 
@@ -54,31 +110,62 @@ class _MapScreenState extends State<MapScreen> {
     return true;
   }
 
+  void _centerOnUser() {
+    if (_currentPosition != null) {
+      _mapController?.animateCamera(CameraUpdate.newLatLng(_currentPosition!));
+      setState(() => _followUser = true);
+    }
+  }
+
   @override
   void dispose() {
+    _positionSubscription?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return GoogleMap(
-      initialCameraPosition: CameraPosition(
-        target: _currentPosition ?? _defaultCenter,
-        zoom: _currentPosition != null ? 15 : 12,
-      ),
-      onMapCreated: (controller) {
-        _mapController = controller;
-        if (_currentPosition != null) {
-          controller.animateCamera(
-            CameraUpdate.newCameraPosition(
-              CameraPosition(target: _currentPosition!, zoom: 15),
+    if (_locationError) {
+      return const Center(
+        child: Text('Location permission is required to use the map.'),
+      );
+    }
+
+    if (_currentPosition == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Stack(
+      children: [
+        GoogleMap(
+          initialCameraPosition: CameraPosition(
+            target: _currentPosition!,
+            zoom: 17,
+          ),
+          onMapCreated: (controller) {
+            _mapController = controller;
+          },
+          myLocationEnabled: true,
+          myLocationButtonEnabled: false,
+          onCameraMoveStarted: () {
+            // Stop auto-following when user manually drags the map
+            setState(() => _followUser = false);
+          },
+        ),
+        Positioned(
+          bottom: 24,
+          right: 16,
+          child: FloatingActionButton(
+            onPressed: _centerOnUser,
+            backgroundColor: Colors.white,
+            child: Icon(
+              _followUser ? Icons.my_location : Icons.location_searching,
+              color: _followUser ? Colors.blue : Colors.grey,
             ),
-          );
-        }
-      },
-      myLocationEnabled: true,
-      myLocationButtonEnabled: true,
+          ),
+        ),
+      ],
     );
   }
 }
