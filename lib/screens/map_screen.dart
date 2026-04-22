@@ -3,7 +3,18 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import '../models/place.dart';
+// import '../models/route_stop.dart';
+// import '../models/transit_route.dart';
 import '../providers/map_provider.dart';
+import '../providers/transit_provider.dart';
+import '../services/place_service.dart';
+import '../services/transit_service.dart';
+// import '../widgets/map/bus_markers_layer.dart';
+import '../widgets/map/locate_me_button.dart';
+import '../widgets/map/place_markers_layer.dart';
+// import '../widgets/map/transit_route_layer.dart';
+import '../widgets/map/user_location_marker_layer.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -14,12 +25,89 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
+  final PlaceService _placeService = PlaceService();
+  final TransitService _transitService = TransitService();
+
+  List<Place> _places = [];
+  bool _placesLoading = true;
+
+  // List<TransitRoute> _routes = [];
+  // Map<String, List<RouteStop>> _routeStops = {};
+  // Map<String, Color> _routeColors = {};
+
+  // static const List<Color> _routePalette = [
+  //   Colors.red,
+  //   Colors.blue,
+  //   Colors.green,
+  //   Colors.orange,
+  //   Colors.yellow,
+  //   Colors.purple,
+  //   Colors.cyan,
+  //   Colors.pink,
+  //   Colors.teal,
+  //   Colors.indigo,
+  // ];
 
   @override
   void initState() {
     super.initState();
     context.read<MapProvider>().init();
+    context.read<TransitProvider>().init();
+    _loadPlaces();
+    // _loadTransitRoutes();
   }
+
+  Future<void> _loadPlaces() async {
+    try {
+      final places = await _placeService.fetchPlaces();
+      if (mounted) {
+        setState(() {
+          _places = places;
+          _placesLoading = false;
+        });
+      }
+    } catch (e, stack) {
+      debugPrint('Failed to load places: $e\n$stack');
+      if (mounted) {
+        setState(() => _placesLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load places: $e'),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: () {
+                setState(() => _placesLoading = true);
+                _loadPlaces();
+              },
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  // Future<void> _loadTransitRoutes() async {
+  //   try {
+  //     final routes = await _transitService.fetchActiveRoutes();
+  //     final stopsMap = <String, List<RouteStop>>{};
+  //     final colors = <String, Color>{};
+  //     for (var i = 0; i < routes.length; i++) {
+  //       final route = routes[i];
+  //       final stops = await _transitService.fetchRouteStops(route.id);
+  //       stopsMap[route.id] = stops;
+  //       colors[route.id] = _routePalette[i % _routePalette.length];
+  //     }
+  //     if (mounted) {
+  //       setState(() {
+  //         _routes = routes;
+  //         _routeStops = stopsMap;
+  //         _routeColors = colors;
+  //       });
+  //     }
+  //   } catch (e) {
+  //     debugPrint('Failed to load transit routes: $e');
+  //   }
+  // }
 
   void _centerOnUser() {
     final provider = context.read<MapProvider>();
@@ -33,7 +121,45 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onMapTap(TapPosition tapPosition, LatLng latLng) {
-    print('Tapped: lat=${latLng.latitude}, lng=${latLng.longitude}');
+    debugPrint('Tapped: lat=${latLng.latitude}, lng=${latLng.longitude}');
+  }
+
+  void _showPlaceDetail(BuildContext context, Place place) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(place.name, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 4),
+            Text('Category: ${place.category?.name ?? 'Uncategorized'}'),
+            Text('Rating: ${place.averageRating?.toStringAsFixed(1) ?? 'N/A'}'),
+            if (place.photos.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 100,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: place.photos.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      place.photos[i],
+                      width: 120,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -65,7 +191,8 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
 
-    // Only show the current user's marker
+    // final transitProvider = context.watch<TransitProvider>();
+
     return Stack(
       children: [
         FlutterMap(
@@ -85,63 +212,25 @@ class _MapScreenState extends State<MapScreen> {
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.kh_map_app',
+              subdomains: const ['a', 'b', 'c'],
             ),
-            MarkerLayer(
-              markers: [
-                Marker(
-                  point: provider.currentPosition!,
-                  width: 40,
-                  height: 40,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Outer blue circle (accuracy ring)
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withAlpha(60), // 60/255 alpha
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      // Inner blue dot
-                      Container(
-                        width: 16,
-                        height: 16,
-                        decoration: const BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      // White border for the dot
-                      Container(
-                        width: 20,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            // TransitRouteLayer(
+            //   routes: _routes,
+            //   routeStops: _routeStops,
+            //   routeColors: _routeColors,
+            // ),
+            // BusMarkersLayer(
+            //   trips: transitProvider.trips,
+            //   routeColors: _routeColors,
+            // ),
+            PlaceMarkersLayer(places: _places, onTap: _showPlaceDetail),
+            UserLocationMarkerLayer(position: provider.currentPosition!),
           ],
         ),
-        Positioned(
-          bottom: 24,
-          right: 16,
-          child: FloatingActionButton(
-            onPressed: _centerOnUser,
-            backgroundColor: Colors.white,
-            child: Icon(
-              provider.followUser
-                  ? Icons.my_location
-                  : Icons.location_searching,
-              color: provider.followUser ? Colors.blue : Colors.grey,
-            ),
-          ),
+        LocateMeButton(
+          isLoading: _placesLoading,
+          followUser: provider.followUser,
+          onPressed: _centerOnUser,
         ),
       ],
     );
