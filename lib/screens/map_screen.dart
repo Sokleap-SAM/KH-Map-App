@@ -141,7 +141,23 @@ class _MapScreenState extends State<MapScreen> {
                   : Icons.location_searching,
               color: provider.followUser ? Colors.blue : Colors.grey,
             ),
-          ),
+            // TransitRouteLayer(
+            //   routes: _routes,
+            //   routeStops: _routeStops,
+            //   routeColors: _routeColors,
+            // ),
+            // BusMarkersLayer(
+            //   trips: transitProvider.trips,
+            //   routeColors: _routeColors,
+            // ),
+            PlaceMarkersLayer(places: _places, onTap: _showPlaceDetail),
+            UserLocationMarkerLayer(position: provider.currentPosition!),
+          ],
+        ),
+        LocateMeButton(
+          isLoading: _placesLoading,
+          followUser: provider.followUser,
+          onPressed: _centerOnUser,
         ),
       ],
     );
