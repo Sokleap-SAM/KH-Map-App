@@ -6,7 +6,6 @@ import 'package:kh_map_app/screens/account_screen.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
 import 'package:provider/provider.dart';
 import 'providers/map_provider.dart';
-// import 'providers/transit_provider.dart';
 import 'services/location_service.dart';
 import 'utils/theme/theme.dart';
 
@@ -31,8 +30,6 @@ class _AppState extends State<App> {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => MapProvider(LocationService()),
-      // child: ChangeNotifierProvider(
-      //   create: (_) => TransitProvider(),
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
