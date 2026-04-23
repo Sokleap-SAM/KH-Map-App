@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:kh_map_app/models/place.dart';
-import 'package:kh_map_app/widgets/map_screen/pin.dart';
-import 'package:kh_map_app/widgets/map_screen/searchBar.dart';
+import 'package:kh_map_app/models/route_stop.dart';
+import 'package:kh_map_app/models/transit_route.dart';
+import 'package:kh_map_app/providers/transit_provider.dart';
+import 'package:kh_map_app/widgets/map/bus_markers_layer.dart';
+import 'package:kh_map_app/widgets/map/transit_route_layer.dart';
+import 'package:kh_map_app/widgets/map_screen/Pin.dart';
+import 'package:kh_map_app/widgets/map_screen/SearchBar.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/map_provider.dart';
-// import '../providers/transit_provider.dart';
 import '../services/place_service.dart';
-// import '../services/transit_service.dart';
-// import '../widgets/map/bus_markers_layer.dart';
+import '../services/transit_service.dart';
 import '../widgets/map/locate_me_button.dart';
 import '../widgets/map/place_markers_layer.dart';
-// import '../widgets/map/transit_route_layer.dart';
 import '../widgets/map/user_location_marker_layer.dart';
 
 class MapScreen extends StatefulWidget {
@@ -26,35 +28,35 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final PlaceService _placeService = PlaceService();
-  // final TransitService _transitService = TransitService();
+  final TransitService _transitService = TransitService();
 
   List<Place> _places = [];
   bool _placesLoading = true;
 
-  // List<TransitRoute> _lineRoutes = [];
-  // Map<String, List<RouteStop>> _routeStops = {};
-  // Map<String, Color> _routeColors = {};
+  List<TransitRoute> _lineRoutes = [];
+  Map<String, List<RouteStop>> _routeStops = {};
+  Map<String, Color> _routeColors = {};
 
-  // static const List<Color> _routePalette = [
-  //   Colors.red,
-  //   Colors.blue,
-  //   Colors.green,
-  //   Colors.orange,
-  //   Colors.purple,
-  //   Colors.cyan,
-  //   Colors.pink,
-  //   Colors.teal,
-  //   Colors.indigo,
-  //   Colors.amber,
-  // ];
+  static const List<Color> _routePalette = [
+    Colors.red,
+    Colors.blue,
+    Colors.green,
+    Colors.orange,
+    Colors.purple,
+    Colors.cyan,
+    Colors.pink,
+    Colors.teal,
+    Colors.indigo,
+    Colors.amber,
+  ];
 
   @override
   void initState() {
     super.initState();
     context.read<MapProvider>().init();
-    // context.read<TransitProvider>().init();
+    context.read<TransitProvider>().init();
     _loadPlaces();
-    // _loadLineRoutes();
+    _loadLineRoutes();
   }
 
   Future<void> _loadPlaces() async {
@@ -86,32 +88,32 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // Future<void> _loadLineRoutes() async {
-  //   try {
-  //     final routes = await _transitService.fetchLineRoutes();
-  //     final stopsMap = <String, List<RouteStop>>{};
-  //     final colors = <String, Color>{};
-  //     for (var i = 0; i < routes.length; i++) {
-  //       final route = routes[i];
-  //       stopsMap[route.id] = await _transitService.fetchRouteStops(route.id);
-  //       colors[route.id] = _routePalette[i % _routePalette.length];
-  //     }
-  //     if (mounted) {
-  //       setState(() {
-  //         _lineRoutes = routes;
-  //         _routeStops = stopsMap;
-  //         _routeColors = colors;
-  //       });
-  //     }
-  //   } catch (e) {
-  //     debugPrint('Failed to load line routes: $e');
-  //     if (mounted) {
-  //       ScaffoldMessenger.of(context).showSnackBar(
-  //         SnackBar(content: Text('Failed to load bus lines: $e')),
-  //       );
-  //     }
-  //   }
-  // }
+  Future<void> _loadLineRoutes() async {
+    try {
+      final routes = await _transitService.fetchLineRoutes();
+      final stopsMap = <String, List<RouteStop>>{};
+      final colors = <String, Color>{};
+      for (var i = 0; i < routes.length; i++) {
+        final route = routes[i];
+        stopsMap[route.id] = await _transitService.fetchRouteStops(route.id);
+        colors[route.id] = _routePalette[i % _routePalette.length];
+      }
+      if (mounted) {
+        setState(() {
+          _lineRoutes = routes;
+          _routeStops = stopsMap;
+          _routeColors = colors;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load line routes: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load bus lines: $e')));
+      }
+    }
+  }
 
   void _centerOnUser() {
     final provider = context.read<MapProvider>();
@@ -228,6 +230,8 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
 
+    final transitProvider = context.watch<TransitProvider>();
+
     return Stack(
       children: [
         FlutterMap(
@@ -248,7 +252,15 @@ class _MapScreenState extends State<MapScreen> {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.kh_map_app',
             ),
-
+            TransitRouteLayer(
+              routes: _lineRoutes,
+              routeStops: _routeStops,
+              routeColors: _routeColors,
+            ),
+            BusMarkersLayer(
+              trips: transitProvider.trips,
+              routeColors: const {},
+            ),
             PlaceMarkersLayer(places: _places, onTap: _showPlaceDetail),
             UserLocationMarkerLayer(position: provider.currentPosition!),
           ],
@@ -268,15 +280,6 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
         ),
-        // TransitRouteLayer(
-        //   routes: _lineRoutes,
-        //   routeStops: _routeStops,
-        //   routeColors: _routeColors,
-        // ),
-        // BusMarkersLayer(
-        //   trips: transitProvider.trips,
-        //   routeColors: const {},
-        // )
         LocateMeButton(
           isLoading: _placesLoading,
           followUser: provider.followUser,
