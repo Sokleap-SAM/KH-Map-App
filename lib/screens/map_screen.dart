@@ -9,7 +9,7 @@ import '../models/place.dart';
 import '../providers/map_provider.dart';
 import '../providers/transit_provider.dart';
 import '../services/place_service.dart';
-import '../services/transit_service.dart';
+// import '../services/transit_service.dart';
 // import '../widgets/map/bus_markers_layer.dart';
 import '../widgets/map/locate_me_button.dart';
 import '../widgets/map/place_markers_layer.dart';
@@ -26,12 +26,12 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final PlaceService _placeService = PlaceService();
-  final TransitService _transitService = TransitService();
+  // final TransitService _transitService = TransitService();
 
   List<Place> _places = [];
   bool _placesLoading = true;
 
-  // List<TransitRoute> _routes = [];
+  // List<TransitRoute> _lineRoutes = [];
   // Map<String, List<RouteStop>> _routeStops = {};
   // Map<String, Color> _routeColors = {};
 
@@ -40,12 +40,12 @@ class _MapScreenState extends State<MapScreen> {
   //   Colors.blue,
   //   Colors.green,
   //   Colors.orange,
-  //   Colors.yellow,
   //   Colors.purple,
   //   Colors.cyan,
   //   Colors.pink,
   //   Colors.teal,
   //   Colors.indigo,
+  //   Colors.amber,
   // ];
 
   @override
@@ -54,7 +54,7 @@ class _MapScreenState extends State<MapScreen> {
     context.read<MapProvider>().init();
     context.read<TransitProvider>().init();
     _loadPlaces();
-    // _loadTransitRoutes();
+    // _loadLineRoutes();
   }
 
   Future<void> _loadPlaces() async {
@@ -86,26 +86,30 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // Future<void> _loadTransitRoutes() async {
+  // Future<void> _loadLineRoutes() async {
   //   try {
-  //     final routes = await _transitService.fetchActiveRoutes();
+  //     final routes = await _transitService.fetchLineRoutes();
   //     final stopsMap = <String, List<RouteStop>>{};
   //     final colors = <String, Color>{};
   //     for (var i = 0; i < routes.length; i++) {
   //       final route = routes[i];
-  //       final stops = await _transitService.fetchRouteStops(route.id);
-  //       stopsMap[route.id] = stops;
+  //       stopsMap[route.id] = await _transitService.fetchRouteStops(route.id);
   //       colors[route.id] = _routePalette[i % _routePalette.length];
   //     }
   //     if (mounted) {
   //       setState(() {
-  //         _routes = routes;
+  //         _lineRoutes = routes;
   //         _routeStops = stopsMap;
   //         _routeColors = colors;
   //       });
   //     }
   //   } catch (e) {
-  //     debugPrint('Failed to load transit routes: $e');
+  //     debugPrint('Failed to load line routes: $e');
+  //     if (mounted) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(content: Text('Failed to load bus lines: $e')),
+  //       );
+  //     }
   //   }
   // }
 
@@ -215,13 +219,13 @@ class _MapScreenState extends State<MapScreen> {
               subdomains: const ['a', 'b', 'c'],
             ),
             // TransitRouteLayer(
-            //   routes: _routes,
+            //   routes: _lineRoutes,
             //   routeStops: _routeStops,
             //   routeColors: _routeColors,
             // ),
             // BusMarkersLayer(
             //   trips: transitProvider.trips,
-            //   routeColors: _routeColors,
+            //   routeColors: const {},
             // ),
             PlaceMarkersLayer(places: _places, onTap: _showPlaceDetail),
             UserLocationMarkerLayer(position: provider.currentPosition!),
