@@ -3,9 +3,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
-import '../models/place.dart';
-// import '../models/route_stop.dart';
-// import '../models/transit_route.dart';
 import '../providers/map_provider.dart';
 import '../providers/transit_provider.dart';
 import '../services/place_service.dart';
@@ -52,7 +49,7 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     context.read<MapProvider>().init();
-    context.read<TransitProvider>().init();
+    // context.read<TransitProvider>().init();
     _loadPlaces();
     // _loadLineRoutes();
   }
@@ -125,45 +122,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onMapTap(TapPosition tapPosition, LatLng latLng) {
-    debugPrint('Tapped: lat=${latLng.latitude}, lng=${latLng.longitude}');
-  }
-
-  void _showPlaceDetail(BuildContext context, Place place) {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(place.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 4),
-            Text('Category: ${place.category?.name ?? 'Uncategorized'}'),
-            Text('Rating: ${place.averageRating?.toStringAsFixed(1) ?? 'N/A'}'),
-            if (place.photos.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 100,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: place.photos.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) => ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      place.photos[i],
-                      width: 120,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
+    print('Tapped: lat=${latLng.latitude}, lng=${latLng.longitude}');
   }
 
   @override
@@ -195,8 +154,7 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
 
-    // final transitProvider = context.watch<TransitProvider>();
-
+    // Only show the current user's marker
     return Stack(
       children: [
         FlutterMap(
@@ -216,7 +174,61 @@ class _MapScreenState extends State<MapScreen> {
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.kh_map_app',
-              subdomains: const ['a', 'b', 'c'],
+            ),
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: provider.currentPosition!,
+                  width: 40,
+                  height: 40,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Outer blue circle (accuracy ring)
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withAlpha(60), // 60/255 alpha
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      // Inner blue dot
+                      Container(
+                        width: 16,
+                        height: 16,
+                        decoration: const BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      // White border for the dot
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        Positioned(
+          bottom: 24,
+          right: 16,
+          child: FloatingActionButton(
+            onPressed: _centerOnUser,
+            backgroundColor: Colors.white,
+            child: Icon(
+              provider.followUser
+                  ? Icons.my_location
+                  : Icons.location_searching,
+              color: provider.followUser ? Colors.blue : Colors.grey,
             ),
             // TransitRouteLayer(
             //   routes: _lineRoutes,
