@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:kh_map_app/models/place.dart';
+import 'package:kh_map_app/widgets/map_screen/pin.dart';
+import 'package:kh_map_app/widgets/map_screen/searchBar.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/map_provider.dart';
-import '../providers/transit_provider.dart';
+// import '../providers/transit_provider.dart';
 import '../services/place_service.dart';
 // import '../services/transit_service.dart';
 // import '../widgets/map/bus_markers_layer.dart';
@@ -158,6 +161,44 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  void _showPlaceDetail(BuildContext context, Place place) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(place.name, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 4),
+            Text('Category: ${place.category?.name ?? 'Uncategorized'}'),
+            Text('Rating: ${place.averageRating?.toStringAsFixed(1) ?? 'N/A'}'),
+            if (place.photos.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 100,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: place.photos.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      place.photos[i],
+                      width: 120,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _mapController.dispose();
@@ -207,55 +248,9 @@ class _MapScreenState extends State<MapScreen> {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.kh_map_app',
             ),
-            MarkerLayer(
-              markers: [
-                Marker(
-                  point: provider.currentPosition!,
-                  width: 40,
-                  height: 40,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Outer blue circle (accuracy ring)
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withAlpha(60),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      // Inner blue dot
-                      Container(
-                        width: 16,
-                        height: 16,
-                        decoration: const BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      // White border for the dot
-                      Container(
-                        width: 20,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (provider.droppedPin != null)
-                  Marker(
-                    point: provider.droppedPin!,
-                    width: 48,
-                    height: 56,
-                    alignment: Alignment.topCenter,
-                    child: const DroppedPin(),
-                  ),
-              ],
-            ),
+
+            PlaceMarkersLayer(places: _places, onTap: _showPlaceDetail),
+            UserLocationMarkerLayer(position: provider.currentPosition!),
           ],
         ),
         Positioned(
@@ -273,31 +268,15 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
         ),
-        Positioned(
-          bottom: 24,
-          right: 16,
-          child: FloatingActionButton(
-            onPressed: _centerOnUser,
-            backgroundColor: Colors.white,
-            child: Icon(
-              provider.followUser
-                  ? Icons.my_location
-                  : Icons.location_searching,
-              color: provider.followUser ? Colors.blue : Colors.grey,
-            ),
-            // TransitRouteLayer(
-            //   routes: _lineRoutes,
-            //   routeStops: _routeStops,
-            //   routeColors: _routeColors,
-            // ),
-            // BusMarkersLayer(
-            //   trips: transitProvider.trips,
-            //   routeColors: const {},
-            // ),
-            PlaceMarkersLayer(places: _places, onTap: _showPlaceDetail),
-            UserLocationMarkerLayer(position: provider.currentPosition!),
-          ],
-        ),
+        // TransitRouteLayer(
+        //   routes: _lineRoutes,
+        //   routeStops: _routeStops,
+        //   routeColors: _routeColors,
+        // ),
+        // BusMarkersLayer(
+        //   trips: transitProvider.trips,
+        //   routeColors: const {},
+        // )
         LocateMeButton(
           isLoading: _placesLoading,
           followUser: provider.followUser,
