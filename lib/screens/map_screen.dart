@@ -122,7 +122,40 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onMapTap(TapPosition tapPosition, LatLng latLng) {
-    print('Tapped: lat=${latLng.latitude}, lng=${latLng.longitude}');
+    final provider = context.read<MapProvider>();
+    provider.dropPin(latLng);
+    _showPinSheet();
+  }
+
+  void _showPinSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return ChangeNotifierProvider.value(
+          value: context.read<MapProvider>(),
+          child: Consumer<MapProvider>(
+            builder: (context, provider, _) {
+              if (provider.droppedPin == null) {
+                return const SizedBox.shrink();
+              }
+              return PinInfoSheet(
+                latitude: provider.droppedPin!.latitude,
+                longitude: provider.droppedPin!.longitude,
+                placeName: provider.droppedPinPlace,
+                road: provider.droppedPinRoad,
+                isLoading: provider.isLoadingPinInfo,
+              );
+            },
+          ),
+        );
+      },
+    ).whenComplete(() {
+      if (mounted) {
+        context.read<MapProvider>().removePin();
+      }
+    });
   }
 
   @override
@@ -154,7 +187,6 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
 
-    // Only show the current user's marker
     return Stack(
       children: [
         FlutterMap(
@@ -189,7 +221,7 @@ class _MapScreenState extends State<MapScreen> {
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          color: Colors.blue.withAlpha(60), // 60/255 alpha
+                          color: Colors.blue.withAlpha(60),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -214,9 +246,32 @@ class _MapScreenState extends State<MapScreen> {
                     ],
                   ),
                 ),
+                if (provider.droppedPin != null)
+                  Marker(
+                    point: provider.droppedPin!,
+                    width: 48,
+                    height: 56,
+                    alignment: Alignment.topCenter,
+                    child: const DroppedPin(),
+                  ),
               ],
             ),
           ],
+        ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                color: Colors.white,
+                height: MediaQuery.of(context).padding.top,
+              ),
+              const MapSearchBar(),
+            ],
+          ),
         ),
         Positioned(
           bottom: 24,
