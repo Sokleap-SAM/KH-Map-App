@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  http: ^1.2.0
+  shared_preferences: ^2.2.2
   google_fonts: ^6.2.1
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
@@ -27,5 +29,5 @@ flutter:
 
   assets:
   - assets/images/
-  - .env
+
 

@@ -1,10 +1,251 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:kh_map_app/screens/login_screen.dart';
+import 'package:kh_map_app/utils/constants/colors.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class AccountScreen extends StatelessWidget {
+class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
 
   @override
+  State<AccountScreen> createState() => _AccountScreenState();
+}
+
+class _AccountScreenState extends State<AccountScreen> {
+  String userName = "មិនមានគណនី"; 
+  bool isLoggedIn = false;
+  bool isLoading = true; // Added to prevent flickering
+
+  // IMPORTANT: Use your computer's IPv4 address here for LD Player
+  final String baseUrl = "http://10.0.2.2:3000"; 
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile(); // Runs automatically when screen opens
+  }
+
+  Future<void> _fetchProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+
+    if (token == null) {
+      setState(() => isLoading = false);
+      return;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse("$baseUrl/users/profile"),
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        print("PROFILE DATA FROM BACKEND: $data");
+
+        setState(() {
+          userName = data['name'] ??"No Name Found";
+          isLoggedIn = true;
+        });
+      } else {
+        // If token is invalid or expired
+        setState(() => isLoggedIn = false);
+      }
+    } catch (e) {
+      debugPrint("Error fetching profile: $e");
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _handleLogout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('access_token');
+    setState(() {
+      isLoggedIn = false;
+      userName = "មិនមានគណនី";
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Center(child: Text('គណនី'));
+    return Scaffold(
+      backgroundColor: AppColors.primaryColor,
+      body: SafeArea(
+        child: isLoading 
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8B67D)))
+          : Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 30),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 60),
+
+                      // 1. Profile Icon (Static)
+                      const Center(
+                        child: CircleAvatar(
+                          radius: 50,
+                          backgroundColor: Colors.transparent,
+                          backgroundImage: AssetImage('assets/images/defaultAccountIcon.png'),
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // --- START CONDITIONAL UI ---
+                      if (!isLoggedIn) ...[
+                        // UI FOR LOGGED OUT USERS
+                        const Text(
+                          "មិនមានគណនី", 
+                          style: TextStyle(color: Color(0xFFE8B67D), fontSize: 22, fontWeight: FontWeight.bold)
+                        ),
+                        const SizedBox(height: 25),
+                        
+                        _buildDescriptionBox(),
+                        
+                        const SizedBox(height: 40),
+                        
+                        _buildLoginButton(context),
+                        
+                        const SizedBox(height: 15),
+                        
+                        const Text("ចូលជាមួយ", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                        
+                        const SizedBox(height: 15),
+                        
+                        _buildSocialRow(),
+                      ] else ...[
+                        // UI FOR LOGGED IN USERS
+                        Text(
+                          userName, 
+                          style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)
+                        ),
+                        const SizedBox(height: 25),
+                        
+                        // "Change Account" Box (Acts as Logout)
+                        GestureDetector(
+                          onTap: _handleLogout,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFAAB8DA),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text("ផ្លាស់ប្តូរគណនី", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+                                Icon(Icons.keyboard_arrow_down, color: Colors.black87),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      // --- END CONDITIONAL UI ---
+
+                      const SizedBox(height: 60),
+                      const Text("...", style: TextStyle(color: Colors.white24, fontSize: 30)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Settings Bar (Always visible at the bottom)
+            _buildSupportBar(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // UI HELPER METHODS
+
+  Widget _buildDescriptionBox() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white24),
+        color: Colors.white.withOpacity(0.05),
+      ),
+      child: const Text(
+        "សូមបង្កើតឬចូលក្នុងគណនីដើម្បីរក្សាទុកទិន្នន័យ និងទទួលបានបទពិសោធន៍ពេញលេញជាមួយ KH-Map",
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+      ),
+    );
+  }
+
+  Widget _buildLoginButton(BuildContext context) {
+    return SizedBox(
+      width: 140,
+      child: ElevatedButton(
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
+          // If login was successful, refresh the profile
+          if (result == true) {
+            _fetchProfile();
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF91A5D4),
+          foregroundColor: Colors.black,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+        child: const Text("ចូលគណនី", style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildSocialRow() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _socialIcon('assets/images/google_icon.png'),
+        const SizedBox(width: 20),
+        _socialIcon('assets/images/apple_icon.png'),
+        const SizedBox(width: 20),
+        _socialIcon('assets/images/facebook_icon.png'),
+      ],
+    );
+  }
+
+  Widget _buildSupportBar() {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFAAB8DA),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.settings_outlined, color: Colors.black87),
+            SizedBox(width: 10),
+            Text("បច្ចេកទេស", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _socialIcon(String imagePath) {
+    return Image.asset(
+      imagePath,
+      width: 25, height: 25,
+      errorBuilder: (context, error, stackTrace) => const Icon(Icons.error, color: Colors.white),
+    );
   }
 }
