@@ -6,16 +6,16 @@ class AuthService {
   static const String baseUrl = "http://10.0.2.2:3000";
 
   // 1. REGISTER
-  Future<http.Response> register(String name, String email, String password) async {
+  Future<http.Response> register(
+    String name,
+    String email,
+    String password,
+  ) async {
     final url = Uri.parse("$baseUrl/users/register");
     return await http.post(
       url,
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "name": name,
-        "email": email,
-        "password": password,
-      }),
+      body: jsonEncode({"name": name, "email": email, "password": password}),
     );
   }
 
@@ -30,7 +30,7 @@ class AuthService {
 
     if (response.statusCode == 201 || response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      
+
       // Save JWT Token to phone memory
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('access_token', data['access_token']);
@@ -46,24 +46,28 @@ class AuthService {
   }
 
   Future<bool> sendForgotPasswordOtp(String email) async {
-  final response = await http.post(
-    Uri.parse("$baseUrl/users/forgot-password"),
-    headers: {"Content-Type": "application/json"},
-    body: jsonEncode({"email": email}),
-  );
-  return response.statusCode == 201 || response.statusCode == 200;
-}
+    final response = await http.post(
+      Uri.parse("$baseUrl/users/forgot-password"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email}),
+    );
+    return response.statusCode == 201 || response.statusCode == 200;
+  }
 
-Future<bool> resetPassword(String email, String otp, String newPassword) async {
-  final response = await http.post(
-    Uri.parse("$baseUrl/users/reset-password"),
-    headers: {"Content-Type": "application/json"},
-    body: jsonEncode({
-      "email": email,
-      "otp": otp,
-      "newPassword": newPassword,
-    }),
-  );
-  return response.statusCode == 201 || response.statusCode == 200;
-}
+  Future<bool> resetPassword(
+    String email,
+    String otp,
+    String newPassword,
+  ) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/users/reset-password"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "email": email,
+        "otp": otp,
+        "newPassword": newPassword,
+      }),
+    );
+    return response.statusCode == 201 || response.statusCode == 200;
+  }
 }

@@ -163,7 +163,6 @@ class _LoginScreenState extends State<LoginScreen> {
               icon: Icons.lock_outline,
               isPassword: true,
             ),
-
             if (!isLoginMode) ...[
               const SizedBox(height: 20),
               _buildTextField(
@@ -191,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 40),
+            const SizedBox(height: 40),
 
             // 4. Main Button
             SizedBox(
