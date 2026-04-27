@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
 import '../services/auth_service.dart';
+import 'package:kh_map_app/screens/forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -63,7 +64,6 @@ class _LoginScreenState extends State<LoginScreen> {
           passwordController.text,
         );
         if (response.statusCode == 201) {
-          // SUCCESS! Now immediately log them in
           bool loginSuccess = await _authService.login(
             emailController.text,
             passwordController.text,
@@ -172,7 +172,24 @@ class _LoginScreenState extends State<LoginScreen> {
                 isPassword: true,
               ),
             ],
-
+            if (isLoginMode)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ForgotPasswordScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text(
+                    "ភ្លេចលេខសម្ងាត់? (Forgot Password?)",
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ),
+              ),
             const SizedBox(height: 40),
 
             // 4. Main Button
