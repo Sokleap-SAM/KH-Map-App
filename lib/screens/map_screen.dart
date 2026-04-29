@@ -259,7 +259,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
             BusMarkersLayer(
               trips: transitProvider.trips,
-              routeColors: const {},
+              routeColors: _routeColors,
             ),
             PlaceMarkersLayer(places: _places, onTap: _showPlaceDetail),
             UserLocationMarkerLayer(position: provider.currentPosition!),

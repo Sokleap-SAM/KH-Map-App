@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../screens/search_screen.dart';
 import '../../utils/constants/colors.dart';
 
 class MapSearchBar extends StatelessWidget {
   const MapSearchBar({super.key});
+
+  void _openSearch(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SearchScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,35 +21,38 @@ class MapSearchBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Search field
-          Container(
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFF243350),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: AppColors.secondaryColor,
-                width: 1.5,
-              ),
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 14),
-                const Icon(
-                  Icons.location_on_outlined,
-                  color:  AppColors.secondaryColor,
-                  size: 22,
+          GestureDetector(
+            onTap: () => _openSearch(context),
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFF243350),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: AppColors.secondaryColor,
+                  width: 1.5,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'ស្វែងរកទីកន្លែង . . .',
-                    style: GoogleFonts.notoSansKhmer(
-                      color: Colors.white70,
-                      fontSize: 14,
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 14),
+                  const Icon(
+                    Icons.location_on_outlined,
+                    color: AppColors.secondaryColor,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'ស្វែងរកទីកន្លែង . . .',
+                      style: GoogleFonts.notoSansKhmer(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 12),
