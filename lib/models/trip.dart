@@ -12,6 +12,7 @@ class Trip {
   final int nextStopIndex;
   final LatLng? currentLocation;
   final int passengerCount;
+  final String busImage;
 
   Trip({
     required this.id,
@@ -25,6 +26,7 @@ class Trip {
     required this.nextStopIndex,
     this.currentLocation,
     required this.passengerCount,
+    required this.busImage,
   });
 
   bool get isScheduled => status == 'scheduled';
@@ -79,6 +81,7 @@ class Trip {
       nextStopIndex: (json['nextStopIndex'] as int?) ?? 1,
       currentLocation: currentLocation,
       passengerCount: (json['passengerCount'] as int?) ?? 0,
+      busImage: json['busImage'] as String? ?? 'bus_go_right.png',
     );
   }
 }
