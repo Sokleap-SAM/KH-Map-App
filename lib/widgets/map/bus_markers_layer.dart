@@ -22,8 +22,7 @@ class BusMarkersLayer extends StatelessWidget {
         .toList();
 
     return MarkerLayer(
-      markers: visibleTrips.map((trip) {
-        print("LOADING IMAGE: assets/images/${trip.busImage}"); 
+      markers: visibleTrips.map((trip) { 
         // final color = routeColors[trip.routeId] ?? Colors.blueGrey;
         return Marker(
           point: trip.currentLocation!,
