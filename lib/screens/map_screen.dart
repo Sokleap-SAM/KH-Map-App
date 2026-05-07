@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:kh_map_app/models/place.dart';
 import 'package:kh_map_app/models/route_stop.dart';
 import 'package:kh_map_app/models/transit_route.dart';
+import 'package:kh_map_app/models/trip.dart';
 import 'package:kh_map_app/providers/transit_provider.dart';
 import 'package:kh_map_app/widgets/map/bus_markers_layer.dart';
 import 'package:kh_map_app/widgets/map/transit_route_layer.dart';
@@ -10,6 +11,7 @@ import 'package:kh_map_app/widgets/map_screen/Pin.dart';
 import 'package:kh_map_app/widgets/map_screen/SearchBar.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:lottie/lottie.dart';
 
 import '../providers/map_provider.dart';
 import '../services/place_service.dart';
@@ -201,6 +203,153 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  void _showBusDetails(Trip trip) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white, // Light modern grey
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag Handle
+              Container(
+                width: 30,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              Row(
+              children: [
+                // LEFT SIDE: Text info (Smaller font sizes)
+                Expanded(
+                  flex: 3,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 10, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "ខ្សែរត់លេខ ${trip.routeNumber ?? '??'}",
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A2B4C)),
+                        ),
+                        Text(
+                          "ផ្លាកលេខ: ${trip.busNumber}",
+                          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                        ),
+                        const SizedBox(height: 10),
+                        // Smaller badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                          child: Text(
+                            "ទៅកាន់: ${trip.direction}",
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                  // RIGHT SIDE: The Animation
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      height: 110,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A2B4C).withOpacity(0.04),
+                        borderRadius: const BorderRadius.all(Radius.circular(20)),
+                      ),
+                      child: Center(
+                        child: Transform.scale(
+                          scale: 1.4,
+                          child: Lottie.asset(
+                            'assets/animations/bus_anim.json',
+                            repeat: true,
+                          ),
+                        ),
+                      )
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+              const Divider(height: 1, indent: 15, endIndent: 15, color: Color(0xFF1A2B4C)),
+              const SizedBox(height: 10),
+
+              // Next Stop Card
+              Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade200),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_on, color: Color(0xFFE8B67D), size: 20),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("ចំណតបន្ទាប់ (Next Stop)", style: TextStyle(color: Colors.black38, fontSize: 10)),
+                        Text(
+                          trip.nextStopName,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A2B4C)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Helper for the "Heading to" badge
+  Widget _buildMiniBadge(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A2B4C).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF1A2B4C)),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1A2B4C),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _mapController.dispose();
@@ -260,6 +409,9 @@ class _MapScreenState extends State<MapScreen> {
             BusMarkersLayer(
               trips: transitProvider.trips,
               routeColors: _routeColors,
+              onBusTap: (trip) {
+                _showBusDetails(trip);
+              },
             ),
             PlaceMarkersLayer(places: _places, onTap: _showPlaceDetail),
             UserLocationMarkerLayer(position: provider.currentPosition!),

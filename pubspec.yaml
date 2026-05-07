@@ -17,6 +17,7 @@ dependencies:
   flutter_dotenv: ^5.2.1
   geolocator: ^13.0.2
   provider: ^6.1.2
+  lottie: ^3.1.2
 
 dev_dependencies:
   flutter_test:
@@ -31,5 +32,6 @@ flutter:
   - .env
   - assets/images./bus_go_right.png
   - assets/images/bus_go_left.png
+  - assets/animations/bus_anim.json
 
 

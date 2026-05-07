@@ -8,10 +8,12 @@ class BusMarkersLayer extends StatelessWidget {
     super.key,
     required this.trips,
     required this.routeColors,
+    required this.onBusTap,
   });
 
   final List<Trip> trips;
   final Map<String, Color> routeColors;
+  final Function(Trip) onBusTap;
 
   @override
   Widget build(BuildContext context) {
@@ -22,18 +24,19 @@ class BusMarkersLayer extends StatelessWidget {
         .toList();
 
     return MarkerLayer(
-      markers: visibleTrips.map((trip) { 
+      markers: visibleTrips.map((trip) {
         // final color = routeColors[trip.routeId] ?? Colors.blueGrey;
         return Marker(
           point: trip.currentLocation!,
-          width: 25,
-          height: 25,
-          child: Image.asset(
-            'assets/images/${trip.busImage}',
-            errorBuilder: (context, error, stackTrace) => const Icon(
-              Icons.directions_bus,
-              color: Colors.blue,
-            )
+          width: 30,
+          height: 30,
+          child: GestureDetector(
+            onTap: () => onBusTap(trip),
+            child: Image.asset(
+              'assets/images/${trip.busImage}',
+              errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.directions_bus, color: Colors.blue),
+            ),
           ),
         );
       }).toList(),
