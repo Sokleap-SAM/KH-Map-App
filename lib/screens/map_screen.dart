@@ -210,113 +210,206 @@ class _MapScreenState extends State<MapScreen> {
       isScrollControlled: true,
       builder: (context) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white, // Light modern grey
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          margin: const EdgeInsets.all(10), // Floating look
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E), // Dark background
+            borderRadius: BorderRadius.circular(28),
           ),
-          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Drag Handle
+              // --- BLUE HEADER SECTION ---
               Container(
-                width: 30,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.black12,
-                  borderRadius: BorderRadius.circular(10),
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1976D2), // Modern Blue
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                 ),
-              ),
-              const SizedBox(height: 20),
-
-              Row(
-              children: [
-                // LEFT SIDE: Text info (Smaller font sizes)
-                Expanded(
-                  flex: 3,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 10, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          "ខ្សែរត់លេខ ${trip.routeNumber ?? '??'}",
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A2B4C)),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "ខ្សែរត់ · ROUTE",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              trip.routeNumber ?? 'N/A',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          "ផ្លាកលេខ: ${trip.busNumber}",
-                          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                        ),
-                        const SizedBox(height: 10),
-                        // Smaller badge
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
-                          child: Text(
-                            "ទៅកាន់: ${trip.direction}",
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text(
+                                "ផ្លាកលេខ",
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 10,
+                                ),
+                              ),
+                              Text(
+                                trip.busNumber ?? '??z',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ),
-
-                  // RIGHT SIDE: The Animation
-                  Expanded(
-                    flex: 2,
-                    child: Container(
-                      height: 110,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A2B4C).withOpacity(0.04),
-                        borderRadius: const BorderRadius.all(Radius.circular(20)),
-                      ),
-                      child: Center(
-                        child: Transform.scale(
-                          scale: 1.4,
-                          child: Lottie.asset(
-                            'assets/animations/bus_anim.json',
-                            repeat: true,
-                          ),
-                        ),
-                      )
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-              const Divider(height: 1, indent: 15, endIndent: 15, color: Color(0xFF1A2B4C)),
-              const SizedBox(height: 10),
-
-              // Next Stop Card
-              Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade200),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.location_on, color: Color(0xFFE8B67D), size: 20),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 15),
+                    Row(
                       children: [
-                        const Text("ចំណតបន្ទាប់ (Next Stop)", style: TextStyle(color: Colors.black38, fontSize: 10)),
-                        Text(
-                          trip.nextStopName,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A2B4C)),
+                        const Icon(
+                          Icons.directions_bus_filled,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            trip.routeName ?? 'Unknown Route', // "Win-Win Boulevard... -> Veal Sbov..."
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                            maxLines: 2,
+                          ),
                         ),
                       ],
                     ),
                   ],
                 ),
               ),
-            ),
-              const SizedBox(height: 20),
+
+              // --- DARK BODY SECTION ---
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    // Row for Status and ETA
+                    Row(
+                      children: [
+                        _buildInfoBox(
+                          "ស្ថានភាព",
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.circle,
+                                color: Colors.green,
+                                size: 10,
+                              ),
+                              const SizedBox(width: 5),
+                              const Text(
+                                "In service",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        _buildInfoBox(
+                          "ETA",
+                          const Text(
+                            "~4 min",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 15),
+
+                    // Next Stop Highlight
+                    Container(
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFEBD8),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.bus_alert,
+                              color: Color(0xFFE8B67D),
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "ចំណតបន្ទាប់ · NEXT STOP",
+                                style: TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 10,
+                                ),
+                              ),
+                              Text(
+                                trip.nextStopName,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 15),
+
+                    // Bottom Action Buttons
+                    Row(
+                      children: [
+                        _buildActionButton(Icons.list, "All stops"),
+                        const SizedBox(width: 10),
+                        _buildActionButton(Icons.map_outlined, "Directions"),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
             ],
           ),
         );
@@ -324,28 +417,44 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // Helper for the "Heading to" badge
-  Widget _buildMiniBadge(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A2B4C).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: const Color(0xFF1A2B4C)),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1A2B4C),
+  // Helper: Small Grid Boxes
+  Widget _buildInfoBox(String label, Widget content) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white38, fontSize: 10),
             ),
+            const SizedBox(height: 5),
+            content,
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper: Outlined Action Buttons
+  Widget _buildActionButton(IconData icon, String label) {
+    return Expanded(
+      child: OutlinedButton.icon(
+        onPressed: () {},
+        icon: Icon(icon, size: 18, color: Colors.white),
+        label: Text(label, style: const TextStyle(color: Colors.white)),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          side: const BorderSide(color: Colors.white12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-        ],
+        ),
       ),
     );
   }
