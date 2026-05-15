@@ -115,6 +115,13 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _focusOnPlace(Place place) {
+    final target = LatLng(place.latitude, place.longitude);
+    context.read<MapProvider>().setFollowUser(false);
+    _mapController.move(target, 17);
+    _showPlaceDetail(context, place);
+  }
+
   void _centerOnUser() {
     final provider = context.read<MapProvider>();
     if (provider.currentPosition != null) {
@@ -236,7 +243,7 @@ class _MapScreenState extends State<MapScreen> {
       children: [
         FlutterMap(
           mapController: _mapController,
-          options: MapOptions(
+          options: MapOptions(  
             initialCenter: provider.currentPosition!,
             initialZoom: 17,
             onTap: _onMapTap,
@@ -276,7 +283,7 @@ class _MapScreenState extends State<MapScreen> {
                 color: Colors.white,
                 height: MediaQuery.of(context).padding.top,
               ),
-              const MapSearchBar(),
+              MapSearchBar(onPlaceSelected: _focusOnPlace),
             ],
           ),
         ),
