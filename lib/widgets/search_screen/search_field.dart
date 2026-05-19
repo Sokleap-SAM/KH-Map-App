@@ -44,6 +44,10 @@ class SearchField extends StatelessWidget {
               autofocus: true,
               cursorColor: AppColors.secondaryColor,
               onSubmitted: onSubmitted,
+              keyboardType: TextInputType.text,
+              textInputAction: TextInputAction.search,
+              autocorrect: false,
+              enableSuggestions: false,
               style: GoogleFonts.notoSansKhmer(
                 color: Colors.white,
                 fontSize: 14,

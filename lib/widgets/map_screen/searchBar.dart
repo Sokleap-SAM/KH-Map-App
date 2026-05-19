@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../models/place.dart';
 import '../../screens/search_screen.dart';
 import '../../utils/constants/colors.dart';
 
 class MapSearchBar extends StatelessWidget {
-  const MapSearchBar({super.key});
+  final ValueChanged<Place>? onPlaceSelected;
 
-  void _openSearch(BuildContext context) {
-    Navigator.of(context).push(
+  const MapSearchBar({super.key, this.onPlaceSelected});
+
+  Future<void> _openSearch(BuildContext context) async {
+    final selected = await Navigator.of(context).push<Place>(
       MaterialPageRoute(builder: (_) => const SearchScreen()),
     );
+    if (selected != null) {
+      onPlaceSelected?.call(selected);
+    }
   }
 
   @override
@@ -62,7 +68,7 @@ class MapSearchBar extends StatelessWidget {
             children: [
               _CategoryButton(
                 icon: Icons.restaurant,
-                label: 'មូលអាហារ',
+                label: 'ភោជនីយដ្ឋាន',
                 color: AppColors.buttonCategoryBlueColor,
               ),
               _CategoryButton(
@@ -82,7 +88,7 @@ class MapSearchBar extends StatelessWidget {
               ),
               _CategoryButton(
                 icon: Icons.local_cafe_outlined,
-                label: 'បាងកាហេ',
+                label: 'ហាងកាហ្វេ',
                 color: AppColors.buttonCategoryPinkColor,
               ),
             ],
