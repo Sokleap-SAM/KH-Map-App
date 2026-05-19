@@ -17,21 +17,13 @@ class TransitRouteLayer extends StatelessWidget {
   final Map<String, List<RouteStop>> routeStops;
   final Map<String, Color> routeColors;
 
-  /// Builds the full road-aligned path for a route by collecting each stop's
-  /// [segmentPath] in order. Falls back to a straight line between stop
-  /// locations when [segmentPath] is absent.
   List<LatLng> _buildRoutePath(List<RouteStop> stops) {
     final points = <LatLng>[];
     for (final stop in stops) {
       if (stop.segmentPath != null && stop.segmentPath!.isNotEmpty) {
-        // Avoid duplicating the junction point between consecutive segments.
         if (points.isNotEmpty) points.removeLast();
         points.addAll(stop.segmentPath!);
-      } else if (stop.stopOrder == 1) {
-        // First stop has no segment; just add its location as the start.
-        points.add(stop.location);
       } else {
-        // No segmentPath: straight line to this stop.
         points.add(stop.location);
       }
     }
@@ -49,33 +41,31 @@ class TransitRouteLayer extends StatelessWidget {
 
       final points = _buildRoutePath(stops);
       if (points.isNotEmpty) {
-        polylines.add(Polyline(points: points, color: color, strokeWidth: 6.0));
+        polylines.add(
+          Polyline(
+            points: points, 
+            color: color.withOpacity(0.8),
+            strokeWidth: 5.0,
+          )
+        );
       }
 
       for (final stop in stops) {
         markers.add(
           Marker(
             point: stop.location,
-            width: 24,
-            height: 24,
+            width: 22,
+            height: 22,
             child: Container(
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
+                  BoxShadow(color: Colors.black26, blurRadius: 3, offset: Offset(0, 1)),
                 ],
               ),
-              child: const Icon(
-                Icons.directions_bus,
-                color: Colors.white,
-                size: 12,
-              ),
+              child: const Icon(Icons.directions_bus, color: Colors.white, size: 10),
             ),
           ),
         );
