@@ -95,6 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showError(String msg) {
+    print("UI ERROR: $msg");
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
