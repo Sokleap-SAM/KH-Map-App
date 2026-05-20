@@ -8,11 +8,7 @@ class DroppedPin extends StatelessWidget {
     return const Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          Icons.location_pin,
-          color: Colors.red,
-          size: 48,
-        ),
+        Icon(Icons.location_pin, color: Colors.red, size: 48),
         SizedBox(
           width: 8,
           height: 4,
@@ -28,12 +24,21 @@ class DroppedPin extends StatelessWidget {
   }
 }
 
+String extractPinTitle(String displayName) {
+  final parts = displayName.split(',');
+  if (parts.length >= 2) {
+    return '${parts[0].trim()}, ${parts[1].trim()}';
+  }
+  return parts.first.trim();
+}
+
 class PinInfoSheet extends StatelessWidget {
   final double latitude;
   final double longitude;
   final String? placeName;
   final String? road;
   final bool isLoading;
+  final VoidCallback? onDirections;
 
   const PinInfoSheet({
     super.key,
@@ -42,6 +47,7 @@ class PinInfoSheet extends StatelessWidget {
     this.placeName,
     this.road,
     this.isLoading = false,
+    this.onDirections,
   });
 
   @override
@@ -86,7 +92,7 @@ class PinInfoSheet extends StatelessWidget {
                         children: [
                           Text(
                             placeName != null && !isLoading
-                                ? _extractTitle(placeName!)
+                                ? extractPinTitle(placeName!)
                                 : 'Dropped Pin',
                             style: const TextStyle(
                               fontSize: 22,
@@ -98,12 +104,18 @@ class PinInfoSheet extends StatelessWidget {
                           if (isLoading)
                             const Text(
                               'Looking up location...',
-                              style: TextStyle(fontSize: 14, color: Colors.grey),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
                             )
                           else if (road != null)
                             Text(
                               road!,
-                              style: const TextStyle(fontSize: 14, color: Colors.grey),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
                             ),
                         ],
                       ),
@@ -111,11 +123,17 @@ class PinInfoSheet extends StatelessWidget {
                     // Action icons
                     IconButton(
                       onPressed: () {},
-                      icon: const Icon(Icons.bookmark_border, color: Colors.white),
+                      icon: const Icon(
+                        Icons.bookmark_border,
+                        color: Colors.white,
+                      ),
                     ),
                     IconButton(
                       onPressed: () {},
-                      icon: const Icon(Icons.share_outlined, color: Colors.white),
+                      icon: const Icon(
+                        Icons.share_outlined,
+                        color: Colors.white,
+                      ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
@@ -134,14 +152,20 @@ class PinInfoSheet extends StatelessWidget {
                       icon: Icons.directions,
                       label: 'Directions',
                       color: const Color(0xFF3B82F6),
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        onDirections?.call();
+                      },
                     ),
                     const SizedBox(width: 10),
                     _ActionChip(
-                      icon: Icons.navigation,
+                      icon: Icons.play_arrow,
                       label: 'Start',
-                      color: const Color(0xFF2D2D2D),
-                      onTap: () {},
+                      color: const Color(0xFF3B82F6),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        onDirections?.call();
+                      },
                     ),
                     const SizedBox(width: 10),
                     _ActionChip(
@@ -164,15 +188,25 @@ class PinInfoSheet extends StatelessWidget {
               const Divider(color: Color(0xFF333333), height: 1),
               // Coordinate info row
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 child: Row(
                   children: [
-                    const Icon(Icons.location_on_outlined, size: 20, color: Colors.grey),
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
-                        style: const TextStyle(fontSize: 14, color: Colors.white),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ],
@@ -182,16 +216,26 @@ class PinInfoSheet extends StatelessWidget {
               // Full address
               if (placeName != null && !isLoading)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.map_outlined, size: 20, color: Colors.grey),
+                      const Icon(
+                        Icons.map_outlined,
+                        size: 20,
+                        color: Colors.grey,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           placeName!,
-                          style: const TextStyle(fontSize: 14, color: Colors.white),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],
@@ -202,15 +246,25 @@ class PinInfoSheet extends StatelessWidget {
               // Road info
               if (road != null && !isLoading)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   child: Row(
                     children: [
-                      const Icon(Icons.route_outlined, size: 20, color: Colors.grey),
+                      const Icon(
+                        Icons.route_outlined,
+                        size: 20,
+                        color: Colors.grey,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           road!,
-                          style: const TextStyle(fontSize: 14, color: Colors.white),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],
@@ -227,7 +281,10 @@ class PinInfoSheet extends StatelessWidget {
                       SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.grey,
+                        ),
                       ),
                       SizedBox(width: 12),
                       Text(
@@ -242,15 +299,6 @@ class PinInfoSheet extends StatelessWidget {
         );
       },
     );
-  }
-
-  String _extractTitle(String displayName) {
-    // Use the first part of the address as the title
-    final parts = displayName.split(',');
-    if (parts.length >= 2) {
-      return '${parts[0].trim()}, ${parts[1].trim()}';
-    }
-    return parts.first.trim();
   }
 }
 

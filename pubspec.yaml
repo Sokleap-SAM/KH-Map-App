@@ -30,8 +30,6 @@ flutter:
   assets:
   - assets/images/
   - .env
-  - assets/images./bus_go_right.png
-  - assets/images/bus_go_left.png
-  - assets/animations/bus_anim.json
+  - assets/animations/
 
 

@@ -1,8 +1,12 @@
+// transit-service
+
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/route_plan.dart';
 import '../models/route_stop.dart';
 import '../models/transit_route.dart';
 import '../models/trip.dart';
@@ -73,5 +77,38 @@ class TransitService {
       throw Exception('Failed to advance trip');
     }
     return Trip.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<RoutePlanResult> fetchRoutePlan({
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
+    String type = 'transit',
+  }) async {
+    final uri = Uri.parse('$_baseUrl/transit/plan').replace(
+      queryParameters: {
+        'originLng': originLng.toString(),
+        'originLat': originLat.toString(),
+        'destLng': destLng.toString(),
+        'destLat': destLat.toString(),
+        'type': type,
+      },
+    );
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to fetch route plan (${response.statusCode})');
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+    // FIX #5: Removed the large debug debugPrint block — not suitable for
+    // production builds. Re-add behind a kDebugMode guard if needed:
+    //
+    //   if (kDebugMode) {
+    //     debugPrint('[TransitService] found=${body['found']}');
+    //   }
+
+    return RoutePlanResult.fromJson(body);
   }
 }

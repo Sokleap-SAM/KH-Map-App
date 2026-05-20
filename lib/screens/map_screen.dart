@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:kh_map_app/models/place.dart';
-import 'package:kh_map_app/models/route_stop.dart';
-import 'package:kh_map_app/models/transit_route.dart';
+import 'package:kh_map_app/models/route_search_selection.dart';
 import 'package:kh_map_app/models/trip.dart';
 import 'package:kh_map_app/providers/transit_provider.dart';
 import 'package:kh_map_app/widgets/map/bus_markers_layer.dart';
+import 'package:kh_map_app/widgets/map/map_pick_banner.dart';
+import 'package:kh_map_app/widgets/map/route_info_card.dart';
+import 'package:kh_map_app/widgets/map/route_search_overlay.dart';
+import 'package:kh_map_app/widgets/map/routing_overlay_layer.dart';
 import 'package:kh_map_app/widgets/map/transit_route_layer.dart';
-import 'package:kh_map_app/widgets/map_screen/Pin.dart';
-import 'package:kh_map_app/widgets/map_screen/SearchBar.dart';
+import 'package:kh_map_app/widgets/map_screen/pin.dart';
+import 'package:kh_map_app/widgets/map_screen/place_detail_sheet.dart';
+import 'package:kh_map_app/widgets/map_screen/search_bar.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/map_provider.dart';
-import '../services/place_service.dart';
-import '../services/transit_service.dart';
 import '../widgets/map/locate_me_button.dart';
 import '../widgets/map/place_markers_layer.dart';
 import '../widgets/map/user_location_marker_layer.dart';
@@ -28,96 +30,27 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
-  final PlaceService _placeService = PlaceService();
-  final TransitService _transitService = TransitService();
 
-  List<Place> _places = [];
-  bool _placesLoading = true;
-
-  List<TransitRoute> _lineRoutes = [];
-  Map<String, List<RouteStop>> _routeStops = {};
-  Map<String, Color> _routeColors = {};
-
+  // UI-only state. The data layers (places, line routes, trips, colors) live
+  // in MapProvider / TransitProvider.
   double _currentZoom = 13.0;
-  Set<String> _selectedRouteIds = {};
-
-  static const List<Color> _routePalette = [
-    Colors.red,
-    Colors.blue,
-    Colors.green,
-    Colors.orange,
-    Colors.purple,
-    Colors.cyan,
-    Colors.pink,
-    Colors.teal,
-    Colors.indigo,
-    Colors.amber,
-  ];
+  final Set<String> _selectedRouteIds = {};
+  bool _seededFilterFromRoutes = false;
 
   @override
   void initState() {
     super.initState();
     context.read<MapProvider>().init();
     context.read<TransitProvider>().init();
-    _loadPlaces();
-    _loadLineRoutes();
   }
 
-  Future<void> _loadPlaces() async {
-    try {
-      final places = await _placeService.fetchPlaces();
-      if (mounted) {
-        setState(() {
-          _places = places;
-          _placesLoading = false;
-        });
-      }
-    } catch (e, stack) {
-      debugPrint('Failed to load places: $e\n$stack');
-      if (mounted) {
-        setState(() => _placesLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load places: $e'),
-            action: SnackBarAction(
-              label: 'Retry',
-              onPressed: () {
-                setState(() => _placesLoading = true);
-                _loadPlaces();
-              },
-            ),
-          ),
-        );
-      }
-    }
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
   }
 
-  Future<void> _loadLineRoutes() async {
-    try {
-      final routes = await _transitService.fetchLineRoutes();
-      final stopsMap = <String, List<RouteStop>>{};
-      final colors = <String, Color>{};
-      for (var i = 0; i < routes.length; i++) {
-        final route = routes[i];
-        stopsMap[route.id] = await _transitService.fetchRouteStops(route.id);
-        colors[route.id] = _routePalette[i % _routePalette.length];
-      }
-      if (mounted) {
-        setState(() {
-          _lineRoutes = routes;
-          _routeStops = stopsMap;
-          _routeColors = colors;
-        });
-      }
-    } catch (e) {
-      debugPrint('Failed to load line routes: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load bus lines: $e')));
-      }
-    }
-  }
+  // ── Map interactions ──────────────────────────────────────────────────────
 
   void _focusOnPlace(Place place) {
     final target = LatLng(place.latitude, place.longitude);
@@ -138,10 +71,21 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onMapTap(TapPosition tapPosition, LatLng latLng) {
-    final provider = context.read<MapProvider>();
-    provider.dropPin(latLng);
+    final mapProvider = context.read<MapProvider>();
+    // Map-pick mode: provider reverse-geocodes and fires the pending callback.
+    if (mapProvider.isMapPickMode) {
+      mapProvider.handleMapPickTap(latLng);
+      return;
+    }
+    // Don't drop a pin while a route is active or the route search overlay
+    // is open — a new pin would re-trigger openRouteSearch and overwrite the
+    // origin/destination the user is currently editing.
+    if (mapProvider.isRoutingActive || mapProvider.showRouteSearch) return;
+    mapProvider.dropPin(latLng);
     _showPinSheet();
   }
+
+  // ── Bottom sheets ─────────────────────────────────────────────────────────
 
   void _showPinSheet() {
     showModalBottomSheet(
@@ -152,16 +96,24 @@ class _MapScreenState extends State<MapScreen> {
         return ChangeNotifierProvider.value(
           value: context.read<MapProvider>(),
           child: Consumer<MapProvider>(
-            builder: (context, provider, _) {
-              if (provider.droppedPin == null) {
-                return const SizedBox.shrink();
-              }
+            builder: (ctx, provider, _) {
+              if (provider.droppedPin == null) return const SizedBox.shrink();
               return PinInfoSheet(
                 latitude: provider.droppedPin!.latitude,
                 longitude: provider.droppedPin!.longitude,
                 placeName: provider.droppedPinPlace,
                 road: provider.droppedPinRoad,
                 isLoading: provider.isLoadingPinInfo,
+                onDirections: () {
+                  final pin = provider.droppedPin!;
+                  final label = provider.droppedPinPlace != null
+                      ? provider.droppedPinPlace!.split(',').first.trim()
+                      : '${pin.latitude.toStringAsFixed(6)}, '
+                            '${pin.longitude.toStringAsFixed(6)}';
+                  provider.openRouteSearch(
+                    RouteSearchSelection(label: label, location: pin),
+                  );
+                },
               );
             },
           ),
@@ -169,7 +121,8 @@ class _MapScreenState extends State<MapScreen> {
       },
     ).whenComplete(() {
       if (mounted) {
-        context.read<MapProvider>().removePin();
+        final provider = context.read<MapProvider>();
+        if (!provider.isRoutingActive) provider.removePin();
       }
     });
   }
@@ -177,37 +130,16 @@ class _MapScreenState extends State<MapScreen> {
   void _showPlaceDetail(BuildContext context, Place place) {
     showModalBottomSheet(
       context: context,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(place.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 4),
-            Text('Category: ${place.category?.name ?? 'Uncategorized'}'),
-            Text('Rating: ${place.averageRating?.toStringAsFixed(1) ?? 'N/A'}'),
-            if (place.photos.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 100,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: place.photos.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) => ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      place.photos[i],
-                      width: 120,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
+      builder: (_) => PlaceDetailSheet(
+        place: place,
+        onDirections: () {
+          context.read<MapProvider>().openRouteSearch(
+            RouteSearchSelection(
+              label: place.name,
+              location: LatLng(place.latitude, place.longitude),
+            ),
+          );
+        },
       ),
     );
   }
@@ -219,19 +151,18 @@ class _MapScreenState extends State<MapScreen> {
       isScrollControlled: true,
       builder: (context) {
         return Container(
-          margin: const EdgeInsets.all(10), // Floating look
+          margin: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E), // Dark background
+            color: const Color(0xFF1E1E1E),
             borderRadius: BorderRadius.circular(28),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // --- BLUE HEADER SECTION ---
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: const BoxDecoration(
-                  color: Color(0xFF1976D2), // Modern Blue
+                  color: Color(0xFF1976D2),
                   borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                 ),
                 child: Column(
@@ -266,7 +197,7 @@ class _MapScreenState extends State<MapScreen> {
                             vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withAlpha(51),
                             borderRadius: BorderRadius.circular(15),
                           ),
                           child: Column(
@@ -301,8 +232,7 @@ class _MapScreenState extends State<MapScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            trip.routeName ??
-                                'Unknown Route', // "Win-Win Boulevard... -> Veal Sbov..."
+                            trip.routeName ?? 'Unknown Route',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 14,
@@ -315,26 +245,23 @@ class _MapScreenState extends State<MapScreen> {
                   ],
                 ),
               ),
-
-              // --- DARK BODY SECTION ---
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    // Row for Status and ETA
                     Row(
                       children: [
                         _buildInfoBox(
                           "ស្ថានភាព",
                           Row(
-                            children: [
-                              const Icon(
+                            children: const [
+                              Icon(
                                 Icons.circle,
                                 color: Colors.green,
                                 size: 10,
                               ),
-                              const SizedBox(width: 5),
-                              const Text(
+                              SizedBox(width: 5),
+                              Text(
                                 "In service",
                                 style: TextStyle(
                                   color: Colors.white,
@@ -359,12 +286,10 @@ class _MapScreenState extends State<MapScreen> {
                       ],
                     ),
                     const SizedBox(height: 15),
-
-                    // Next Stop Highlight
                     Container(
                       padding: const EdgeInsets.all(15),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withAlpha(13),
                         borderRadius: BorderRadius.circular(15),
                         border: Border.all(color: Colors.white12),
                       ),
@@ -407,10 +332,7 @@ class _MapScreenState extends State<MapScreen> {
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 15),
-
-                    // Bottom Action Buttons
                     Row(
                       children: [
                         _buildActionButton(
@@ -444,6 +366,11 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showRouteSelector() {
+    // Snapshot once — the modal owns its own setState for redraws.
+    final transit = context.read<TransitProvider>();
+    final lineRoutes = transit.lineRoutes;
+    final routeColors = transit.routeColors;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E1E1E),
@@ -466,42 +393,37 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                   const SizedBox(height: 15),
-
-                  // 1. "Show All" Toggle - Fixed logic
                   CheckboxListTile(
                     title: const Text(
                       "បង្ហាញទាំងអស់ (Show All)",
                       style: TextStyle(color: Colors.white),
                     ),
                     value:
-                        _lineRoutes.isNotEmpty &&
-                        _selectedRouteIds.length ==
-                            _lineRoutes.length, // Empty means show everything
+                        lineRoutes.isNotEmpty &&
+                        _selectedRouteIds.length == lineRoutes.length,
                     activeColor: const Color(0xFFE8B67D),
                     onChanged: (bool? val) {
                       setState(() {
                         if (val == true) {
-                          _selectedRouteIds = _lineRoutes
-                              .map((r) => r.id)
-                              .toSet();
+                          _selectedRouteIds
+                            ..clear()
+                            ..addAll(lineRoutes.map((r) => r.id));
                         } else {
                           _selectedRouteIds.clear();
                         }
                       });
-                      setModalState(() {}); // Update the modal's state
+                      setModalState(() {});
                     },
                   ),
                   const Divider(color: Colors.white10),
-
-                  // 2. List of Routes
                   Flexible(
                     child: ListView.builder(
                       shrinkWrap: true,
-                      itemCount: _lineRoutes.length,
+                      itemCount: lineRoutes.length,
                       itemBuilder: (context, index) {
-                        final route = _lineRoutes[index];
+                        final route = lineRoutes[index];
                         final isSelected = _selectedRouteIds.contains(route.id);
-                        final color = _routeColors[route.id] ?? Colors.blue;
+                        final color = routeColors[route.id] ?? Colors.blue;
 
                         return CheckboxListTile(
                           activeColor: color,
@@ -559,7 +481,6 @@ class _MapScreenState extends State<MapScreen> {
             return Column(
               children: [
                 const SizedBox(height: 12),
-                // Drag Handle
                 Container(
                   width: 40,
                   height: 4,
@@ -568,7 +489,6 @@ class _MapScreenState extends State<MapScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 20),
                   child: Text(
@@ -580,25 +500,20 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ),
-
                 Expanded(
                   child: ListView.builder(
                     controller: scrollController,
                     itemCount: trip.allStops.length,
                     itemBuilder: (context, index) {
-                      // Logic to determine stop status
-                      bool isTarget = index == trip.nextStopIndex;
-                      bool isPassed = index < trip.nextStopIndex;
+                      final isTarget = index == trip.nextStopIndex;
+                      final isPassed = index < trip.nextStopIndex;
 
                       return IntrinsicHeight(
                         child: Row(
                           children: [
                             const SizedBox(width: 30),
-
-                            // --- THE TIMELINE COLUMN ---
                             Column(
                               children: [
-                                // The Dot
                                 Container(
                                   width: 14,
                                   height: 14,
@@ -611,12 +526,11 @@ class _MapScreenState extends State<MapScreen> {
                                               : Colors.white10),
                                     border: isTarget
                                         ? Border.all(
-                                            color: Colors.blue.withOpacity(0.5),
+                                            color: Colors.blue.withAlpha(128),
                                             width: 4,
                                           )
                                         : null,
                                   ),
-                                  // The "Small Light Dot" for the live target
                                   child: isTarget
                                       ? Center(
                                           child: Container(
@@ -630,7 +544,6 @@ class _MapScreenState extends State<MapScreen> {
                                         )
                                       : null,
                                 ),
-                                // The Connecting Line
                                 Expanded(
                                   child: Container(
                                     width: 2,
@@ -639,10 +552,7 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                               ],
                             ),
-
                             const SizedBox(width: 20),
-
-                            // --- THE STOP NAME ---
                             Expanded(
                               child: Padding(
                                 padding: const EdgeInsets.only(bottom: 30),
@@ -679,7 +589,7 @@ class _MapScreenState extends State<MapScreen> {
   void _showDirectionsPanel(Trip trip) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E1E), // Match your dark theme
+      backgroundColor: const Color(0xFF1E1E1E),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -698,8 +608,6 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Simple Origin to Destination view
               Row(
                 children: [
                   const Icon(
@@ -764,46 +672,12 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // Widget _buildDynamicBusStopsLayer() {
-  //   // Decide icon size based on zoom
-  //   final bool isZoomedIn = _currentZoom >= 15.5;
-  //   final double markerSize = isZoomedIn ? 30.0 : 12.0;
-
-  //   return MarkerLayer(
-  //     markers: _places.map((place) {
-  //       return Marker(
-  //         point: LatLng(place.latitude, place.longitude),
-  //         width: markerSize,
-  //         height: markerSize,
-  //         child: isZoomedIn
-  //             // Full detailed icon when close
-  //             ? const CircleAvatar(
-  //                 backgroundColor: Colors.blue,
-  //                 child: Icon(
-  //                   Icons.directions_bus,
-  //                   size: 16,
-  //                   color: Colors.white,
-  //                 ),
-  //               )
-  //             // Small subtle dot when far away
-  //             : Container(
-  //                 decoration: const BoxDecoration(
-  //                   color: Colors.blue,
-  //                   shape: BoxShape.circle,
-  //                 ),
-  //               ),
-  //       );
-  //     }).toList(),
-  //   );
-  // }
-
-  // Helper: Small Grid Boxes
   Widget _buildInfoBox(String label, Widget content) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withAlpha(13),
           borderRadius: BorderRadius.circular(15),
         ),
         child: Column(
@@ -821,7 +695,6 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // Helper: Outlined Action Buttons
   Widget _buildActionButton(
     IconData icon,
     String label, {
@@ -843,22 +716,24 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    _mapController.dispose();
-    super.dispose();
-  }
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MapProvider>();
     final transitProvider = context.watch<TransitProvider>();
 
-    final List<TransitRoute> displayRoutes = _lineRoutes
+    // Seed the filter with every route the first time line routes load, so
+    // the default view shows all routes. After that, the user owns the set.
+    if (!_seededFilterFromRoutes && transitProvider.lineRoutes.isNotEmpty) {
+      _seededFilterFromRoutes = true;
+      _selectedRouteIds.addAll(transitProvider.lineRoutes.map((r) => r.id));
+    }
+
+    final displayRoutes = transitProvider.lineRoutes
         .where((r) => _selectedRouteIds.contains(r.id))
         .toList();
-
-    final List<Trip> displayTrips = transitProvider.trips
+    final displayTrips = transitProvider.trips
         .where((t) => _selectedRouteIds.contains(t.routeId))
         .toList();
 
@@ -881,35 +756,19 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
 
-    // final mapProvider = context.watch<MapProvider>();
-
-    // final filteredRoutes = _selectedRouteIds.isEmpty
-    //     ? _lineRoutes
-    //     : _lineRoutes
-    //           .where((route) => _selectedRouteIds.contains(route.id))
-    //           .toList();
-
-    // final filteredTrips = _selectedRouteIds.isEmpty
-    //     ? transitProvider.trips
-    //     : transitProvider.trips
-    //           .where((trip) => _selectedRouteIds.contains(trip.routeId))
-    //           .toList();
-
     return Stack(
       children: [
+        // ── Map ───────────────────────────────────────────────────────────
         FlutterMap(
           mapController: _mapController,
-          options: MapOptions(  
+          options: MapOptions(
             initialCenter: provider.currentPosition!,
             initialZoom: _currentZoom,
             minZoom: 5,
             maxZoom: 18,
-            onPositionChanged: (MapCamera camera, bool hasGesture) {
+            onPositionChanged: (camera, hasGesture) {
               if (camera.zoom != _currentZoom) {
-                print("CURRENT ZOOM: ${camera.zoom}");
-                setState(() {
-                  _currentZoom = camera.zoom;
-                });
+                setState(() => _currentZoom = camera.zoom);
               }
             },
             onTap: _onMapTap,
@@ -921,55 +780,72 @@ class _MapScreenState extends State<MapScreen> {
             },
           ),
           children: [
-            // 1. Base Map Layer (Always first)
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.kh_map_app',
             ),
-
-            if (_currentZoom >= 12.0)
+            // States A/B: full bus route polylines (zoom-gated).
+            if (provider.showBusLines && _currentZoom >= 12.0)
               TransitRouteLayer(
                 routes: displayRoutes,
-                routeStops: _routeStops,
-                routeColors: _routeColors,
+                routeStops: transitProvider.routeStops,
+                routeColors: transitProvider.routeColors,
               ),
-
+            // State C: routing overlay.
+            if (provider.isRoutingActive && provider.activeOption != null)
+              RoutingOverlayLayer(option: provider.activeOption!),
             if (_currentZoom >= 12.0)
               BusMarkersLayer(
                 trips: displayTrips,
-                routeColors: _routeColors,
-                onBusTap: (trip) => _showBusDetails(trip),
+                routeColors: transitProvider.routeColors,
+                onBusTap: _showBusDetails,
               ),
-
             if (_currentZoom >= 15.0)
-              PlaceMarkersLayer(places: _places, onTap: _showPlaceDetail),
-
-            // 5. USER LOCATION (The Blue Dot)
+              PlaceMarkersLayer(places: provider.places, onTap: _showPlaceDetail),
             UserLocationMarkerLayer(position: provider.currentPosition!),
           ],
         ),
+
+        // ── Top bar: search bar OR route search overlay ──────────────────
         Positioned(
           top: 0,
           left: 0,
           right: 0,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                color: Colors.white,
-                height: MediaQuery.of(context).padding.top,
-              ),
-              MapSearchBar(onPlaceSelected: _focusOnPlace),
-            ],
-          ),
+          child:
+              provider.showRouteSearch &&
+                  provider.routeSearchDestination != null
+              ? RouteSearchOverlay(
+                  places: provider.places,
+                  currentLocation: provider.currentPosition!,
+                  initialDestination: provider.routeSearchDestination!,
+                  onClose: () => provider.closeRouteSearch(),
+                  onSubmit: ({required origin, required destination}) =>
+                      provider.submitRouteSearch(
+                        origin: origin,
+                        destination: destination,
+                      ),
+                  onRequestMapPick: (onPicked) =>
+                      provider.startMapPick(onPicked),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      color: Colors.white,
+                      height: MediaQuery.of(context).padding.top,
+                    ),
+                    MapSearchBar(onPlaceSelected: _focusOnPlace),
+                  ],
+                ),
         ),
 
+        // ── Route filter ────────────────────────────────────────────────
         Positioned(
-          bottom: 100, // Adjust this so it is above your LocateMeButton
+          bottom: 100,
           right: 16,
           child: FloatingActionButton(
             heroTag: 'route_filter',
-            mini: true, // Small circle
+            mini: true,
             backgroundColor: const Color(0xFF1A2B4C),
             onPressed: _showRouteSelector,
             child: const Icon(
@@ -979,12 +855,25 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
         ),
-        // LOCATE ME BUTTON
+
+        // ── Locate-me button ─────────────────────────────────────────────
         LocateMeButton(
-          isLoading: _placesLoading,
+          isLoading: provider.placesLoading,
           followUser: provider.followUser,
           onPressed: _centerOnUser,
         ),
+
+        // ── Map-pick hint banner (reads provider internally) ─────────────
+        const MapPickBanner(),
+
+        // ── Route info card (State C) ────────────────────────────────────
+        if (provider.isRoutingActive)
+          RouteInfoCard(
+            onClear: () {
+              provider.clearRouting();
+              provider.removePin();
+            },
+          ),
       ],
     );
   }
