@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../models/route_stop.dart';
+import '../models/transit_route.dart';
 import '../models/trip.dart';
 import '../services/transit_service.dart';
 
 class TransitProvider extends ChangeNotifier {
   final TransitService _service = TransitService();
 
+  // ── Live trips ────────────────────────────────────────────────────────────
   List<Trip> _trips = [];
   bool _loading = false;
   String? _error;
@@ -22,19 +25,74 @@ class TransitProvider extends ChangeNotifier {
   static const Duration _slowPoll = Duration(seconds: 10);
   Duration _currentInterval = _slowPoll;
 
-  /// Fetches active trips once and starts an adaptive poll cycle.
-  /// Safe to call from [State.initState] — the first fetch is deferred
-  /// via [Future.microtask] so it never fires during the build phase.
+  // ── Line routes / stops / colors ──────────────────────────────────────────
+  static const List<Color> _palette = [
+    Colors.red,
+    Colors.blue,
+    Colors.green,
+    Colors.orange,
+    Colors.purple,
+    Colors.cyan,
+    Colors.pink,
+    Colors.teal,
+    Colors.indigo,
+    Colors.amber,
+  ];
+
+  List<TransitRoute> _lineRoutes = [];
+  Map<String, List<RouteStop>> _routeStops = {};
+  Map<String, Color> _routeColors = {};
+  bool _routesLoading = false;
+  String? _routesError;
+
+  List<TransitRoute> get lineRoutes => _lineRoutes;
+  Map<String, List<RouteStop>> get routeStops => _routeStops;
+  Map<String, Color> get routeColors => _routeColors;
+  bool get routesLoading => _routesLoading;
+  String? get routesError => _routesError;
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  /// Fetches active trips and line routes, then starts an adaptive poll cycle.
   Future<void> init() async {
-    await Future.microtask(refresh);
+    await Future.microtask(() async {
+      await loadRoutes();
+      await refresh();
+    });
     _schedulePoll();
   }
+
+  Future<void> loadRoutes() async {
+    _routesLoading = true;
+    _routesError = null;
+    notifyListeners();
+    try {
+      final routes = await _service.fetchLineRoutes();
+      final stopsMap = <String, List<RouteStop>>{};
+      final colors = <String, Color>{};
+      for (var i = 0; i < routes.length; i++) {
+        stopsMap[routes[i].id] = await _service.fetchRouteStops(routes[i].id);
+        colors[routes[i].id] = _palette[i % _palette.length];
+      }
+      _lineRoutes = routes;
+      _routeStops = stopsMap;
+      _routeColors = colors;
+    } catch (e) {
+      _routesError = e.toString();
+      debugPrint('TransitProvider: failed to load routes: $e');
+    } finally {
+      _routesLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ── Trip polling ──────────────────────────────────────────────────────────
 
   void _schedulePoll() {
     _pollTimer?.cancel();
     _pollTimer = Timer(_currentInterval, () async {
       await refresh();
-      _schedulePoll(); // reschedule so the interval can change dynamically
+      _schedulePoll();
     });
   }
 
@@ -44,14 +102,9 @@ class TransitProvider extends ChangeNotifier {
     notifyListeners();
     try {
       _trips = await _service.fetchActiveTrips();
-      // Switch poll speed based on whether any bus is currently moving.
       final hasInProgress = _trips.any((t) => t.isInProgress);
       final desired = hasInProgress ? _fastPoll : _slowPoll;
-      if (desired != _currentInterval) {
-        _currentInterval = desired;
-        // _schedulePoll is called after refresh() returns, so the next
-        // timer will already use the updated interval.
-      }
+      if (desired != _currentInterval) _currentInterval = desired;
     } catch (e) {
       _error = e.toString();
       debugPrint('TransitProvider: failed to refresh trips: $e');
