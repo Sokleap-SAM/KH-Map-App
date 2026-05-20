@@ -1,9 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../models/place.dart';
+import '../../screens/search_screen.dart';
 import '../../utils/constants/colors.dart';
 
 class MapSearchBar extends StatelessWidget {
-  const MapSearchBar({super.key});
+  final ValueChanged<Place>? onPlaceSelected;
+
+  const MapSearchBar({super.key, this.onPlaceSelected});
+
+  Future<void> _openSearch(BuildContext context) async {
+    final selected = await Navigator.of(context).push<Place>(
+      MaterialPageRoute(builder: (_) => const SearchScreen()),
+    );
+    if (selected != null) {
+      onPlaceSelected?.call(selected);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,35 +27,38 @@ class MapSearchBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Search field
-          Container(
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFF243350),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: AppColors.secondaryColor,
-                width: 1.5,
-              ),
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 14),
-                const Icon(
-                  Icons.location_on_outlined,
-                  color:  AppColors.secondaryColor,
-                  size: 22,
+          GestureDetector(
+            onTap: () => _openSearch(context),
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFF243350),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: AppColors.secondaryColor,
+                  width: 1.5,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'ស្វែងរកទីកន្លែង . . .',
-                    style: GoogleFonts.notoSansKhmer(
-                      color: Colors.white70,
-                      fontSize: 14,
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 14),
+                  const Icon(
+                    Icons.location_on_outlined,
+                    color: AppColors.secondaryColor,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'ស្វែងរកទីកន្លែង . . .',
+                      style: GoogleFonts.notoSansKhmer(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -52,7 +68,7 @@ class MapSearchBar extends StatelessWidget {
             children: [
               _CategoryButton(
                 icon: Icons.restaurant,
-                label: 'មូលអាហារ',
+                label: 'ភោជនីយដ្ឋាន',
                 color: AppColors.buttonCategoryBlueColor,
               ),
               _CategoryButton(
@@ -72,7 +88,7 @@ class MapSearchBar extends StatelessWidget {
               ),
               _CategoryButton(
                 icon: Icons.local_cafe_outlined,
-                label: 'បាងកាហេ',
+                label: 'ហាងកាហ្វេ',
                 color: AppColors.buttonCategoryPinkColor,
               ),
             ],
