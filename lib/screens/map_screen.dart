@@ -255,11 +255,7 @@ class _MapScreenState extends State<MapScreen> {
                           "ស្ថានភាព",
                           Row(
                             children: const [
-                              Icon(
-                                Icons.circle,
-                                color: Colors.green,
-                                size: 10,
-                              ),
+                              Icon(Icons.circle, color: Colors.green, size: 10),
                               SizedBox(width: 5),
                               Text(
                                 "In service",
@@ -467,118 +463,142 @@ class _MapScreenState extends State<MapScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E1E1E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return DraggableScrollableSheet(
           initialChildSize: 0.6,
-          maxChildSize: 0.9,
+          maxChildSize: 0.95,
           minChildSize: 0.4,
           expand: false,
           builder: (context, scrollController) {
-            return Column(
-              children: [
-                const SizedBox(height: 12),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white12,
-                    borderRadius: BorderRadius.circular(10),
+            // AUTO-SCROLL LOGIC: Run once when the panel opens
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (scrollController.hasClients) {
+                scrollController.animateTo(
+                  (trip.nextStopIndex * 60.0).clamp(
+                    0.0,
+                    scrollController.position.maxScrollExtent,
                   ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Text(
-                    "ចំណតទាំងអស់ · ALL STOPS",
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
+                  duration: const Duration(milliseconds: 800),
+                  curve: Curves.easeOutCubic,
+                );
+              }
+            });
+
+            return Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white12,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    controller: scrollController,
-                    itemCount: trip.allStops.length,
-                    itemBuilder: (context, index) {
-                      final isTarget = index == trip.nextStopIndex;
-                      final isPassed = index < trip.nextStopIndex;
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Text(
+                      "ចំណតទាំងអស់ · ALL STOPS",
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.only(bottom: 50),
+                      itemCount: trip.allStops.length,
+                      itemBuilder: (context, index) {
+                        bool isTarget = index == trip.nextStopIndex;
+                        bool isPassed = index < trip.nextStopIndex;
+                        bool isLast = index == trip.allStops.length - 1;
+                        bool isLinePassed = index < (trip.nextStopIndex - 1);
+                        bool isLineLoading = index == (trip.nextStopIndex - 1);
 
-                      return IntrinsicHeight(
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 30),
-                            Column(
-                              children: [
-                                Container(
-                                  width: 14,
-                                  height: 14,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: isTarget
-                                        ? const Color(0xFF1976D2)
-                                        : (isPassed
-                                              ? Colors.white24
-                                              : Colors.white10),
-                                    border: isTarget
-                                        ? Border.all(
-                                            color: Colors.blue.withAlpha(128),
-                                            width: 4,
-                                          )
-                                        : null,
-                                  ),
-                                  child: isTarget
-                                      ? Center(
-                                          child: Container(
-                                            width: 4,
-                                            height: 4,
-                                            decoration: const BoxDecoration(
-                                              color: Colors.white,
-                                              shape: BoxShape.circle,
-                                            ),
+                        return IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 1. THE TIMELINE LANE (Fixed width ensures no "floating")
+                              SizedBox(
+                                width: 60,
+                                child: Column(
+                                  children: [
+                                    // Area for the Dot
+                                    SizedBox(
+                                      height:
+                                          30, // Centers dot with the first line of text
+                                      child: Center(
+                                        child: isTarget
+                                            ? const BusPulseIndicator()
+                                            : Container(
+                                                width: 10,
+                                                height: 10,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: isPassed
+                                                      ? const Color(0xFF1976D2)
+                                                      : Colors.white10,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                    // Area for the Connecting Line
+                                    if (!isLast)
+                                      Expanded(
+                                        child: Center(
+                                          child: FlowingLineConnector(
+                                            isPassed: isLinePassed,
+                                            isLoading: isLineLoading,
                                           ),
-                                        )
-                                      : null,
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                                Expanded(
-                                  child: Container(
-                                    width: 2,
-                                    color: Colors.white10,
+                              ),
+
+                              // 2. THE STATION NAME
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: 4,
+                                    bottom: 40,
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(width: 20),
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.only(bottom: 30),
-                                child: Text(
-                                  trip.allStops[index],
-                                  style: TextStyle(
-                                    color: isTarget
-                                        ? Colors.white
-                                        : (isPassed
-                                              ? Colors.white24
-                                              : Colors.white38),
-                                    fontSize: 16,
-                                    fontWeight: isTarget
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
+                                  child: Text(
+                                    trip.allStops[index],
+                                    style: TextStyle(
+                                      color: isTarget
+                                          ? Colors.white
+                                          : (isPassed
+                                                ? Colors.white70
+                                                : Colors.white24),
+                                      fontSize: 16,
+                                      height: 1.4,
+                                      fontWeight: isTarget
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                              const SizedBox(width: 20),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           },
         );
@@ -785,12 +805,13 @@ class _MapScreenState extends State<MapScreen> {
               userAgentPackageName: 'com.kh_map_app',
             ),
             // States A/B: full bus route polylines (zoom-gated).
-            if (provider.showBusLines && _currentZoom >= 12.0)
-              TransitRouteLayer(
-                routes: displayRoutes,
-                routeStops: transitProvider.routeStops,
-                routeColors: transitProvider.routeColors,
-              ),
+            // if (provider.showBusLines && _currentZoom >= 12.0)
+            TransitRouteLayer(
+              routes: displayRoutes,
+              routeStops: transitProvider.routeStops,
+              routeColors: transitProvider.routeColors,
+              currentZoom: _currentZoom,
+            ),
             // State C: routing overlay.
             if (provider.isRoutingActive && provider.activeOption != null)
               RoutingOverlayLayer(option: provider.activeOption!),
@@ -801,7 +822,10 @@ class _MapScreenState extends State<MapScreen> {
                 onBusTap: _showBusDetails,
               ),
             if (_currentZoom >= 17.0)
-              PlaceMarkersLayer(places: provider.places, onTap: _showPlaceDetail),
+              PlaceMarkersLayer(
+                places: provider.places,
+                onTap: _showPlaceDetail,
+              ),
             UserLocationMarkerLayer(position: provider.currentPosition!),
           ],
         ),
@@ -876,5 +900,163 @@ class _MapScreenState extends State<MapScreen> {
           ),
       ],
     );
+  }
+}
+
+class BusPulseIndicator extends StatefulWidget {
+  const BusPulseIndicator({super.key});
+
+  @override
+  State<BusPulseIndicator> createState() => _BusPulseIndicatorState();
+}
+
+class _BusPulseIndicatorState extends State<BusPulseIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(); // Makes it pulse forever
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            // The growing "Radar" ring
+            Container(
+              width: 12 + (24 * _controller.value),
+              height: 12 + (24 * _controller.value),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(
+                  0xFF1976D2,
+                ).withOpacity(1 - _controller.value),
+              ),
+            ),
+            // The solid center dot
+            Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF1976D2),
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: Center(
+                child: Container(
+                  width: 4,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class FlowingLineConnector extends StatefulWidget {
+  final bool isPassed;
+  final bool isLoading;
+
+  const FlowingLineConnector({
+    super.key,
+    required this.isPassed,
+    required this.isLoading,
+  });
+
+  @override
+  State<FlowingLineConnector> createState() => _FlowingLineConnectorState();
+}
+
+class _FlowingLineConnectorState extends State<FlowingLineConnector>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // Increase duration to 1.5 seconds for a smoother flow
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000), 
+    );
+    
+    if (widget.isLoading) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(FlowingLineConnector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If the bus moves, start or stop the animation
+    if (widget.isLoading && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.isLoading) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 1. If the segment is already passed, show a solid blue line
+    if (widget.isPassed) {
+      return Container(width: 2.5, color: const Color(0xFF1976D2));
+    }
+
+    // 2. If the segment is currently loading (the bus is on it)
+    if (widget.isLoading) {
+      return AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return Container(
+            width: 2.5,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                // This math slides the gradient from -3 to +3
+                // creating a "window" of light that flows down
+                begin: Alignment(0, -1 + (_controller.value * 6)),
+                end: Alignment(0, -2 + (_controller.value * 6)),
+                colors: const [
+                  Color(0xFF1976D2), // Dark Blue
+                  Color.fromARGB(255, 46, 59, 77),      // Bright Light
+                  Color(0xFF1976D2), // Dark Blue
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    // 3. If it's a future segment, show a dim grey line
+    return Container(width: 2, color: Colors.white10);
   }
 }
