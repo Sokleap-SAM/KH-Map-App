@@ -22,8 +22,8 @@ class PlaceMarkersLayer extends StatelessWidget {
         final categoryName = place.category?.name;
         return Marker(
           point: LatLng(place.latitude, place.longitude),
-          width: 16,
-          height: 16,
+          width: 25,
+          height: 25,
           child: GestureDetector(
             onTap: () => onTap(context, place),
             child: Container(
@@ -41,7 +41,7 @@ class PlaceMarkersLayer extends StatelessWidget {
               child: Icon(
                 getIconForCategory(categoryName),
                 color: Colors.white,
-                size: 10,
+                size: 15,
               ),
             ),
           ),

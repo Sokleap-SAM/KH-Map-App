@@ -800,7 +800,7 @@ class _MapScreenState extends State<MapScreen> {
                 routeColors: transitProvider.routeColors,
                 onBusTap: _showBusDetails,
               ),
-            if (_currentZoom >= 15.0)
+            if (_currentZoom >= 17.0)
               PlaceMarkersLayer(places: provider.places, onTap: _showPlaceDetail),
             UserLocationMarkerLayer(position: provider.currentPosition!),
           ],

@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/constants.dart';
 
 class AuthService {
-  static const String baseUrl = "http://localhost:3000";
+  static const String baseUrl = AppConfig.baseUrl;
 
   // 1. REGISTER
   Future<http.Response> register(
