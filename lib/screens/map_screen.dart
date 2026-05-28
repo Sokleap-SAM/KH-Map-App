@@ -8,10 +8,13 @@ import 'package:kh_map_app/widgets/map/bus_markers_layer.dart';
 import 'package:kh_map_app/widgets/map/transit_route_layer.dart';
 import 'package:kh_map_app/widgets/map_screen/Pin.dart';
 import 'package:kh_map_app/widgets/map_screen/SearchBar.dart';
+import 'package:kh_map_app/widgets/map_screen/place_detail_sheet.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/map_provider.dart';
+import '../services/auth_service.dart';
+import '../services/favorites_service.dart';
 import '../services/place_service.dart';
 import '../services/transit_service.dart';
 import '../widgets/map/locate_me_button.dart';
@@ -29,9 +32,11 @@ class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final PlaceService _placeService = PlaceService();
   final TransitService _transitService = TransitService();
+  final FavoritesService _favoritesService = FavoritesService();
 
   List<Place> _places = [];
   bool _placesLoading = true;
+  final Set<String> _favoritePlaceIds = {};
 
   List<TransitRoute> _lineRoutes = [];
   Map<String, List<RouteStop>> _routeStops = {};
@@ -57,6 +62,61 @@ class _MapScreenState extends State<MapScreen> {
     context.read<TransitProvider>().init();
     _loadPlaces();
     _loadLineRoutes();
+    _loadFavorites();
+    AuthService.tokenNotifier.addListener(_onAuthChanged);
+  }
+
+  void _onAuthChanged() {
+    // Auth state changed (login/logout). Drop the stale per-user set
+    // immediately so the UI reflects the change without waiting for the
+    // network round-trip, then reload from the right source.
+    if (!mounted) return;
+    setState(() => _favoritePlaceIds.clear());
+    _loadFavorites();
+  }
+
+  Future<void> _loadFavorites() async {
+    try {
+      final favorites = await _favoritesService.load();
+      if (!mounted) return;
+      setState(() {
+        _favoritePlaceIds
+          ..clear()
+          ..addAll(favorites.map((f) => f.placeId));
+      });
+    } catch (e) {
+      debugPrint('Failed to load favorites: $e');
+    }
+  }
+
+  Future<void> _toggleFavorite(Place place, bool isFav) async {
+    setState(() {
+      if (isFav) {
+        _favoritePlaceIds.add(place.id);
+      } else {
+        _favoritePlaceIds.remove(place.id);
+      }
+    });
+    try {
+      if (isFav) {
+        await _favoritesService.add(place);
+      } else {
+        await _favoritesService.remove(place.id);
+      }
+    } catch (e) {
+      debugPrint('Failed to persist favorite: $e');
+      if (!mounted) return;
+      setState(() {
+        if (isFav) {
+          _favoritePlaceIds.remove(place.id);
+        } else {
+          _favoritePlaceIds.add(place.id);
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save favorite. Try again.')),
+      );
+    }
   }
 
   Future<void> _loadPlaces() async {
@@ -173,43 +233,19 @@ class _MapScreenState extends State<MapScreen> {
   void _showPlaceDetail(BuildContext context, Place place) {
     showModalBottomSheet(
       context: context,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(place.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 4),
-            Text('Category: ${place.category?.name ?? 'Uncategorized'}'),
-            Text('Rating: ${place.averageRating?.toStringAsFixed(1) ?? 'N/A'}'),
-            if (place.photos.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 100,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: place.photos.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) => ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      place.photos[i],
-                      width: 120,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => PlaceDetailSheet(
+        place: place,
+        initialFavorite: _favoritePlaceIds.contains(place.id),
+        onFavoriteChanged: (isFav) => _toggleFavorite(place, isFav),
       ),
     );
   }
 
   @override
   void dispose() {
+    AuthService.tokenNotifier.removeListener(_onAuthChanged);
     _mapController.dispose();
     super.dispose();
   }

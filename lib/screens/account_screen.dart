@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/screens/login_screen.dart';
+import 'package:kh_map_app/services/auth_service.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -62,8 +63,7 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _handleLogout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('access_token');
+    await AuthService().logout();
     setState(() {
       isLoggedIn = false;
       userName = "មិនមានគណនី";
