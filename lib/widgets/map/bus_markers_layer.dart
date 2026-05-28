@@ -8,10 +8,12 @@ class BusMarkersLayer extends StatelessWidget {
     super.key,
     required this.trips,
     required this.routeColors,
+    required this.onBusTap,
   });
 
   final List<Trip> trips;
   final Map<String, Color> routeColors;
+  final Function(Trip) onBusTap;
 
   @override
   Widget build(BuildContext context) {
@@ -23,34 +25,17 @@ class BusMarkersLayer extends StatelessWidget {
 
     return MarkerLayer(
       markers: visibleTrips.map((trip) {
-        final color = routeColors[trip.routeId] ?? Colors.blueGrey;
+        // final color = routeColors[trip.routeId] ?? Colors.blueGrey;
         return Marker(
           point: trip.currentLocation!,
-          width: 36,
-          height: 36,
-          child: Tooltip(
-            message:
-                '${trip.routeNumber != null ? 'Route ${trip.routeNumber}' : 'Bus'}'
-                ' · ${trip.busNumber ?? trip.busId}'
-                ' · Stop ${trip.currentStopIndex + 1}',
-            child: Container(
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black38,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.directions_bus,
-                color: Colors.white,
-                size: 20,
-              ),
+          width: 30,
+          height: 30,
+          child: GestureDetector(
+            onTap: () => onBusTap(trip),
+            child: Image.asset(
+              'assets/images/${trip.busImage}',
+              errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.directions_bus, color: Colors.blue),
             ),
           ),
         );

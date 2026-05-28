@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:kh_map_app/models/place.dart';
-import 'package:kh_map_app/models/route_stop.dart';
-import 'package:kh_map_app/models/transit_route.dart';
+import 'package:kh_map_app/models/route_search_selection.dart';
+import 'package:kh_map_app/models/trip.dart';
 import 'package:kh_map_app/providers/transit_provider.dart';
 import 'package:kh_map_app/widgets/map/bus_markers_layer.dart';
+import 'package:kh_map_app/widgets/map/map_pick_banner.dart';
+import 'package:kh_map_app/widgets/map/route_info_card.dart';
+import 'package:kh_map_app/widgets/map/route_search_overlay.dart';
+import 'package:kh_map_app/widgets/map/routing_overlay_layer.dart';
 import 'package:kh_map_app/widgets/map/transit_route_layer.dart';
-import 'package:kh_map_app/widgets/map_screen/Pin.dart';
-import 'package:kh_map_app/widgets/map_screen/SearchBar.dart';
+import 'package:kh_map_app/widgets/map_screen/pin.dart';
 import 'package:kh_map_app/widgets/map_screen/place_detail_sheet.dart';
+import 'package:kh_map_app/widgets/map_screen/search_bar.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/map_provider.dart';
 import '../services/auth_service.dart';
 import '../services/favorites_service.dart';
-import '../services/place_service.dart';
-import '../services/transit_service.dart';
 import '../widgets/map/locate_me_button.dart';
 import '../widgets/map/place_markers_layer.dart';
 import '../widgets/map/user_location_marker_layer.dart';
@@ -30,46 +32,25 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
-  final PlaceService _placeService = PlaceService();
-  final TransitService _transitService = TransitService();
   final FavoritesService _favoritesService = FavoritesService();
 
-  List<Place> _places = [];
-  bool _placesLoading = true;
+  // UI-only state. The data layers (places, line routes, trips, colors) live
+  // in MapProvider / TransitProvider.
+  double _currentZoom = 13.0;
+  final Set<String> _selectedRouteIds = {};
+  bool _seededFilterFromRoutes = false;
   final Set<String> _favoritePlaceIds = {};
-
-  List<TransitRoute> _lineRoutes = [];
-  Map<String, List<RouteStop>> _routeStops = {};
-  Map<String, Color> _routeColors = {};
-
-  static const List<Color> _routePalette = [
-    Colors.red,
-    Colors.blue,
-    Colors.green,
-    Colors.orange,
-    Colors.purple,
-    Colors.cyan,
-    Colors.pink,
-    Colors.teal,
-    Colors.indigo,
-    Colors.amber,
-  ];
 
   @override
   void initState() {
     super.initState();
     context.read<MapProvider>().init();
     context.read<TransitProvider>().init();
-    _loadPlaces();
-    _loadLineRoutes();
     _loadFavorites();
     AuthService.tokenNotifier.addListener(_onAuthChanged);
   }
 
   void _onAuthChanged() {
-    // Auth state changed (login/logout). Drop the stale per-user set
-    // immediately so the UI reflects the change without waiting for the
-    // network round-trip, then reload from the right source.
     if (!mounted) return;
     setState(() => _favoritePlaceIds.clear());
     _loadFavorites();
@@ -119,61 +100,14 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Future<void> _loadPlaces() async {
-    try {
-      final places = await _placeService.fetchPlaces();
-      if (mounted) {
-        setState(() {
-          _places = places;
-          _placesLoading = false;
-        });
-      }
-    } catch (e, stack) {
-      debugPrint('Failed to load places: $e\n$stack');
-      if (mounted) {
-        setState(() => _placesLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load places: $e'),
-            action: SnackBarAction(
-              label: 'Retry',
-              onPressed: () {
-                setState(() => _placesLoading = true);
-                _loadPlaces();
-              },
-            ),
-          ),
-        );
-      }
-    }
+  @override
+  void dispose() {
+    AuthService.tokenNotifier.removeListener(_onAuthChanged);
+    _mapController.dispose();
+    super.dispose();
   }
 
-  Future<void> _loadLineRoutes() async {
-    try {
-      final routes = await _transitService.fetchLineRoutes();
-      final stopsMap = <String, List<RouteStop>>{};
-      final colors = <String, Color>{};
-      for (var i = 0; i < routes.length; i++) {
-        final route = routes[i];
-        stopsMap[route.id] = await _transitService.fetchRouteStops(route.id);
-        colors[route.id] = _routePalette[i % _routePalette.length];
-      }
-      if (mounted) {
-        setState(() {
-          _lineRoutes = routes;
-          _routeStops = stopsMap;
-          _routeColors = colors;
-        });
-      }
-    } catch (e) {
-      debugPrint('Failed to load line routes: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load bus lines: $e')));
-      }
-    }
-  }
+  // ── Map interactions ──────────────────────────────────────────────────────
 
   void _focusOnPlace(Place place) {
     final target = LatLng(place.latitude, place.longitude);
@@ -194,10 +128,21 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onMapTap(TapPosition tapPosition, LatLng latLng) {
-    final provider = context.read<MapProvider>();
-    provider.dropPin(latLng);
+    final mapProvider = context.read<MapProvider>();
+    // Map-pick mode: provider reverse-geocodes and fires the pending callback.
+    if (mapProvider.isMapPickMode) {
+      mapProvider.handleMapPickTap(latLng);
+      return;
+    }
+    // Don't drop a pin while a route is active or the route search overlay
+    // is open — a new pin would re-trigger openRouteSearch and overwrite the
+    // origin/destination the user is currently editing.
+    if (mapProvider.isRoutingActive || mapProvider.showRouteSearch) return;
+    mapProvider.dropPin(latLng);
     _showPinSheet();
   }
+
+  // ── Bottom sheets ─────────────────────────────────────────────────────────
 
   void _showPinSheet() {
     showModalBottomSheet(
@@ -208,16 +153,24 @@ class _MapScreenState extends State<MapScreen> {
         return ChangeNotifierProvider.value(
           value: context.read<MapProvider>(),
           child: Consumer<MapProvider>(
-            builder: (context, provider, _) {
-              if (provider.droppedPin == null) {
-                return const SizedBox.shrink();
-              }
+            builder: (ctx, provider, _) {
+              if (provider.droppedPin == null) return const SizedBox.shrink();
               return PinInfoSheet(
                 latitude: provider.droppedPin!.latitude,
                 longitude: provider.droppedPin!.longitude,
                 placeName: provider.droppedPinPlace,
                 road: provider.droppedPinRoad,
                 isLoading: provider.isLoadingPinInfo,
+                onDirections: () {
+                  final pin = provider.droppedPin!;
+                  final label = provider.droppedPinPlace != null
+                      ? provider.droppedPinPlace!.split(',').first.trim()
+                      : '${pin.latitude.toStringAsFixed(6)}, '
+                            '${pin.longitude.toStringAsFixed(6)}';
+                  provider.openRouteSearch(
+                    RouteSearchSelection(label: label, location: pin),
+                  );
+                },
               );
             },
           ),
@@ -225,7 +178,8 @@ class _MapScreenState extends State<MapScreen> {
       },
     ).whenComplete(() {
       if (mounted) {
-        context.read<MapProvider>().removePin();
+        final provider = context.read<MapProvider>();
+        if (!provider.isRoutingActive) provider.removePin();
       }
     });
   }
@@ -239,20 +193,610 @@ class _MapScreenState extends State<MapScreen> {
         place: place,
         initialFavorite: _favoritePlaceIds.contains(place.id),
         onFavoriteChanged: (isFav) => _toggleFavorite(place, isFav),
+        onDirections: () {
+          context.read<MapProvider>().openRouteSearch(
+            RouteSearchSelection(
+              label: place.name,
+              location: LatLng(place.latitude, place.longitude),
+            ),
+          );
+        },
       ),
     );
   }
 
-  @override
-  void dispose() {
-    AuthService.tokenNotifier.removeListener(_onAuthChanged);
-    _mapController.dispose();
-    super.dispose();
+  void _showBusDetails(Trip trip) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          margin: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1976D2),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "ខ្សែរត់ · ROUTE",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              trip.routeNumber ?? 'N/A',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(51),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text(
+                                "ផ្លាកលេខ",
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 10,
+                                ),
+                              ),
+                              Text(
+                                trip.busNumber ?? '??z',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 15),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.directions_bus_filled,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            trip.routeName ?? 'Unknown Route',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                            maxLines: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        _buildInfoBox(
+                          "ស្ថានភាព",
+                          Row(
+                            children: const [
+                              Icon(
+                                Icons.circle,
+                                color: Colors.green,
+                                size: 10,
+                              ),
+                              SizedBox(width: 5),
+                              Text(
+                                "In service",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        _buildInfoBox(
+                          "ETA",
+                          const Text(
+                            "~4 min",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 15),
+                    Container(
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(13),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFEBD8),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.bus_alert,
+                              color: Color(0xFFE8B67D),
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  "ចំណតបន្ទាប់ · NEXT STOP",
+                                  style: TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                                Text(
+                                  trip.nextStopName,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    Row(
+                      children: [
+                        _buildActionButton(
+                          Icons.list,
+                          "All stops",
+                          onTap: () {
+                            Navigator.pop(context);
+                            _showAllStopsPanel(trip);
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        _buildActionButton(
+                          Icons.map_outlined,
+                          "Directions",
+                          onTap: () {
+                            Navigator.pop(context);
+                            _showDirectionsPanel(trip);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
+
+  void _showRouteSelector() {
+    // Snapshot once — the modal owns its own setState for redraws.
+    final transit = context.read<TransitProvider>();
+    final lineRoutes = transit.lineRoutes;
+    final routeColors = transit.routeColors;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "ជ្រើសរើសខ្សែរត់ · SELECT ROUTES",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  CheckboxListTile(
+                    title: const Text(
+                      "បង្ហាញទាំងអស់ (Show All)",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    value:
+                        lineRoutes.isNotEmpty &&
+                        _selectedRouteIds.length == lineRoutes.length,
+                    activeColor: const Color(0xFFE8B67D),
+                    onChanged: (bool? val) {
+                      setState(() {
+                        if (val == true) {
+                          _selectedRouteIds
+                            ..clear()
+                            ..addAll(lineRoutes.map((r) => r.id));
+                        } else {
+                          _selectedRouteIds.clear();
+                        }
+                      });
+                      setModalState(() {});
+                    },
+                  ),
+                  const Divider(color: Colors.white10),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: lineRoutes.length,
+                      itemBuilder: (context, index) {
+                        final route = lineRoutes[index];
+                        final isSelected = _selectedRouteIds.contains(route.id);
+                        final color = routeColors[route.id] ?? Colors.blue;
+
+                        return CheckboxListTile(
+                          activeColor: color,
+                          secondary: Icon(Icons.directions_bus, color: color),
+                          title: Text(
+                            "ខ្សែរត់ ${route.code ?? '??'}",
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          subtitle: Text(
+                            route.name ?? '',
+                            style: const TextStyle(
+                              color: Colors.white38,
+                              fontSize: 11,
+                            ),
+                          ),
+                          value: isSelected,
+                          onChanged: (val) {
+                            setState(() {
+                              if (isSelected) {
+                                _selectedRouteIds.remove(route.id);
+                              } else {
+                                _selectedRouteIds.add(route.id);
+                              }
+                            });
+                            setModalState(() {});
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAllStopsPanel(Trip trip) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          maxChildSize: 0.9,
+          minChildSize: 0.4,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white12,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Text(
+                    "ចំណតទាំងអស់ · ALL STOPS",
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    itemCount: trip.allStops.length,
+                    itemBuilder: (context, index) {
+                      final isTarget = index == trip.nextStopIndex;
+                      final isPassed = index < trip.nextStopIndex;
+
+                      return IntrinsicHeight(
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 30),
+                            Column(
+                              children: [
+                                Container(
+                                  width: 14,
+                                  height: 14,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isTarget
+                                        ? const Color(0xFF1976D2)
+                                        : (isPassed
+                                              ? Colors.white24
+                                              : Colors.white10),
+                                    border: isTarget
+                                        ? Border.all(
+                                            color: Colors.blue.withAlpha(128),
+                                            width: 4,
+                                          )
+                                        : null,
+                                  ),
+                                  child: isTarget
+                                      ? Center(
+                                          child: Container(
+                                            width: 4,
+                                            height: 4,
+                                            decoration: const BoxDecoration(
+                                              color: Colors.white,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                                Expanded(
+                                  child: Container(
+                                    width: 2,
+                                    color: Colors.white10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 20),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 30),
+                                child: Text(
+                                  trip.allStops[index],
+                                  style: TextStyle(
+                                    color: isTarget
+                                        ? Colors.white
+                                        : (isPassed
+                                              ? Colors.white24
+                                              : Colors.white38),
+                                    fontSize: 16,
+                                    fontWeight: isTarget
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showDirectionsPanel(Trip trip) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(25.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "ទិសដៅរត់ · DIRECTIONS",
+                style: TextStyle(
+                  color: Color(0xFFE8B67D),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.radio_button_checked,
+                    color: Colors.blue,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 15),
+                  const Text(
+                    "ចាប់ផ្តើម: ",
+                    style: TextStyle(color: Colors.white54),
+                  ),
+                  Expanded(
+                    child: Text(
+                      trip.allStops.first,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                margin: const EdgeInsets.only(left: 9),
+                height: 30,
+                width: 2,
+                color: Colors.white10,
+              ),
+              Row(
+                children: [
+                  const Icon(Icons.location_on, color: Colors.red, size: 20),
+                  const SizedBox(width: 15),
+                  const Text(
+                    "គោលដៅ: ",
+                    style: TextStyle(color: Colors.white54),
+                  ),
+                  Expanded(
+                    child: Text(
+                      trip.direction,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 30),
+              const Center(
+                child: Text(
+                  "មុខងារនេះនឹងមកដល់ឆាប់ៗនេះ\n(Navigation coming soon)",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white24, fontSize: 12),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildInfoBox(String label, Widget content) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withAlpha(13),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white38, fontSize: 10),
+            ),
+            const SizedBox(height: 5),
+            content,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(
+    IconData icon,
+    String label, {
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18, color: Colors.white),
+        label: Text(label, style: const TextStyle(color: Colors.white)),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          side: const BorderSide(color: Colors.white12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MapProvider>();
+    final transitProvider = context.watch<TransitProvider>();
+
+    // Seed the filter with every route the first time line routes load, so
+    // the default view shows all routes. After that, the user owns the set.
+    if (!_seededFilterFromRoutes && transitProvider.lineRoutes.isNotEmpty) {
+      _seededFilterFromRoutes = true;
+      _selectedRouteIds.addAll(transitProvider.lineRoutes.map((r) => r.id));
+    }
+
+    final displayRoutes = transitProvider.lineRoutes
+        .where((r) => _selectedRouteIds.contains(r.id))
+        .toList();
+    final displayTrips = transitProvider.trips
+        .where((t) => _selectedRouteIds.contains(t.routeId))
+        .toList();
 
     if (provider.locationError) {
       return const Center(
@@ -273,15 +817,21 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
 
-    final transitProvider = context.watch<TransitProvider>();
-
     return Stack(
       children: [
+        // ── Map ───────────────────────────────────────────────────────────
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(  
             initialCenter: provider.currentPosition!,
-            initialZoom: 17,
+            initialZoom: _currentZoom,
+            minZoom: 5,
+            maxZoom: 18,
+            onPositionChanged: (camera, hasGesture) {
+              if (camera.zoom != _currentZoom) {
+                setState(() => _currentZoom = camera.zoom);
+              }
+            },
             onTap: _onMapTap,
             onMapEvent: (event) {
               if (event is MapEventMoveStart &&
@@ -295,39 +845,96 @@ class _MapScreenState extends State<MapScreen> {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.kh_map_app',
             ),
-            TransitRouteLayer(
-              routes: _lineRoutes,
-              routeStops: _routeStops,
-              routeColors: _routeColors,
-            ),
-            BusMarkersLayer(
-              trips: transitProvider.trips,
-              routeColors: _routeColors,
-            ),
-            PlaceMarkersLayer(places: _places, onTap: _showPlaceDetail),
+            // States A/B: full bus route polylines (zoom-gated).
+            if (provider.showBusLines && _currentZoom >= 12.0)
+              TransitRouteLayer(
+                routes: displayRoutes,
+                routeStops: transitProvider.routeStops,
+                routeColors: transitProvider.routeColors,
+              ),
+            // State C: routing overlay.
+            if (provider.isRoutingActive && provider.activeOption != null)
+              RoutingOverlayLayer(option: provider.activeOption!),
+            if (_currentZoom >= 12.0)
+              BusMarkersLayer(
+                trips: displayTrips,
+                routeColors: transitProvider.routeColors,
+                onBusTap: _showBusDetails,
+              ),
+            if (_currentZoom >= 15.0)
+              PlaceMarkersLayer(places: provider.places, onTap: _showPlaceDetail),
             UserLocationMarkerLayer(position: provider.currentPosition!),
           ],
         ),
+
+        // ── Top bar: search bar OR route search overlay ──────────────────
         Positioned(
           top: 0,
           left: 0,
           right: 0,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                color: Colors.white,
-                height: MediaQuery.of(context).padding.top,
-              ),
-              MapSearchBar(onPlaceSelected: _focusOnPlace),
-            ],
+          child:
+              provider.showRouteSearch &&
+                  provider.routeSearchDestination != null
+              ? RouteSearchOverlay(
+                  places: provider.places,
+                  currentLocation: provider.currentPosition!,
+                  initialDestination: provider.routeSearchDestination!,
+                  onClose: () => provider.closeRouteSearch(),
+                  onSubmit: ({required origin, required destination}) =>
+                      provider.submitRouteSearch(
+                        origin: origin,
+                        destination: destination,
+                      ),
+                  onRequestMapPick: (onPicked) =>
+                      provider.startMapPick(onPicked),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      color: Colors.white,
+                      height: MediaQuery.of(context).padding.top,
+                    ),
+                    MapSearchBar(onPlaceSelected: _focusOnPlace),
+                  ],
+                ),
+        ),
+
+        // ── Route filter ────────────────────────────────────────────────
+        Positioned(
+          bottom: 100,
+          right: 16,
+          child: FloatingActionButton(
+            heroTag: 'route_filter',
+            mini: true,
+            backgroundColor: const Color(0xFF1A2B4C),
+            onPressed: _showRouteSelector,
+            child: const Icon(
+              Icons.alt_route,
+              color: Color(0xFFE8B67D),
+              size: 20,
+            ),
           ),
         ),
+
+        // ── Locate-me button ─────────────────────────────────────────────
         LocateMeButton(
-          isLoading: _placesLoading,
+          isLoading: provider.placesLoading,
           followUser: provider.followUser,
           onPressed: _centerOnUser,
         ),
+
+        // ── Map-pick hint banner (reads provider internally) ─────────────
+        const MapPickBanner(),
+
+        // ── Route info card (State C) ────────────────────────────────────
+        if (provider.isRoutingActive)
+          RouteInfoCard(
+            onClear: () {
+              provider.clearRouting();
+              provider.removePin();
+            },
+          ),
       ],
     );
   }
