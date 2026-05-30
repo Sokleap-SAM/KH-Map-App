@@ -11,8 +11,8 @@ const Color _kFirstBoardColor = Colors.red;
 
 // Numbered waypoint colours (1 = origin, intermediate = get-off, last = destination).
 const Color _kOriginColor = Color(0xFF22C55E); // emerald
-const Color _kAlightColor = _kNavBorder;        // blue
-const Color _kDestColor = Color(0xFFEF4444);   // red
+const Color _kAlightColor = _kNavBorder; // blue
+const Color _kDestColor = Color(0xFFEF4444); // red
 
 /// Draws the routing overlay for one [RouteOption] (the currently selected tab).
 ///
@@ -225,11 +225,7 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
     );
   }
 
-  Marker _numberedMarker(
-    LatLng point,
-    int number, {
-    required Color color,
-  }) {
+  Marker _numberedMarker(LatLng point, int number, {required Color color}) {
     return Marker(
       point: point,
       width: 34,
