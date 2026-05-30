@@ -221,6 +221,31 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
 
 // ── Tab bar ──────────────────────────────────────────────────────────────────
 
+/// Rank-based palette: fastest → slowest. Index 0 is the fastest option the
+/// backend returned; later indices fade through warmer hues to red.
+const List<Color> _kRankColors = [
+  Color(0xFF22C55E), // emerald — fastest
+  Color(0xFF84CC16), // lime
+  Color(0xFFEAB308), // amber
+  Color(0xFFF97316), // orange
+  Color(0xFFEF4444), // red — slowest
+];
+
+Color _rankColor(int index, int total) {
+  if (total <= 1) return _kRankColors.first;
+  // Spread the available options evenly across the palette so 2 options use
+  // green + red, 3 use green + yellow + red, etc.
+  final slot = ((index / (total - 1)) * (_kRankColors.length - 1)).round();
+  return _kRankColors[slot.clamp(0, _kRankColors.length - 1)];
+}
+
+String _formatRouteDuration(int minutes) {
+  if (minutes < 60) return '${minutes}m';
+  final h = minutes ~/ 60;
+  final m = minutes % 60;
+  return m == 0 ? '${h}h' : '${h}h ${m}m';
+}
+
 class _OptionTabBar extends StatelessWidget {
   const _OptionTabBar({
     required this.options,
@@ -232,77 +257,56 @@ class _OptionTabBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onTap;
 
-  IconData _iconForType(String type) {
-    switch (type) {
-      case 'walk':
-        return Icons.directions_walk;
-      case 'fastest':
-        return Icons.bolt;
-      case 'fast':
-        return Icons.directions_run;
-      case 'average':
-        return Icons.directions_bus;
-      case 'slower':
-      case 'slowest':
-        return Icons.transfer_within_a_station;
-      default:
-        return Icons.directions_bus;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Row(
         children: List.generate(options.length, (i) {
           final opt = options[i];
-          final icon = _iconForType(opt.type);
-          final label = opt.label;
-
           final selected = i == selectedIndex;
+          final rank = _rankColor(i, options.length);
           return Expanded(
             child: GestureDetector(
               onTap: () => onTap(i),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                curve: Curves.easeOut,
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: selected
-                      ? const Color(0xFF1565C0)
-                      : const Color(0xFF2A2A2A),
-                  borderRadius: BorderRadius.circular(10),
+                  color: selected ? rank : rank.withAlpha(160),
+                  borderRadius: BorderRadius.circular(12),
+                  // Constant-width border so tab sizes don't jump on tap.
+                  border: Border.all(
+                    color: selected ? Colors.white : Colors.transparent,
+                    width: 2,
+                  ),
+                  boxShadow: selected
+                      ? [
+                          BoxShadow(
+                            color: rank.withAlpha(140),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ]
+                      : null,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      icon,
-                      color: selected ? Colors.white : Colors.white54,
-                      size: 18,
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      label,
-                      textAlign: TextAlign.center,
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      _formatRouteDuration(opt.totalEstimatedMinutes),
                       style: TextStyle(
-                        color: selected ? Colors.white : Colors.white54,
-                        fontSize: 10,
+                        color: Colors.white,
+                        fontSize: selected ? 16 : 14,
                         fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.normal,
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                        letterSpacing: 0.2,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '~${opt.totalEstimatedMinutes} min',
-                      style: TextStyle(
-                        color: selected ? Colors.white70 : Colors.white38,
-                        fontSize: 9,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -635,7 +639,7 @@ class _BusSegmentTile extends StatelessWidget {
           if (wait != null)
             Text(
               live
-                  ? 'Bus in ~$wait min 🟢 Live'
+                  ? 'Wait time in ~$wait min 🟢 Live'
                   : '~$wait min wait (estimated)',
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
