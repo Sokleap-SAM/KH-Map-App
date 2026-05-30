@@ -37,6 +37,15 @@ class _MapScreenState extends State<MapScreen> {
   final Set<String> _selectedRouteIds = {};
   bool _seededFilterFromRoutes = false;
 
+  /// Pushes the current filter to TransitProvider, which opens/closes the
+  /// matching MQTT topic subscriptions. Safe to call repeatedly; the provider
+  /// only acts on the diff.
+  void _syncMqttSubscriptions() {
+    context.read<TransitProvider>().setSubscribedRoutes(
+      Set<String>.from(_selectedRouteIds),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -408,6 +417,7 @@ class _MapScreenState extends State<MapScreen> {
                           _selectedRouteIds.clear();
                         }
                       });
+                      _syncMqttSubscriptions();
                       setModalState(() {});
                     },
                   ),
@@ -444,6 +454,7 @@ class _MapScreenState extends State<MapScreen> {
                                 _selectedRouteIds.add(route.id);
                               }
                             });
+                            _syncMqttSubscriptions();
                             setModalState(() {});
                           },
                         );
@@ -748,6 +759,10 @@ class _MapScreenState extends State<MapScreen> {
     if (!_seededFilterFromRoutes && transitProvider.lineRoutes.isNotEmpty) {
       _seededFilterFromRoutes = true;
       _selectedRouteIds.addAll(transitProvider.lineRoutes.map((r) => r.id));
+      // Provider updates must happen outside build — defer to the next frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncMqttSubscriptions();
+      });
     }
 
     final displayRoutes = transitProvider.lineRoutes
@@ -839,10 +854,15 @@ class _MapScreenState extends State<MapScreen> {
               provider.showRouteSearch &&
                   provider.routeSearchDestination != null
               ? RouteSearchOverlay(
-                  places: provider.places,
                   currentLocation: provider.currentPosition!,
                   initialDestination: provider.routeSearchDestination!,
-                  onClose: () => provider.closeRouteSearch(),
+                  onClose: () {
+                    // Close the overlay and clear any active routing so the
+                    // `RouteInfoCard` is removed when the user taps back.
+                    provider.closeRouteSearch();
+                    provider.clearRouting();
+                    provider.removePin();
+                  },
                   onSubmit: ({required origin, required destination}) =>
                       provider.submitRouteSearch(
                         origin: origin,
@@ -999,9 +1019,9 @@ class _FlowingLineConnectorState extends State<FlowingLineConnector>
     // Increase duration to 1.5 seconds for a smoother flow
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3000), 
+      duration: const Duration(milliseconds: 3000),
     );
-    
+
     if (widget.isLoading) {
       _controller.repeat();
     }
@@ -1046,7 +1066,7 @@ class _FlowingLineConnectorState extends State<FlowingLineConnector>
                 end: Alignment(0, -2 + (_controller.value * 6)),
                 colors: const [
                   Color(0xFF1976D2), // Dark Blue
-                  Color.fromARGB(255, 46, 59, 77),      // Bright Light
+                  Color.fromARGB(255, 46, 59, 77), // Bright Light
                   Color(0xFF1976D2), // Dark Blue
                 ],
               ),
