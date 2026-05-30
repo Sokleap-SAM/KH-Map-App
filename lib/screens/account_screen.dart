@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:kh_map_app/screens/login_screen.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/constants.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -15,10 +16,9 @@ class AccountScreen extends StatefulWidget {
 class _AccountScreenState extends State<AccountScreen> {
   String userName = "មិនមានគណនី"; 
   bool isLoggedIn = false;
-  bool isLoading = true; // Added to prevent flickering
+  bool isLoading = true;
 
-  // IMPORTANT: Use your computer's IPv4 address here for LD Player
-  final String baseUrl = "http://10.0.2.2:3000"; 
+  final String baseUrl = AppConfig.baseUrl;
 
   @override
   void initState() {
