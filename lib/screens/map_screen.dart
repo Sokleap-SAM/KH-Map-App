@@ -37,6 +37,15 @@ class _MapScreenState extends State<MapScreen> {
   final Set<String> _selectedRouteIds = {};
   bool _seededFilterFromRoutes = false;
 
+  /// Pushes the current filter to TransitProvider, which opens/closes the
+  /// matching MQTT topic subscriptions. Safe to call repeatedly; the provider
+  /// only acts on the diff.
+  void _syncMqttSubscriptions() {
+    context.read<TransitProvider>().setSubscribedRoutes(
+      Set<String>.from(_selectedRouteIds),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -255,11 +264,7 @@ class _MapScreenState extends State<MapScreen> {
                           "ស្ថានភាព",
                           Row(
                             children: const [
-                              Icon(
-                                Icons.circle,
-                                color: Colors.green,
-                                size: 10,
-                              ),
+                              Icon(Icons.circle, color: Colors.green, size: 10),
                               SizedBox(width: 5),
                               Text(
                                 "In service",
@@ -412,6 +417,7 @@ class _MapScreenState extends State<MapScreen> {
                           _selectedRouteIds.clear();
                         }
                       });
+                      _syncMqttSubscriptions();
                       setModalState(() {});
                     },
                   ),
@@ -448,6 +454,7 @@ class _MapScreenState extends State<MapScreen> {
                                 _selectedRouteIds.add(route.id);
                               }
                             });
+                            _syncMqttSubscriptions();
                             setModalState(() {});
                           },
                         );
@@ -728,6 +735,10 @@ class _MapScreenState extends State<MapScreen> {
     if (!_seededFilterFromRoutes && transitProvider.lineRoutes.isNotEmpty) {
       _seededFilterFromRoutes = true;
       _selectedRouteIds.addAll(transitProvider.lineRoutes.map((r) => r.id));
+      // Provider updates must happen outside build — defer to the next frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncMqttSubscriptions();
+      });
     }
 
     final displayRoutes = transitProvider.lineRoutes
@@ -801,7 +812,10 @@ class _MapScreenState extends State<MapScreen> {
                 onBusTap: _showBusDetails,
               ),
             if (_currentZoom >= 15.0)
-              PlaceMarkersLayer(places: provider.places, onTap: _showPlaceDetail),
+              PlaceMarkersLayer(
+                places: provider.places,
+                onTap: _showPlaceDetail,
+              ),
             UserLocationMarkerLayer(position: provider.currentPosition!),
           ],
         ),
@@ -815,10 +829,15 @@ class _MapScreenState extends State<MapScreen> {
               provider.showRouteSearch &&
                   provider.routeSearchDestination != null
               ? RouteSearchOverlay(
-                  places: provider.places,
                   currentLocation: provider.currentPosition!,
                   initialDestination: provider.routeSearchDestination!,
-                  onClose: () => provider.closeRouteSearch(),
+                  onClose: () {
+                    // Close the overlay and clear any active routing so the
+                    // `RouteInfoCard` is removed when the user taps back.
+                    provider.closeRouteSearch();
+                    provider.clearRouting();
+                    provider.removePin();
+                  },
                   onSubmit: ({required origin, required destination}) =>
                       provider.submitRouteSearch(
                         origin: origin,
