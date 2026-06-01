@@ -15,6 +15,7 @@ import 'package:kh_map_app/widgets/map_screen/place_detail_sheet.dart';
 import 'package:kh_map_app/widgets/map_screen/search_bar.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/map_provider.dart';
 import '../widgets/map/locate_me_button.dart';
@@ -56,6 +57,7 @@ class _MapScreenState extends State<MapScreen> {
     final target = LatLng(place.latitude, place.longitude);
     context.read<MapProvider>().setFollowUser(false);
     _mapController.move(target, 17);
+    context.read<MapProvider>().addToRecentSearches(place.id);
     _showPlaceDetail(context, place);
   }
 
@@ -475,7 +477,7 @@ class _MapScreenState extends State<MapScreen> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (scrollController.hasClients) {
                 scrollController.animateTo(
-                  (trip.nextStopIndex * 60.0).clamp(
+                  (trip.nextStopIndex * 30.0).clamp(
                     0.0,
                     scrollController.position.maxScrollExtent,
                   ),
@@ -743,6 +745,16 @@ class _MapScreenState extends State<MapScreen> {
     final provider = context.watch<MapProvider>();
     final transitProvider = context.watch<TransitProvider>();
 
+    final List<Place> displayPlaces = provider.places.where((place) {
+      final bool isRecent = provider.recentSearchIds.contains(place.id);
+
+      // 1. If it's a recent search, show it from Zoom 10.0 (Far away)
+      if (isRecent) return _currentZoom >= 10.0;
+
+      // 2. If it's a normal place, show it from Zoom 14.5 (Close up)
+      return _currentZoom >= 16.5;
+    }).toList();
+
     // Seed the filter with every route the first time line routes load, so
     // the default view shows all routes. After that, the user owns the set.
     if (!_seededFilterFromRoutes && transitProvider.lineRoutes.isNotEmpty) {
@@ -821,9 +833,11 @@ class _MapScreenState extends State<MapScreen> {
                 routeColors: transitProvider.routeColors,
                 onBusTap: _showBusDetails,
               ),
-            if (_currentZoom >= 17.0)
+
               PlaceMarkersLayer(
-                places: provider.places,
+                places: displayPlaces,
+                recentSearchIds: provider.recentSearchIds,
+                currentZoom: _currentZoom,
                 onTap: _showPlaceDetail,
               ),
             UserLocationMarkerLayer(position: provider.currentPosition!),
@@ -999,9 +1013,9 @@ class _FlowingLineConnectorState extends State<FlowingLineConnector>
     // Increase duration to 1.5 seconds for a smoother flow
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3000), 
+      duration: const Duration(milliseconds: 3000),
     );
-    
+
     if (widget.isLoading) {
       _controller.repeat();
     }
@@ -1046,7 +1060,7 @@ class _FlowingLineConnectorState extends State<FlowingLineConnector>
                 end: Alignment(0, -2 + (_controller.value * 6)),
                 colors: const [
                   Color(0xFF1976D2), // Dark Blue
-                  Color.fromARGB(255, 46, 59, 77),      // Bright Light
+                  Color.fromARGB(255, 46, 59, 77), // Bright Light
                   Color(0xFF1976D2), // Dark Blue
                 ],
               ),

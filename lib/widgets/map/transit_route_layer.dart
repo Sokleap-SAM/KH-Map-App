@@ -56,22 +56,26 @@ class TransitRouteLayer extends StatelessWidget {
       }
       if (showMarkers) {
         for (final stop in stops) {
+          bool isZoomedIn = currentZoom >= 15.0;
+          double stopSize = isZoomedIn ? 20.0 : 6.0; // Tiny 6px dot when far
+
           markers.add(
             Marker(
               point: stop.location,
-              width: markerSize,
-              height: markerSize,
+              width: stopSize,
+              height: stopSize,
+              alignment: Alignment.center, // Keep centered
               child: Container(
                 decoration: BoxDecoration(
                   color: color,
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: Colors.white,
-                    width: useDetailedIcons ? 2 : 1,
+                    width: isZoomedIn ? 2 : 1,
                   ),
                 ),
                 //only show bus icon if zoom in close
-                child: useDetailedIcons
+                child: isZoomedIn
                     ? const Icon(Icons.directions_bus, color: Colors.white, size: 10)
                     : null,
               ),
