@@ -9,9 +9,11 @@ class MapSearchBar extends StatelessWidget {
 
   const MapSearchBar({super.key, this.onPlaceSelected});
 
-  Future<void> _openSearch(BuildContext context) async {
+  Future<void> _openSearch(BuildContext context, {String? initialQuery}) async {
     final selected = await Navigator.of(context).push<Place>(
-      MaterialPageRoute(builder: (_) => const SearchScreen()),
+      MaterialPageRoute(
+        builder: (_) => SearchScreen(initialQuery: initialQuery),
+      ),
     );
     if (selected != null) {
       onPlaceSelected?.call(selected);
@@ -70,26 +72,31 @@ class MapSearchBar extends StatelessWidget {
                 icon: Icons.restaurant,
                 label: 'ភោជនីយដ្ឋាន',
                 color: AppColors.buttonCategoryBlueColor,
+                onTap: () => _openSearch(context, initialQuery: 'restaurant'),
               ),
               _CategoryButton(
                 icon: Icons.hotel,
                 label: 'សណ្ឋាគារ',
                 color: AppColors.buttonCategoryBrownColor,
+                onTap: () => _openSearch(context, initialQuery: 'hotel'),
               ),
               _CategoryButton(
                 icon: Icons.shopping_cart_outlined,
                 label: 'ផ្សារ',
                 color: AppColors.buttonCategoryPurpleColor,
+                onTap: () => _openSearch(context, initialQuery: 'market'),
               ),
               _CategoryButton(
                 icon: Icons.attractions,
                 label: 'កន្លែងកម្សាន្ត',
                 color: AppColors.buttonCategoryYellowColor,
+                onTap: () => _openSearch(context, initialQuery: 'park'),
               ),
               _CategoryButton(
                 icon: Icons.local_cafe_outlined,
                 label: 'ហាងកាហ្វេ',
                 color: AppColors.buttonCategoryPinkColor,
+                onTap: () => _openSearch(context, initialQuery: 'coffee'),
               ),
             ],
           ),
@@ -103,38 +110,44 @@ class _CategoryButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
+  final VoidCallback onTap;
 
   const _CategoryButton({
     required this.icon,
     required this.label,
     required this.color,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {},
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withAlpha(50),
-              borderRadius: BorderRadius.circular(10),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withAlpha(50),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 22),
             ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: GoogleFonts.notoSansKhmer(
-              color: Colors.white,
-              fontSize: 10,
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: GoogleFonts.notoSansKhmer(
+                color: Colors.white,
+                fontSize: 10,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

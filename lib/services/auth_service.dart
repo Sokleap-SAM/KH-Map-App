@@ -1,9 +1,24 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
 
 class AuthService {
+  static const String baseUrl = "http://10.0.2.2:3000";
+  static const String _tokenKey = 'access_token';
+
+  // Broadcasts the current access token. Listeners (e.g. MapScreen) react
+  // to login/logout so they can refresh per-user state like favorites.
+  static final ValueNotifier<String?> tokenNotifier = ValueNotifier<String?>(
+    null,
+  );
+
+  // Call once during app startup so the notifier reflects any persisted token.
+  static Future<void> initTokenNotifier() async {
+    final prefs = await SharedPreferences.getInstance();
+    tokenNotifier.value = prefs.getString(_tokenKey);
+  }
   static const String baseUrl = AppConfig.baseUrl;
 
   // 1. REGISTER
@@ -34,7 +49,9 @@ class AuthService {
 
       // Save JWT Token to phone memory
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('access_token', data['access_token']);
+      final token = data['access_token'] as String?;
+      await prefs.setString(_tokenKey, token ?? '');
+      tokenNotifier.value = token;
       return true;
     }
     return false;
@@ -43,7 +60,8 @@ class AuthService {
   // 3. LOGOUT
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('access_token');
+    await prefs.remove(_tokenKey);
+    tokenNotifier.value = null;
   }
 
   Future<bool> sendForgotPasswordOtp(String email) async {
