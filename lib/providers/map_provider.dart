@@ -46,9 +46,17 @@ class MapProvider extends ChangeNotifier {
   bool _isMapPickMode = false;
   void Function(RouteSearchSelection)? _mapPickCallback;
 
+  /// Live preview of the origin/destination chosen in the route search overlay.
+  /// Rendered on the map as numbered pins (1 = origin, 2 = destination) so the
+  /// user can see what they've selected before submitting the route.
+  LatLng? _routeSearchOriginPin;
+  LatLng? _routeSearchDestinationPin;
+
   bool get showRouteSearch => _showRouteSearch;
   RouteSearchSelection? get routeSearchDestination => _routeSearchDestination;
   bool get isMapPickMode => _isMapPickMode;
+  LatLng? get routeSearchOriginPin => _routeSearchOriginPin;
+  LatLng? get routeSearchDestinationPin => _routeSearchDestinationPin;
 
   // ── Routing state (State A → B → C per ROUTING.md) ───────────────────────
   bool _showBusLines = true;
@@ -205,13 +213,45 @@ class MapProvider extends ChangeNotifier {
 
   void openRouteSearch(RouteSearchSelection destination) {
     _routeSearchDestination = destination;
+    _routeSearchDestinationPin = destination.location;
+    // Default origin is the user's current location; the overlay overrides
+    // this via [updateRouteSearchPins] if the user picks a different origin.
+    _routeSearchOriginPin = _currentPosition;
     _showRouteSearch = true;
+    notifyListeners();
+    // Auto-fetch the plan immediately so the route info card streams in
+    // without the user having to hit a "Go" button.
+    final origin = _currentPosition;
+    if (origin != null) {
+      submitRouteSearch(
+        origin: RouteSearchSelection(
+          label: 'Current location',
+          location: origin,
+          useLiveCurrentLocation: true,
+        ),
+        destination: destination,
+      );
+    }
+  }
+
+  /// Updates the live origin/destination preview pins. Called by the route
+  /// search overlay whenever either field changes (search-screen pick,
+  /// map-pick, or reset-to-current-location).
+  void updateRouteSearchPins({LatLng? origin, LatLng? destination}) {
+    if (_routeSearchOriginPin == origin &&
+        _routeSearchDestinationPin == destination) {
+      return;
+    }
+    _routeSearchOriginPin = origin;
+    _routeSearchDestinationPin = destination;
     notifyListeners();
   }
 
   void closeRouteSearch() {
     _showRouteSearch = false;
     _routeSearchDestination = null;
+    _routeSearchOriginPin = null;
+    _routeSearchDestinationPin = null;
     _isMapPickMode = false;
     _mapPickCallback = null;
     notifyListeners();

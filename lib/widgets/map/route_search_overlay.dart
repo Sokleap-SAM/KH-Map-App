@@ -12,6 +12,7 @@ class RouteSearchOverlay extends StatefulWidget {
     required this.onClose,
     required this.onSubmit,
     this.onRequestMapPick,
+    this.onSelectionChanged,
   });
 
   final LatLng currentLocation;
@@ -29,6 +30,11 @@ class RouteSearchOverlay extends StatefulWidget {
   final void Function(void Function(RouteSearchSelection) onPicked)?
   onRequestMapPick;
 
+  /// Fired whenever either field changes so the host can update the live
+  /// preview pins on the map (numbered 1 = origin, 2 = destination).
+  final void Function({required LatLng origin, required LatLng destination})?
+  onSelectionChanged;
+
   @override
   State<RouteSearchOverlay> createState() => _RouteSearchOverlayState();
 }
@@ -39,8 +45,6 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
 
   late RouteSearchSelection _origin;
   late RouteSearchSelection _destination;
-
-  bool _submitting = false;
 
   @override
   void initState() {
@@ -72,11 +76,16 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
         _destinationCtrl.text = selected.label;
       }
     });
+    widget.onSelectionChanged?.call(
+      origin: _origin.location,
+      destination: _destination.location,
+    );
+    // Re-fetch the plan immediately — no Go button.
+    widget.onSubmit(origin: _origin, destination: _destination);
   }
 
-  /// Pushes the full-screen [SearchScreen] and converts the returned [Place]
-  /// into a [RouteSearchSelection]. Returns `null` if the user backs out
-  /// without picking anything, in which case the field is left unchanged.
+  /// Pushes the full-screen [SearchScreen] and applies the returned [Place]
+  /// to the matching field. No-op when the user backs out.
   Future<void> _pickViaSearchScreen({required bool isOrigin}) async {
     final picked = await Navigator.of(
       context,
@@ -91,16 +100,38 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
     );
   }
 
-  void _pickOriginFromMap() {
-    widget.onRequestMapPick?.call(
-      (selection) => _applySelection(selection, true),
-    );
+  void _pickFromMap({required bool isOrigin}) {
+    widget.onRequestMapPick?.call((selection) async {
+      if (!mounted) return;
+      final confirmed = await _confirmChangeLocation(isOrigin: isOrigin);
+      if (!mounted || !confirmed) return;
+      _applySelection(selection, isOrigin);
+    });
   }
 
-  void _pickDestinationFromMap() {
-    widget.onRequestMapPick?.call(
-      (selection) => _applySelection(selection, false),
+  /// Confirmation popup shown after the user taps the map in pick mode.
+  /// Returning `false` (Cancel or dismiss) leaves the existing field value
+  /// untouched.
+  Future<bool> _confirmChangeLocation({required bool isOrigin}) async {
+    final label = isOrigin ? 'origin' : 'destination';
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Change $label?'),
+        content: Text("Do you want to change your $label's location?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
     );
+    return result ?? false;
   }
 
   void _resetOriginToCurrentLocation() {
@@ -112,16 +143,6 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
       ),
       true,
     );
-  }
-
-  Future<void> _submit() async {
-    if (_submitting) return;
-    setState(() => _submitting = true);
-    try {
-      await widget.onSubmit(origin: _origin, destination: _destination);
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
   }
 
   @override
@@ -151,20 +172,6 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
                       ),
                     ),
                   ),
-                  FilledButton.icon(
-                    onPressed: _submitting ? null : _submit,
-                    icon: _submitting
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.directions),
-                    label: const Text('Go'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF2D8CFF),
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -174,7 +181,7 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
                 iconColor: Colors.greenAccent,
                 onTap: () => _pickViaSearchScreen(isOrigin: true),
                 onPickFromMap: widget.onRequestMapPick != null
-                    ? _pickOriginFromMap
+                    ? () => _pickFromMap(isOrigin: true)
                     : null,
                 onUseCurrentLocation: _origin.useLiveCurrentLocation
                     ? null
@@ -187,7 +194,7 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
                 iconColor: Colors.orangeAccent,
                 onTap: () => _pickViaSearchScreen(isOrigin: false),
                 onPickFromMap: widget.onRequestMapPick != null
-                    ? _pickDestinationFromMap
+                    ? () => _pickFromMap(isOrigin: false)
                     : null,
               ),
             ],

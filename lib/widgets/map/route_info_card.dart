@@ -8,9 +8,18 @@ import '../../providers/map_provider.dart';
 const _kSnapSizes = [0.2, 0.5, 0.88];
 
 class RouteInfoCard extends StatefulWidget {
-  const RouteInfoCard({super.key, required this.onClear});
+  const RouteInfoCard({
+    super.key,
+    required this.onClear,
+    this.onShowBusDetail,
+  });
 
   final VoidCallback onClear;
+
+  /// Invoked when the user taps the "View" button on a bus segment.
+  /// Receives the segment's `tripId`. The caller is responsible for
+  /// resolving it to a live trip and displaying details.
+  final void Function(String tripId)? onShowBusDetail;
 
   @override
   State<RouteInfoCard> createState() => _RouteInfoCardState();
@@ -205,6 +214,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                             0,
                             routePlan.options.length - 1,
                           )],
+                      onShowBusDetail: widget.onShowBusDetail,
                     ),
                   ],
 
@@ -325,9 +335,10 @@ String _formatDistance(int meters) {
 }
 
 class _OptionDetails extends StatelessWidget {
-  const _OptionDetails({required this.option});
+  const _OptionDetails({required this.option, this.onShowBusDetail});
 
   final RouteOption option;
+  final void Function(String tripId)? onShowBusDetail;
 
   @override
   Widget build(BuildContext context) {
@@ -398,7 +409,12 @@ class _OptionDetails extends StatelessWidget {
           child: Column(
             children: option.segments.map((seg) {
               if (seg.isWalk) return _WalkSegmentTile(seg: seg);
-              if (seg.isBus) return _BusSegmentTile(seg: seg);
+              if (seg.isBus) {
+                return _BusSegmentTile(
+                  seg: seg,
+                  onShowBusDetail: onShowBusDetail,
+                );
+              }
               return const SizedBox.shrink();
             }).toList(),
           ),
@@ -545,9 +561,10 @@ class _WalkSegmentTile extends StatelessWidget {
 // ── Bus segment tile ──────────────────────────────────────────────────────────
 
 class _BusSegmentTile extends StatelessWidget {
-  const _BusSegmentTile({required this.seg});
+  const _BusSegmentTile({required this.seg, this.onShowBusDetail});
 
   final RouteSegment seg;
+  final void Function(String tripId)? onShowBusDetail;
 
   @override
   Widget build(BuildContext context) {
@@ -565,6 +582,9 @@ class _BusSegmentTile extends StatelessWidget {
       seg.rideMinutes != null || seg.distanceMeters != null,
     ].where((v) => v).length;
 
+    final tripId = seg.tripId;
+    final canViewDetail = tripId != null && onShowBusDetail != null;
+
     return ListTile(
       dense: true,
       leading: const Icon(
@@ -572,6 +592,37 @@ class _BusSegmentTile extends StatelessWidget {
         color: Colors.white70,
         size: 20,
       ),
+      trailing: canViewDetail
+          ? TextButton(
+              onPressed: () => onShowBusDetail!(tripId),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF1565C0),
+                backgroundColor: const Color(0xFF1565C0).withAlpha(38),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'View',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, size: 16),
+                ],
+              ),
+            )
+          : null,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:kh_map_app/models/place.dart';
 import 'package:kh_map_app/models/route_search_selection.dart';
+import 'package:kh_map_app/models/route_stop.dart';
+import 'package:kh_map_app/models/transit_route.dart';
 import 'package:kh_map_app/models/trip.dart';
 import 'package:kh_map_app/providers/transit_provider.dart';
 import 'package:kh_map_app/widgets/map/bus_markers_layer.dart';
@@ -11,6 +13,9 @@ import 'package:kh_map_app/widgets/map/route_search_overlay.dart';
 import 'package:kh_map_app/widgets/map/routing_overlay_layer.dart';
 import 'package:kh_map_app/widgets/map/transit_route_layer.dart';
 import 'package:kh_map_app/widgets/map_screen/pin.dart';
+import 'package:kh_map_app/models/trip_eta.dart';
+import 'package:kh_map_app/services/transit_service.dart';
+import 'package:kh_map_app/utils/eta.dart';
 import 'package:kh_map_app/widgets/map_screen/place_detail_sheet.dart';
 import 'package:kh_map_app/widgets/map_screen/search_bar.dart';
 import 'package:latlong2/latlong.dart';
@@ -136,6 +141,83 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  void _showStopDetail(RouteStop stop, TransitRoute route) {
+    final color = context.read<TransitProvider>().routeColors[route.id] ??
+        Colors.blue;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white12,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withAlpha(40),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.directions_bus, color: color),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          stop.stopName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'ខ្សែរត់ ${route.code ?? '??'} · Stop ${stop.stopOrder}',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (route.name != null) ...[
+                const SizedBox(height: 14),
+                Text(
+                  route.name!,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showPlaceDetail(BuildContext context, Place place) {
     showModalBottomSheet(
       context: context,
@@ -149,6 +231,28 @@ class _MapScreenState extends State<MapScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  /// Looks up a [Trip] by its `tripId` in [TransitProvider.trips] and opens
+  /// the existing [_showBusDetails] panel for it.
+  ///
+  /// Called from the "View" button on each bus segment inside the route info
+  /// card. If the matching trip isn't in the provider's cache (it could have
+  /// ended, or its route hasn't been subscribed yet so MQTT hasn't surfaced
+  /// it), surface a brief snackbar instead of opening an empty panel.
+  void _viewBusByTripId(String tripId) {
+    final trips = context.read<TransitProvider>().trips;
+    final match = trips.where((t) => t.id == tripId).firstOrNull;
+    if (match != null) {
+      _showBusDetails(match);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Live bus details are not available right now.'),
+        duration: Duration(seconds: 2),
       ),
     );
   }
@@ -260,34 +364,30 @@ class _MapScreenState extends State<MapScreen> {
                   children: [
                     Row(
                       children: [
-                        _buildInfoBox(
-                          "ស្ថានភាព",
-                          Row(
-                            children: const [
-                              Icon(Icons.circle, color: Colors.green, size: 10),
-                              SizedBox(width: 5),
-                              Text(
-                                "In service",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                        const Expanded(
+                          child: _InfoBox(
+                            label: "ស្ថានភាព",
+                            content: Row(
+                              children: [
+                                Icon(
+                                  Icons.circle,
+                                  color: Colors.green,
+                                  size: 10,
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        _buildInfoBox(
-                          "ETA",
-                          const Text(
-                            "~4 min",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                                SizedBox(width: 5),
+                                Text(
+                                  "In service",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
+                        const SizedBox(width: 10),
+                        Expanded(child: _LiveEtaBox(tripId: trip.id)),
                       ],
                     ),
                     const SizedBox(height: 15),
@@ -703,25 +803,48 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _buildInfoBox(String label, Widget content) {
-    return Expanded(
+  /// Origin marker for the route-search preview — the same `Icons.trip_origin`
+  /// + `Colors.greenAccent` shown next to the origin field in the overlay,
+  /// wrapped in a white disc so the hollow ring stays readable on the map.
+  Marker _originPreviewMarker(LatLng point) {
+    return Marker(
+      point: point,
+      width: 24,
+      height: 24,
       child: Container(
-        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white.withAlpha(13),
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(color: Colors.white38, fontSize: 10),
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black45,
+              blurRadius: 5,
+              offset: Offset(0, 2),
             ),
-            const SizedBox(height: 5),
-            content,
           ],
         ),
+        alignment: Alignment.center,
+        child: const Icon(Icons.trip_origin, color: Colors.green, size: 24),
+      ),
+    );
+  }
+
+  /// Destination marker for the route-search preview — an orange drop-pin
+  /// matching the `Icons.location_on` shown next to the destination field.
+  /// Anchored at the bottom so the tip touches [point].
+  Marker _destinationPreviewMarker(LatLng point) {
+    return Marker(
+      point: point,
+      width: 28,
+      height: 36,
+      alignment: Alignment.topCenter,
+      child: const Icon(
+        Icons.location_on,
+        color: Color(0xFFF97316),
+        size: 36,
+        shadows: [
+          Shadow(color: Colors.black45, blurRadius: 5, offset: Offset(0, 2)),
+        ],
       ),
     );
   }
@@ -819,17 +942,29 @@ class _MapScreenState extends State<MapScreen> {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.kh_map_app',
             ),
-            // States A/B: full bus route polylines (zoom-gated).
-            // if (provider.showBusLines && _currentZoom >= 12.0)
             TransitRouteLayer(
               routes: displayRoutes,
               routeStops: transitProvider.routeStops,
               routeColors: transitProvider.routeColors,
               currentZoom: _currentZoom,
+              onStopTap: _showStopDetail,
             ),
-            // State C: routing overlay.
             if (provider.isRoutingActive && provider.activeOption != null)
               RoutingOverlayLayer(option: provider.activeOption!),
+            // Live preview pins while the route-search overlay is open.
+            // Hidden once routing starts — RoutingOverlayLayer paints its own
+            // numbered markers from then on.
+            if (provider.showRouteSearch && !provider.isRoutingActive)
+              MarkerLayer(
+                markers: [
+                  if (provider.routeSearchOriginPin != null)
+                    _originPreviewMarker(provider.routeSearchOriginPin!),
+                  if (provider.routeSearchDestinationPin != null)
+                    _destinationPreviewMarker(
+                      provider.routeSearchDestinationPin!,
+                    ),
+                ],
+              ),
             if (_currentZoom >= 12.0)
               BusMarkersLayer(
                 trips: displayTrips,
@@ -870,6 +1005,12 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                   onRequestMapPick: (onPicked) =>
                       provider.startMapPick(onPicked),
+                  onSelectionChanged:
+                      ({required origin, required destination}) =>
+                          provider.updateRouteSearchPins(
+                            origin: origin,
+                            destination: destination,
+                          ),
                 )
               : Column(
                   mainAxisSize: MainAxisSize.min,
@@ -917,6 +1058,7 @@ class _MapScreenState extends State<MapScreen> {
               provider.clearRouting();
               provider.removePin();
             },
+            onShowBusDetail: _viewBusByTripId,
           ),
       ],
     );
@@ -965,7 +1107,7 @@ class _BusPulseIndicatorState extends State<BusPulseIndicator>
                 shape: BoxShape.circle,
                 color: const Color(
                   0xFF1976D2,
-                ).withOpacity(1 - _controller.value),
+                ).withValues(alpha: 1 - _controller.value),
               ),
             ),
             // The solid center dot
@@ -1078,5 +1220,138 @@ class _FlowingLineConnectorState extends State<FlowingLineConnector>
 
     // 3. If it's a future segment, show a dim grey line
     return Container(width: 2, color: Colors.white10);
+  }
+}
+
+/// ETA panel inside the bus detail card. Fetches a one-shot snapshot from
+/// `/transit/trips/:id/eta` on open, then re-derives the displayed number
+/// every time [TransitProvider] notifies (i.e. on every MQTT position tick).
+class _LiveEtaBox extends StatefulWidget {
+  const _LiveEtaBox({required this.tripId});
+
+  final String tripId;
+
+  @override
+  State<_LiveEtaBox> createState() => _LiveEtaBoxState();
+}
+
+class _LiveEtaBoxState extends State<_LiveEtaBox> {
+  TripEtaSnapshot? _snapshot;
+  bool _snapshotLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSnapshot();
+  }
+
+  Future<void> _fetchSnapshot() async {
+    try {
+      final snap = await TransitService().fetchTripEta(widget.tripId);
+      if (!mounted) return;
+      setState(() {
+        _snapshot = snap;
+        _snapshotLoaded = true;
+      });
+    } catch (e) {
+      debugPrint('_LiveEtaBox: snapshot fetch failed: $e');
+      if (!mounted) return;
+      setState(() => _snapshotLoaded = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<TransitProvider>();
+    final trip = provider.trips.where((t) => t.id == widget.tripId).firstOrNull;
+    final stops = trip == null
+        ? const <RouteStop>[]
+        : (provider.routeStops[trip.routeId] ?? const <RouteStop>[]);
+
+    final (label, value) = _resolveLabel(trip, stops);
+    return _box(label, value);
+  }
+
+  (String, String) _resolveLabel(Trip? trip, List<RouteStop> stops) {
+    // No MQTT-derived position yet → fall back to the one-shot snapshot.
+    final hasLive =
+        trip?.currentLocation != null &&
+        trip?.speed != null &&
+        stops.isNotEmpty;
+
+    if (!hasLive) {
+      if (!_snapshotLoaded) return ('ETA', '—');
+      final snap = _snapshot;
+      if (snap == null) return ('ETA', '—');
+      if (snap.notDepartingUntilMs != null &&
+          snap.notDepartingUntilMs! > DateTime.now().millisecondsSinceEpoch) {
+        return ('Departs in', '~${snap.etaMinutes ?? 0} min');
+      }
+      if (snap.isDwelling) return ('Status', 'At stop');
+      if (snap.etaMinutes != null) {
+        return ('Arrives in', '~${snap.etaMinutes} min');
+      }
+      return ('ETA', '—');
+    }
+
+    final seconds = etaToNextStopSeconds(
+      currentPos: trip!.currentLocation!,
+      speedKmh: trip.speed,
+      currentStopIndex: trip.currentStopIndex,
+      stops: stops,
+      notDepartingUntilMs: trip.notDepartingUntilMs,
+    );
+
+    if (seconds == null) return ('Status', 'At stop');
+
+    final minutes = (seconds / 60).round();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final parked =
+        trip.notDepartingUntilMs != null && trip.notDepartingUntilMs! > nowMs;
+    return (parked ? 'Departs in' : 'Arrives in', '~$minutes min');
+  }
+
+  Widget _box(String label, String value) {
+    return _InfoBox(
+      label: label,
+      content: Text(
+        value,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact two-line info card used in the bus detail sheet (status, ETA, …).
+class _InfoBox extends StatelessWidget {
+  const _InfoBox({required this.label, required this.content});
+
+  final String label;
+  final Widget content;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(13),
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white38, fontSize: 10),
+          ),
+          const SizedBox(height: 5),
+          content,
+        ],
+      ),
+    );
   }
 }
