@@ -22,6 +22,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/map_provider.dart';
+import '../services/auth_service.dart';
+import '../services/favorites_service.dart';
 import '../widgets/map/locate_me_button.dart';
 import '../widgets/map/place_markers_layer.dart';
 import '../widgets/map/user_location_marker_layer.dart';
@@ -35,12 +37,14 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
+  final FavoritesService _favoritesService = FavoritesService();
 
   // UI-only state. The data layers (places, line routes, trips, colors) live
   // in MapProvider / TransitProvider.
   double _currentZoom = 13.0;
   final Set<String> _selectedRouteIds = {};
   bool _seededFilterFromRoutes = false;
+  final Set<String> _favoritePlaceIds = {};
 
   /// Pushes the current filter to TransitProvider, which opens/closes the
   /// matching MQTT topic subscriptions. Safe to call repeatedly; the provider
@@ -56,10 +60,63 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     context.read<MapProvider>().init();
     context.read<TransitProvider>().init();
+    _loadFavorites();
+    AuthService.tokenNotifier.addListener(_onAuthChanged);
+  }
+
+  void _onAuthChanged() {
+    if (!mounted) return;
+    setState(() => _favoritePlaceIds.clear());
+    _loadFavorites();
+  }
+
+  Future<void> _loadFavorites() async {
+    try {
+      final favorites = await _favoritesService.load();
+      if (!mounted) return;
+      setState(() {
+        _favoritePlaceIds
+          ..clear()
+          ..addAll(favorites.map((f) => f.placeId));
+      });
+    } catch (e) {
+      debugPrint('Failed to load favorites: $e');
+    }
+  }
+
+  Future<void> _toggleFavorite(Place place, bool isFav) async {
+    setState(() {
+      if (isFav) {
+        _favoritePlaceIds.add(place.id);
+      } else {
+        _favoritePlaceIds.remove(place.id);
+      }
+    });
+    try {
+      if (isFav) {
+        await _favoritesService.add(place);
+      } else {
+        await _favoritesService.remove(place.id);
+      }
+    } catch (e) {
+      debugPrint('Failed to persist favorite: $e');
+      if (!mounted) return;
+      setState(() {
+        if (isFav) {
+          _favoritePlaceIds.remove(place.id);
+        } else {
+          _favoritePlaceIds.add(place.id);
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save favorite. Try again.')),
+      );
+    }
   }
 
   @override
   void dispose() {
+    AuthService.tokenNotifier.removeListener(_onAuthChanged);
     _mapController.dispose();
     super.dispose();
   }
@@ -142,8 +199,8 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showStopDetail(RouteStop stop, TransitRoute route) {
-    final color = context.read<TransitProvider>().routeColors[route.id] ??
-        Colors.blue;
+    final color =
+        context.read<TransitProvider>().routeColors[route.id] ?? Colors.blue;
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E1E1E),
@@ -221,8 +278,12 @@ class _MapScreenState extends State<MapScreen> {
   void _showPlaceDetail(BuildContext context, Place place) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (_) => PlaceDetailSheet(
         place: place,
+        initialFavorite: _favoritePlaceIds.contains(place.id),
+        onFavoriteChanged: (isFav) => _toggleFavorite(place, isFav),
         onDirections: () {
           context.read<MapProvider>().openRouteSearch(
             RouteSearchSelection(
