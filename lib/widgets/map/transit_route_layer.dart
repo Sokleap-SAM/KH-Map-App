@@ -12,12 +12,18 @@ class TransitRouteLayer extends StatelessWidget {
     required this.routeStops,
     required this.routeColors,
     required this.currentZoom,
+    this.onStopTap,
   });
 
   final List<TransitRoute> routes;
   final Map<String, List<RouteStop>> routeStops;
   final Map<String, Color> routeColors;
   final double currentZoom;
+
+  /// Fired when the user taps a stop. The route is included so the host can
+  /// show context (route code, color) alongside the stop name.
+  final void Function(RouteStop stop, TransitRoute route)? onStopTap;
+
   List<LatLng> _buildRoutePath(List<RouteStop> stops) {
     final points = <LatLng>[];
     for (final stop in stops) {
@@ -38,7 +44,10 @@ class TransitRouteLayer extends StatelessWidget {
     double lineWidth = currentZoom > 14 ? 5.0 : 2.5;
     bool showMarkers = currentZoom > 12.0;
     bool useDetailedIcons = currentZoom >= 14.5;
-    double markerSize = useDetailedIcons ? 22.0 : 8.0;
+    double visualSize = useDetailedIcons ? 22.0 : 8.0;
+    // Hit area is always large enough to tap reliably, regardless of the
+    // visual size at the current zoom.
+    const double hitSize = 32.0;
 
     for (final route in routes) {
       final stops = routeStops[route.id] ?? [];
@@ -48,10 +57,10 @@ class TransitRouteLayer extends StatelessWidget {
       if (points.isNotEmpty) {
         polylines.add(
           Polyline(
-            points: points, 
-            color: color.withOpacity(0.8),
+            points: points,
+            color: color.withValues(alpha: 0.8),
             strokeWidth: lineWidth,
-          )
+          ),
         );
       }
       if (showMarkers) {
@@ -59,21 +68,32 @@ class TransitRouteLayer extends StatelessWidget {
           markers.add(
             Marker(
               point: stop.location,
-              width: markerSize,
-              height: markerSize,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: useDetailedIcons ? 2 : 1,
+              width: hitSize,
+              height: hitSize,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onStopTap == null ? null : () => onStopTap!(stop, route),
+                child: Center(
+                  child: Container(
+                    width: visualSize,
+                    height: visualSize,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white,
+                        width: useDetailedIcons ? 2 : 1,
+                      ),
+                    ),
+                    child: useDetailedIcons
+                        ? const Icon(
+                            Icons.directions_bus,
+                            color: Colors.white,
+                            size: 10,
+                          )
+                        : null,
                   ),
                 ),
-                //only show bus icon if zoom in close
-                child: useDetailedIcons
-                    ? const Icon(Icons.directions_bus, color: Colors.white, size: 10)
-                    : null,
               ),
             ),
           );

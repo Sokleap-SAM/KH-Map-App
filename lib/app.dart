@@ -20,15 +20,16 @@ class App extends StatefulWidget {
 class _AppState extends State<App> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = const [
-    MapScreen(),
-    BookmarkScreen(),
-    ContributeScreen(),
-    AccountScreen(),
-  ];
+  void _goToMapTab() => setState(() => _currentIndex = 0);
 
   @override
   Widget build(BuildContext context) {
+    final screens = <Widget>[
+      const MapScreen(),
+      BookmarkScreen(onNavigateToMap: _goToMapTab),
+      const ContributeScreen(),
+      const AccountScreen(),
+    ];
     return ChangeNotifierProvider(
       create: (_) => MapProvider(LocationService()),
       child: ChangeNotifierProvider(
@@ -39,7 +40,7 @@ class _AppState extends State<App> {
           darkTheme: AppTheme.darkTheme,
           themeMode: ThemeMode.system,
           home: Scaffold(
-            body: IndexedStack(index: _currentIndex, children: _screens),
+            body: IndexedStack(index: _currentIndex, children: screens),
             bottomNavigationBar: BottomNavigationBar(
               currentIndex: _currentIndex,
               onTap: (index) => setState(() => _currentIndex = index),

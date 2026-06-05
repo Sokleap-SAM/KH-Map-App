@@ -24,6 +24,16 @@ class Trip {
   final double? speed;
   final DateTime? recordedAt;
 
+  /// Epoch-ms wall-clock departure time for parked buses. Carried by both
+  /// the `/transit/trips/:id/eta` snapshot and MQTT position messages whose
+  /// `status == 'scheduled'`. Absent once the bus is moving.
+  final int? notDepartingUntilMs;
+
+  /// Server-computed ETA from the one-shot `/transit/trips/:id/eta` snapshot.
+  /// Not refreshed by MQTT — once we have live position + speed, the UI
+  /// re-derives ETA locally via [etaToNextStopSeconds].
+  final int? etaSeconds;
+
   Trip({
     required this.id,
     required this.routeId,
@@ -43,6 +53,8 @@ class Trip {
     this.heading,
     this.speed,
     this.recordedAt,
+    this.notDepartingUntilMs,
+    this.etaSeconds,
   });
 
   Trip copyWith({
@@ -53,6 +65,8 @@ class Trip {
     double? heading,
     double? speed,
     DateTime? recordedAt,
+    int? notDepartingUntilMs,
+    int? etaSeconds,
   }) {
     return Trip(
       id: id,
@@ -73,6 +87,8 @@ class Trip {
       heading: heading ?? this.heading,
       speed: speed ?? this.speed,
       recordedAt: recordedAt ?? this.recordedAt,
+      notDepartingUntilMs: notDepartingUntilMs ?? this.notDepartingUntilMs,
+      etaSeconds: etaSeconds ?? this.etaSeconds,
     );
   }
 
@@ -135,6 +151,8 @@ class Trip {
       // nextStopName: json['nextStopName'] ?? 'N/A',
       direction: json['direction'] ?? 'N/A',
       allStops: List<String>.from(json['allStops'] ?? []),
+      notDepartingUntilMs: (json['notDepartingUntilMs'] as num?)?.toInt(),
+      etaSeconds: (json['etaSeconds'] as num?)?.toInt(),
     );
   }
 }

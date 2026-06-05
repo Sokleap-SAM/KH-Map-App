@@ -22,6 +22,10 @@ class BusPosition {
   final int currentStopIndex;
   final DateTime recordedAt;
 
+  /// Set on parked-bus messages (`status == 'scheduled'`). The detail card
+  /// uses this to display "Departs in ~N min".
+  final int? notDepartingUntilMs;
+
   BusPosition({
     required this.tripId,
     required this.busId,
@@ -32,6 +36,7 @@ class BusPosition {
     required this.speed,
     required this.currentStopIndex,
     required this.recordedAt,
+    this.notDepartingUntilMs,
   });
 
   LatLng get location => LatLng(latitude, longitude);
@@ -49,6 +54,7 @@ class BusPosition {
       recordedAt: json['recordedAt'] != null
           ? DateTime.parse(json['recordedAt'] as String)
           : DateTime.now(),
+      notDepartingUntilMs: (json['notDepartingUntilMs'] as num?)?.toInt(),
     );
   }
 }

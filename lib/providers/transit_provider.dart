@@ -211,6 +211,7 @@ class TransitProvider extends ChangeNotifier {
       heading: pos.heading,
       speed: pos.speed,
       recordedAt: pos.recordedAt,
+      notDepartingUntilMs: pos.notDepartingUntilMs,
     );
     _lastSeen[pos.tripId] = DateTime.now();
     notifyListeners();
