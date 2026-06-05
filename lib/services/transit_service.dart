@@ -116,13 +116,6 @@ class TransitService {
 
     final body = jsonDecode(response.body) as Map<String, dynamic>;
 
-    // FIX #5: Removed the large debug debugPrint block — not suitable for
-    // production builds. Re-add behind a kDebugMode guard if needed:
-    //
-    //   if (kDebugMode) {
-    //     debugPrint('[TransitService] found=${body['found']}');
-    //   }
-
     return RoutePlanResult.fromJson(body);
   }
 }

@@ -11,12 +11,17 @@ class RouteSearchOverlay extends StatefulWidget {
     required this.initialDestination,
     required this.onClose,
     required this.onSubmit,
+    this.initialOrigin,
     this.onRequestMapPick,
     this.onSelectionChanged,
   });
 
   final LatLng currentLocation;
   final RouteSearchSelection initialDestination;
+
+  /// Optional pre-filled origin (e.g. a saved favorite route's fixed origin).
+  /// When null, the origin defaults to the user's live current location.
+  final RouteSearchSelection? initialOrigin;
   final VoidCallback onClose;
   final Future<void> Function({
     required RouteSearchSelection origin,
@@ -49,11 +54,13 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
   @override
   void initState() {
     super.initState();
-    _origin = RouteSearchSelection(
-      label: 'Current location',
-      location: widget.currentLocation,
-      useLiveCurrentLocation: true,
-    );
+    _origin =
+        widget.initialOrigin ??
+        RouteSearchSelection(
+          label: 'ទីតាំងបច្ចុប្បន្ន', // "Current location" in Khmer
+          location: widget.currentLocation,
+          useLiveCurrentLocation: true,
+        );
     _destination = widget.initialDestination;
     _originCtrl = TextEditingController(text: _origin.label);
     _destinationCtrl = TextEditingController(text: _destination.label);
@@ -137,7 +144,7 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
   void _resetOriginToCurrentLocation() {
     _applySelection(
       RouteSearchSelection(
-        label: 'Current location',
+        label: 'ទីតាំងបច្ចុប្បន្ន', // "Current location" in Khmer
         location: widget.currentLocation,
         useLiveCurrentLocation: true,
       ),
@@ -164,7 +171,7 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
                   ),
                   const Expanded(
                     child: Text(
-                      'Plan route',
+                      'គម្រោងធ្វើដំណើរ', // "Route Planner" in Khmer
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 18,

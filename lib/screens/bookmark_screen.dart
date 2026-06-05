@@ -4,30 +4,50 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import '../models/favorite_route.dart';
+import '../models/route_search_selection.dart';
 import '../providers/map_provider.dart';
 import '../services/auth_service.dart';
+import '../services/favorite_routes_service.dart';
 import '../services/favorites_service.dart';
 import '../utils/constants/colors.dart';
 import '../widgets/bookmark_screen/favorite_place_card.dart';
 import '../widgets/bookmark_screen/favorite_place_sheet.dart';
+import '../widgets/bookmark_screen/favorite_route_card.dart';
+import '../widgets/bookmark_screen/favorite_route_sheet.dart';
 
 /// "Saved places" screen — the user's favourite places, presented in the
 /// style of the Google Maps *Saved* tab: a list-header banner, category
 /// filter chips, sortable cards, swipe-to-remove and a detail sheet.
 class BookmarkScreen extends StatefulWidget {
-  const BookmarkScreen({super.key});
+  const BookmarkScreen({super.key, this.onNavigateToMap});
+
+  /// Switches the app to the map tab — used when opening a saved route so the
+  /// overlay, route card and drawn polyline appear on the map.
+  final VoidCallback? onNavigateToMap;
 
   @override
   State<BookmarkScreen> createState() => _BookmarkScreenState();
 }
 
+/// Which list the bookmark screen is currently showing.
+enum _BookmarkTab { places, routes }
+
 class _BookmarkScreenState extends State<BookmarkScreen> {
   final FavoritesService _service = FavoritesService();
+  final FavoriteRoutesService _routesService = FavoriteRoutesService();
   final Distance _distance = const Distance();
+
+  _BookmarkTab _tab = _BookmarkTab.places;
 
   List<FavoritePlace> _favorites = [];
   bool _loading = true;
   String? _error;
+
+  // Favorite routes.
+  List<FavoriteRoute> _routes = [];
+  bool _routesLoading = true;
+  String? _routesError;
 
   // Filter + sort state.
   String? _categoryFilter; // null = show every category
@@ -37,14 +57,24 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   void initState() {
     super.initState();
     _load();
+    _loadRoutes();
     // Keep the list in sync when the user logs in / out elsewhere.
     AuthService.tokenNotifier.addListener(_onAuthChanged);
+    // This screen lives in an IndexedStack (always alive), so reload whenever a
+    // route is saved/removed on another tab instead of waiting for a restart.
+    FavoriteRoutesService.changes.addListener(_onRoutesChanged);
   }
 
   @override
   void dispose() {
     AuthService.tokenNotifier.removeListener(_onAuthChanged);
+    FavoriteRoutesService.changes.removeListener(_onRoutesChanged);
     super.dispose();
+  }
+
+  void _onRoutesChanged() {
+    if (!mounted) return;
+    _loadRoutes();
   }
 
   void _onAuthChanged() {
@@ -52,8 +82,11 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     setState(() {
       _favorites = [];
       _loading = true;
+      _routes = [];
+      _routesLoading = true;
     });
     _load();
+    _loadRoutes();
   }
 
   Future<void> _load() async {
@@ -70,6 +103,24 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
       setState(() {
         _error = 'មិនអាចទាញយកទីកន្លែងដែលបានរក្សាទុកបានទេ';
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadRoutes() async {
+    setState(() => _routesError = null);
+    try {
+      final routes = await _routesService.load();
+      if (!mounted) return;
+      setState(() {
+        _routes = routes;
+        _routesLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _routesError = 'មិនអាចទាញយកផ្លូវដែលបានរក្សាទុកបានទេ';
+        _routesLoading = false;
       });
     }
   }
@@ -225,6 +276,74 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     if (result == kFavSheetRemove) _removeFavorite(f);
   }
 
+  // ---------- Favorite routes ----------
+
+  void _removeRoute(FavoriteRoute r) {
+    final index = _routes.indexWhere((e) => e.id == r.id);
+    if (index < 0) return;
+    setState(() => _routes.removeAt(index));
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger
+        .showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+            content: Text(
+              'បានលុបផ្លូវចេញពីចំណាំ',
+              style: GoogleFonts.notoSansKhmer(fontSize: 13),
+            ),
+            action: SnackBarAction(
+              label: 'មិនធ្វើវិញ',
+              textColor: AppColors.secondaryColor,
+              onPressed: () {
+                if (!mounted) return;
+                setState(() {
+                  _routes.insert(index.clamp(0, _routes.length), r);
+                });
+              },
+            ),
+          ),
+        )
+        .closed
+        .then((reason) {
+          if (reason != SnackBarClosedReason.action) {
+            _routesService.remove(r.id);
+          }
+        });
+  }
+
+  void _openRouteDetail(FavoriteRoute r) async {
+    final result = await showModalBottomSheet<Object>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FavoriteRouteSheet(favorite: r),
+    );
+    if (result == kFavRouteSheetRemove) _removeRoute(r);
+    if (result is FavoriteRouteLive) _goToRoute(result);
+  }
+
+  /// Opens the saved route on the map: feeds its fixed origin/destination and
+  /// the single live-rebuilt option into the routing flow (overlay + route info
+  /// card + drawn polyline) then switches to the map tab. Shows only this route.
+  void _goToRoute(FavoriteRouteLive live) {
+    context.read<MapProvider>().showFavoriteRoute(
+      favoriteId: live.favoriteId,
+      origin: RouteSearchSelection(
+        label: live.origin.name.isEmpty ? 'ដើម' : live.origin.name,
+        location: live.origin.coordinates,
+      ),
+      destination: RouteSearchSelection(
+        label: live.destination.name.isEmpty ? 'គោលដៅ' : live.destination.name,
+        location: live.destination.coordinates,
+      ),
+      option: live.option,
+    );
+    widget.onNavigateToMap?.call();
+  }
+
   void _snack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -251,12 +370,160 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
         child: Column(
           children: [
             _header(),
-            _listBanner(),
-            if (_categories.isNotEmpty) _categoryChips(),
-            const SizedBox(height: 4),
-            Expanded(child: _body(visible, user)),
+            _tabToggle(),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _tab == _BookmarkTab.places
+                  ? _placesTab(visible, user)
+                  : _routesTab(),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _placesTab(List<FavoritePlace> visible, LatLng? user) {
+    return Column(
+      children: [
+        _listBanner(),
+        if (_categories.isNotEmpty) _categoryChips(),
+        const SizedBox(height: 4),
+        Expanded(child: _body(visible, user)),
+      ],
+    );
+  }
+
+  /// Segmented control switching between saved places and saved routes.
+  Widget _tabToggle() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Row(
+        children: [
+          _tabButton(
+            label: 'ទីកន្លែង',
+            icon: Icons.place_outlined,
+            selected: _tab == _BookmarkTab.places,
+            onTap: () => setState(() => _tab = _BookmarkTab.places),
+          ),
+          const SizedBox(width: 8),
+          _tabButton(
+            label: 'ផ្លូវ',
+            icon: Icons.directions_bus_outlined,
+            selected: _tab == _BookmarkTab.routes,
+            onTap: () => setState(() => _tab = _BookmarkTab.routes),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabButton({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: Material(
+        color: selected ? AppColors.secondaryColor : kFavSurfaceColor,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: selected ? AppColors.secondaryColor : kFavBorderColor,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: selected ? AppColors.primaryColor : Colors.white70,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: GoogleFonts.notoSansKhmer(
+                    color: selected ? AppColors.primaryColor : Colors.white70,
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _routesTab() {
+    if (_routesLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.secondaryColor),
+      );
+    }
+    if (_routesError != null) {
+      return _stateMessage(
+        icon: Icons.cloud_off_rounded,
+        title: _routesError!,
+        actionLabel: 'ព្យាយាមម្ដងទៀត',
+        onAction: () {
+          setState(() => _routesLoading = true);
+          _loadRoutes();
+        },
+      );
+    }
+    if (_routes.isEmpty) {
+      return _stateMessage(
+        icon: Icons.bookmark_added_outlined,
+        title: 'មិនទាន់មានផ្លូវដែលបានរក្សាទុក',
+        subtitle:
+            'ប៉ះរូបតំណាងចំណាំនៅលើកាតផ្លូវ ពេលស្វែងរកទិសដៅ ដើម្បីរក្សាទុកវានៅទីនេះ។',
+      );
+    }
+    return RefreshIndicator(
+      color: AppColors.secondaryColor,
+      backgroundColor: const Color(0xFF243456),
+      onRefresh: _loadRoutes,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: _routes.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (_, i) {
+          final route = _routes[i];
+          return Dismissible(
+            key: ValueKey('favroute_${route.id}'),
+            direction: DismissDirection.endToStart,
+            onDismissed: (_) => _removeRoute(route),
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              decoration: BoxDecoration(
+                color: AppColors.alertBorderColor.withAlpha(60),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(
+                Icons.bookmark_remove_outlined,
+                color: AppColors.alertBorderColor,
+              ),
+            ),
+            child: FavoriteRouteCard(
+              favorite: route,
+              onTap: () => _openRouteDetail(route),
+              onRemove: () => _removeRoute(route),
+            ),
+          );
+        },
       ),
     );
   }
@@ -264,6 +531,9 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   Widget _header() {
     final hasLocation =
         context.read<MapProvider>().currentPosition != null;
+    final isPlaces = _tab == _BookmarkTab.places;
+    final count = isPlaces ? _favorites.length : _routes.length;
+    final loading = isPlaces ? _loading : _routesLoading;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 8, 6),
@@ -274,7 +544,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ទីកន្លែងពេញចិត្ត',
+                  isPlaces ? 'ទីកន្លែងពេញចិត្ត' : 'ផ្លូវពេញចិត្ត',
                   style: GoogleFonts.notoSansKhmer(
                     color: Colors.white,
                     fontSize: 22,
@@ -283,9 +553,11 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _loading
+                  loading
                       ? 'កំពុងផ្ទុក...'
-                      : '${_favorites.length} ទីកន្លែងបានរក្សាទុក',
+                      : isPlaces
+                          ? '$count ទីកន្លែងបានរក្សាទុក'
+                          : '$count ផ្លូវបានរក្សាទុក',
                   style: GoogleFonts.notoSansKhmer(
                     color: AppColors.secondaryTextColor,
                     fontSize: 12.5,
@@ -294,7 +566,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
               ],
             ),
           ),
-          _sortMenu(hasLocation),
+          if (isPlaces) _sortMenu(hasLocation),
         ],
       ),
     );

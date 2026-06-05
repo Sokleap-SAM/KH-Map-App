@@ -21,8 +21,11 @@ import 'package:kh_map_app/widgets/map_screen/search_bar.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import '../models/favorite_route.dart';
+import '../models/route_plan.dart';
 import '../providers/map_provider.dart';
 import '../services/auth_service.dart';
+import '../services/favorite_routes_service.dart';
 import '../services/favorites_service.dart';
 import '../widgets/map/locate_me_button.dart';
 import '../widgets/map/place_markers_layer.dart';
@@ -38,6 +41,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final FavoritesService _favoritesService = FavoritesService();
+  final FavoriteRoutesService _favoriteRoutesService = FavoriteRoutesService();
 
   // UI-only state. The data layers (places, line routes, trips, colors) live
   // in MapProvider / TransitProvider.
@@ -119,6 +123,76 @@ class _MapScreenState extends State<MapScreen> {
     AuthService.tokenNotifier.removeListener(_onAuthChanged);
     _mapController.dispose();
     super.dispose();
+  }
+
+  /// Persists [option] (the active route plan option) as a favorite route.
+  /// Returns the new favorite's id on success (so the bookmark icon can flip to
+  /// its saved state and later remove it), or null on failure.
+  Future<String?> _saveFavoriteRoute(RouteOption option) async {
+    final provider = context.read<MapProvider>();
+    final originPos = provider.routingOrigin;
+    final destPos = provider.routingDestination;
+
+    final legs = FavoriteRoutesService.legsFromOption(option);
+    if (originPos == null || destPos == null || legs == null) {
+      _snack('មិនអាចរក្សាទុកផ្លូវនេះបានទេ');
+      return null;
+    }
+
+    // A favorite stores a FIXED origin coordinate, so a live "current location"
+    // label would be misleading once the user moves. Resolve the saved point to
+    // a stable address (falling back to coordinates) in that case.
+    final originLabel = provider.routingOriginLabel;
+    final originName = (provider.useLiveCurrentOrigin ||
+            originLabel == null ||
+            originLabel.trim().isEmpty)
+        ? await provider.reverseGeocodeLabel(originPos)
+        : originLabel;
+
+    final origin = FavoriteRouteEndpoint(name: originName, coordinates: originPos);
+    final destination = FavoriteRouteEndpoint(
+      name: provider.routingDestinationLabel ?? 'គោលដៅ',
+      coordinates: destPos,
+    );
+
+    try {
+      final saved = await _favoriteRoutesService.add(
+        origin: origin,
+        destination: destination,
+        legs: legs,
+        label: '${origin.name} → ${destination.name}',
+      );
+      _snack('បានរក្សាទុកផ្លូវទៅចំណាំ');
+      return saved.id;
+    } catch (e) {
+      debugPrint('Failed to save favorite route: $e');
+      _snack('មិនអាចរក្សាទុកផ្លូវបានទេ');
+      return null;
+    }
+  }
+
+  /// Removes the favorite route saved during this routing view.
+  Future<bool> _removeFavoriteRoute(String favoriteId) async {
+    try {
+      await _favoriteRoutesService.remove(favoriteId);
+      _snack('បានលុបផ្លូវចេញពីចំណាំ');
+      return true;
+    } catch (e) {
+      debugPrint('Failed to remove favorite route: $e');
+      _snack('មិនអាចលុបផ្លូវបានទេ');
+      return false;
+    }
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        content: Text(message),
+      ),
+    );
   }
 
   // ── Map interactions ──────────────────────────────────────────────────────
@@ -975,6 +1049,16 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
 
+    // One-shot camera move (e.g. framing a favorite route's origin opened from
+    // the bookmark tab). Consume it so it only happens once.
+    final camTarget = provider.cameraMoveTarget;
+    if (camTarget != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _mapController.move(camTarget, 14);
+        provider.consumeCameraMoveTarget();
+      });
+    }
+
     return Stack(
       children: [
         // ── Map ───────────────────────────────────────────────────────────
@@ -1052,6 +1136,7 @@ class _MapScreenState extends State<MapScreen> {
               ? RouteSearchOverlay(
                   currentLocation: provider.currentPosition!,
                   initialDestination: provider.routeSearchDestination!,
+                  initialOrigin: provider.routeSearchOrigin,
                   onClose: () {
                     // Close the overlay and clear any active routing so the
                     // `RouteInfoCard` is removed when the user taps back.
@@ -1120,6 +1205,8 @@ class _MapScreenState extends State<MapScreen> {
               provider.removePin();
             },
             onShowBusDetail: _viewBusByTripId,
+            onSaveFavorite: _saveFavoriteRoute,
+            onRemoveFavorite: _removeFavoriteRoute,
           ),
       ],
     );

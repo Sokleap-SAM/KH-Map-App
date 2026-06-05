@@ -5,6 +5,11 @@ class SegmentStop {
   final String name;
   final LatLng coordinates;
 
+  /// Backend stop id, when present. Needed to persist a favorite route's
+  /// board/alight stops (POST /transit/favorites expects stop ids). Null when
+  /// the plan response omits it.
+  final String? stopId;
+
   /// Road-aligned geometry FROM the previous stop TO this stop.
   /// Same structure as [RouteStop.segmentPath] — a GeoJSON LineString
   /// `{"type":"LineString","coordinates":[[lng,lat],...]}` in the backend
@@ -14,6 +19,7 @@ class SegmentStop {
   SegmentStop({
     required this.name,
     required this.coordinates,
+    this.stopId,
     this.segmentPath,
   });
 
@@ -32,6 +38,7 @@ class SegmentStop {
 
     return SegmentStop(
       name: json['name'] as String,
+      stopId: (json['stopId'] ?? json['id'] ?? json['_id'])?.toString(),
       // GeoJSON order: [lng, lat]
       coordinates: LatLng(
         (coords[1] as num).toDouble(),

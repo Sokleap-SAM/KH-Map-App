@@ -12,6 +12,8 @@ class RouteInfoCard extends StatefulWidget {
     super.key,
     required this.onClear,
     this.onShowBusDetail,
+    this.onSaveFavorite,
+    this.onRemoveFavorite,
   });
 
   final VoidCallback onClear;
@@ -21,6 +23,17 @@ class RouteInfoCard extends StatefulWidget {
   /// resolving it to a live trip and displaying details.
   final void Function(String tripId)? onShowBusDetail;
 
+  /// Invoked when the user taps the bookmark icon to save the active option
+  /// as a favorite route. Returns the new favorite's id on success (so the icon
+  /// can switch to its filled state and later remove it), or null on failure.
+  /// Null hides the icon entirely.
+  final Future<String?> Function(RouteOption option)? onSaveFavorite;
+
+  /// Invoked when the user taps the filled bookmark to remove the favorite
+  /// saved during this view. Receives the id returned by [onSaveFavorite].
+  /// Returns `true` when the removal succeeded.
+  final Future<bool> Function(String favoriteId)? onRemoveFavorite;
+
   @override
   State<RouteInfoCard> createState() => _RouteInfoCardState();
 }
@@ -29,10 +42,57 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
   final DraggableScrollableController _controller =
       DraggableScrollableController();
 
+  /// Option index saved during this view + the favorite's id, so the bookmark
+  /// shows filled and a second tap removes it. Reset when the user switches to
+  /// a different option tab.
+  int? _savedOptionIndex;
+  String? _savedFavoriteId;
+  bool _busy = false;
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleToggle(
+    int optionIndex,
+    RouteOption option,
+    String? providerFavoriteId,
+  ) async {
+    final onSave = widget.onSaveFavorite;
+    if (onSave == null || _busy) return;
+    setState(() => _busy = true);
+
+    // Id to remove: a session-saved one for this option, else the favorite this
+    // view was opened from.
+    final localId = _savedOptionIndex == optionIndex ? _savedFavoriteId : null;
+    final removeId = localId ?? providerFavoriteId;
+
+    if (removeId != null) {
+      final onRemove = widget.onRemoveFavorite;
+      final ok = onRemove == null ? false : await onRemove(removeId);
+      if (!mounted) return;
+      // Clear the provider marker so the bookmark stops showing as saved.
+      if (ok) context.read<MapProvider>().clearActiveFavoriteId();
+      setState(() {
+        _busy = false;
+        if (ok) {
+          _savedFavoriteId = null;
+          _savedOptionIndex = null;
+        }
+      });
+    } else {
+      final id = await onSave(option);
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        if (id != null) {
+          _savedFavoriteId = id;
+          _savedOptionIndex = optionIndex;
+        }
+      });
+    }
   }
 
   @override
@@ -52,6 +112,29 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
             final planType = provider.planType;
             final isLoading = provider.isLoadingRoute;
             final error = provider.routeError;
+
+            final hasOptions =
+                routePlan != null &&
+                routePlan.found &&
+                routePlan.options.isNotEmpty;
+            final clampedIndex = hasOptions
+                ? activeOptionIndex.clamp(0, routePlan.options.length - 1)
+                : 0;
+            final activeOpt = hasOptions
+                ? routePlan.options[clampedIndex]
+                : null;
+            // Saving only makes sense for a transit plan that has bus legs.
+            final canSave =
+                widget.onSaveFavorite != null &&
+                planType == 'transit' &&
+                activeOpt != null &&
+                activeOpt.segments.any((s) => s.isBus);
+            // Saved when either the user saved it this session, or we're
+            // displaying an existing favorite route opened from the bookmarks.
+            final providerFavoriteId = provider.activeFavoriteId;
+            final localSaved =
+                _savedOptionIndex == clampedIndex && _savedFavoriteId != null;
+            final isSaved = localSaved || providerFavoriteId != null;
 
             return Container(
               decoration: const BoxDecoration(
@@ -105,6 +188,40 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                             ),
                           ),
                         ),
+                        if (canSave)
+                          IconButton(
+                            onPressed: _busy
+                                ? null
+                                : () => _handleToggle(
+                                    clampedIndex,
+                                    activeOpt,
+                                    providerFavoriteId,
+                                  ),
+                            icon: _busy
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white54,
+                                    ),
+                                  )
+                                : Icon(
+                                    isSaved
+                                        ? Icons.bookmark
+                                        : Icons.bookmark_add_outlined,
+                                    color: isSaved
+                                        ? const Color(0xFFD5AC79)
+                                        : Colors.white70,
+                                    size: 20,
+                                  ),
+                            tooltip: isSaved
+                                ? 'ដកចេញ​ថ្លូវធ្វើដំណើរពីចំណាំ' // "Remove from favorites" in Khmer
+                                : 'រក្សាទុក​ថ្លូវធ្វើដំណើរពីជាចំណាំ', // "Save route to favorites"
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        if (canSave) const SizedBox(width: 12),
                         IconButton(
                           onPressed: widget.onClear,
                           icon: const Icon(
@@ -208,12 +325,8 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                     const Divider(color: Color(0xFF333333), height: 1),
 
                     // ── Active option details ──────────────────────────────
-                    _OptionDetails(
-                      option:
-                          routePlan.options[activeOptionIndex.clamp(
-                            0,
-                            routePlan.options.length - 1,
-                          )],
+                    RouteOptionDetails(
+                      option: routePlan.options[clampedIndex],
                       onShowBusDetail: widget.onShowBusDetail,
                     ),
                   ],
@@ -334,8 +447,15 @@ String _formatDistance(int meters) {
   return '${(meters / 1000).toStringAsFixed(1)} km';
 }
 
-class _OptionDetails extends StatelessWidget {
-  const _OptionDetails({required this.option, this.onShowBusDetail});
+/// Renders a single [RouteOption] — its summary chips, optional warning, and
+/// the walk/bus segment list. Shared by [RouteInfoCard] (the live routing
+/// flow) and the saved favorite-route detail sheet.
+class RouteOptionDetails extends StatelessWidget {
+  const RouteOptionDetails({
+    super.key,
+    required this.option,
+    this.onShowBusDetail,
+  });
 
   final RouteOption option;
   final void Function(String tripId)? onShowBusDetail;
@@ -613,10 +733,7 @@ class _BusSegmentTile extends StatelessWidget {
                 children: [
                   Text(
                     'View',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                   ),
                   Icon(Icons.chevron_right, size: 16),
                 ],
