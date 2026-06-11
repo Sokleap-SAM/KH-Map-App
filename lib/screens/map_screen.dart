@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:kh_map_app/models/place.dart';
 import 'package:kh_map_app/models/route_search_selection.dart';
 import 'package:kh_map_app/models/trip.dart';
@@ -18,6 +19,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/map_provider.dart';
 import '../services/auth_service.dart';
+import '../utils/constants/colors.dart';
 import '../services/favorites_service.dart';
 import '../widgets/map/locate_me_button.dart';
 import '../widgets/map/place_markers_layer.dart';
@@ -114,6 +116,48 @@ class _MapScreenState extends State<MapScreen> {
     context.read<MapProvider>().setFollowUser(false);
     _mapController.move(target, 17);
     _showPlaceDetail(context, place);
+  }
+
+  /// Filters the map to every place in the tapped category and frames them.
+  void _onCategorySelected(MapCategory category) {
+    final provider = context.read<MapProvider>();
+    final user = provider.currentPosition;
+
+    final results = provider.toggleCategoryFilter(
+      key: category.key,
+      keywords: category.keywords,
+    );
+
+    // Tapping the active category again clears the filter — recenter on user.
+    if (!provider.hasCategoryFilter) {
+      if (user != null) _mapController.move(user, 15);
+      return;
+    }
+
+    provider.setFollowUser(false);
+
+    if (results.isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('រកមិនឃើញ${category.label}ទេ')),
+        );
+      if (user != null) _mapController.move(user, 15);
+      return;
+    }
+
+    // Frame every match (and the user) so the whole category is on screen.
+    final points = <LatLng>[
+      ?user,
+      for (final p in results) LatLng(p.latitude, p.longitude),
+    ];
+    _mapController.fitCamera(
+      CameraFit.coordinates(
+        coordinates: points,
+        padding: const EdgeInsets.fromLTRB(60, 220, 60, 160),
+        maxZoom: 16.5,
+      ),
+    );
   }
 
   void _centerOnUser() {
@@ -861,8 +905,11 @@ class _MapScreenState extends State<MapScreen> {
                 routeColors: transitProvider.routeColors,
                 onBusTap: _showBusDetails,
               ),
-            if (_currentZoom >= 15.0)
-              PlaceMarkersLayer(places: provider.places, onTap: _showPlaceDetail),
+            if (provider.hasCategoryFilter || _currentZoom >= 15.0)
+              PlaceMarkersLayer(
+                places: provider.displayPlaces,
+                onTap: _showPlaceDetail,
+              ),
             UserLocationMarkerLayer(position: provider.currentPosition!),
           ],
         ),
@@ -895,7 +942,20 @@ class _MapScreenState extends State<MapScreen> {
                       color: Colors.white,
                       height: MediaQuery.of(context).padding.top,
                     ),
-                    MapSearchBar(onPlaceSelected: _focusOnPlace),
+                    MapSearchBar(
+                      onPlaceSelected: _focusOnPlace,
+                      activeCategory: provider.activeCategoryKey,
+                      onCategorySelected: _onCategorySelected,
+                    ),
+                    if (provider.hasCategoryFilter)
+                      _NearbyResultsBanner(
+                        count: provider.nearbyCategoryPlaces.length,
+                        onClear: () {
+                          provider.clearCategoryFilter();
+                          final user = provider.currentPosition;
+                          if (user != null) _mapController.move(user, 15);
+                        },
+                      ),
                   ],
                 ),
         ),
@@ -936,6 +996,59 @@ class _MapScreenState extends State<MapScreen> {
             },
           ),
       ],
+    );
+  }
+}
+
+/// Thin banner under the search bar summarising the active nearby-category
+/// search, with a button to clear it.
+class _NearbyResultsBanner extends StatelessWidget {
+  const _NearbyResultsBanner({required this.count, required this.onClear});
+
+  final int count;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: AppColors.primaryColor,
+      padding: const EdgeInsets.only(left: 16, right: 8, bottom: 10),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.near_me,
+            color: AppColors.secondaryColor,
+            size: 16,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              count == 0 ? 'រកមិនឃើញ' : 'ឃើញ $count កន្លែង',
+              style: GoogleFonts.notoSansKhmer(
+                color: Colors.white,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: onClear,
+            icon: const Icon(Icons.close, size: 16, color: Colors.white70),
+            label: Text(
+              'សម្អាត',
+              style: GoogleFonts.notoSansKhmer(
+                color: Colors.white70,
+                fontSize: 12,
+              ),
+            ),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

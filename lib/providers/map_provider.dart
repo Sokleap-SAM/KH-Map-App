@@ -34,6 +34,84 @@ class MapProvider extends ChangeNotifier {
   bool get placesLoading => _placesLoading;
   String? get placesError => _placesError;
 
+  // ── Category filter ──────────────────────────────────────────────────────
+  // When the user taps a category icon under the search bar, we show every
+  // place of that category on the map (sorted nearest-first when the user's
+  // location is known).
+  static const Distance _distance = Distance();
+
+  String? _activeCategoryKey;
+  List<String> _categoryKeywords = const [];
+  List<Place> _nearbyCategoryPlaces = [];
+
+  /// Identifier of the active category button (e.g. 'restaurant'), or null.
+  String? get activeCategoryKey => _activeCategoryKey;
+  bool get hasCategoryFilter => _activeCategoryKey != null;
+
+  /// Matching places for the active category, nearest first.
+  List<Place> get nearbyCategoryPlaces => _nearbyCategoryPlaces;
+
+  /// Places to draw on the map: only the category matches while a filter is
+  /// active, otherwise every loaded place.
+  List<Place> get displayPlaces =>
+      _activeCategoryKey != null ? _nearbyCategoryPlaces : _places;
+
+  /// Toggles the filter for a category. Tapping the active category again
+  /// clears it. Returns the resulting matches (empty when cleared).
+  List<Place> toggleCategoryFilter({
+    required String key,
+    required List<String> keywords,
+  }) {
+    if (_activeCategoryKey == key) {
+      clearCategoryFilter();
+      return const [];
+    }
+    _activeCategoryKey = key;
+    _categoryKeywords = keywords.map((k) => k.toLowerCase()).toList();
+    _recomputeNearbyCategory();
+    notifyListeners();
+    return _nearbyCategoryPlaces;
+  }
+
+  void clearCategoryFilter() {
+    if (_activeCategoryKey == null) return;
+    _activeCategoryKey = null;
+    _categoryKeywords = const [];
+    _nearbyCategoryPlaces = const [];
+    notifyListeners();
+  }
+
+  void _recomputeNearbyCategory() {
+    if (_activeCategoryKey == null) {
+      _nearbyCategoryPlaces = const [];
+      return;
+    }
+    final matches = <Place>[];
+    for (final p in _places) {
+      final name = p.category?.name.toLowerCase() ?? '';
+      if (name.isEmpty) continue;
+      if (_categoryKeywords.any(name.contains)) matches.add(p);
+    }
+    // Sort nearest-first when we know where the user is.
+    final origin = _currentPosition;
+    if (origin != null) {
+      matches.sort((a, b) {
+        final da = _distance.as(
+          LengthUnit.Meter,
+          origin,
+          LatLng(a.latitude, a.longitude),
+        );
+        final db = _distance.as(
+          LengthUnit.Meter,
+          origin,
+          LatLng(b.latitude, b.longitude),
+        );
+        return da.compareTo(db);
+      });
+    }
+    _nearbyCategoryPlaces = matches;
+  }
+
   // Dropped pin state
   LatLng? _droppedPin;
   String? _droppedPinPlace;
@@ -131,6 +209,7 @@ class MapProvider extends ChangeNotifier {
     notifyListeners();
     _positionSub = _locationService.positionStream.listen((latLng) {
       _currentPosition = latLng;
+      if (_activeCategoryKey != null) _recomputeNearbyCategory();
       notifyListeners();
     });
     // Load places after location is known.
@@ -143,6 +222,7 @@ class MapProvider extends ChangeNotifier {
     notifyListeners();
     try {
       _places = await _placeService.fetchPlaces();
+      if (_activeCategoryKey != null) _recomputeNearbyCategory();
     } catch (e) {
       _placesError = e.toString();
       debugPrint('MapProvider: failed to load places: $e');
