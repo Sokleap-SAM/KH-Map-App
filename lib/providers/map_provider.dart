@@ -160,7 +160,20 @@ class MapProvider extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        _droppedPinPlace = data['display_name'];
+        final String fullAddress = data['display_name'] ?? "";
+
+        // Filter out segments that look like IDs or numbers (e.g. "12345678")
+        final segments = fullAddress.split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty && !RegExp(r'^\d+$').hasMatch(s))
+            .toList();
+
+        if (segments.isNotEmpty) {
+          _droppedPinPlace = segments.first;
+        } else {
+          _droppedPinPlace = "Dropped Pin";
+        }
+
         final address = data['address'] as Map<String, dynamic>?;
         if (address != null) {
           _droppedPinRoad =
@@ -218,8 +231,8 @@ class MapProvider extends ChangeNotifier {
     _mapPickCallback = null;
     notifyListeners();
 
-    String label =
-        '${latLng.latitude.toStringAsFixed(6)}, ${latLng.longitude.toStringAsFixed(6)}';
+    // Use a friendly label for map picks instead of raw coordinate "IDs"
+    String label = 'Point (${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)})';
     try {
       final url = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse'

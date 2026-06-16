@@ -25,6 +25,16 @@ class PlaceMarkersLayer extends StatelessWidget {
         final bool isRecent = recentSearchIds.contains(place.id);
         final String? categoryName = place.category?.name;
 
+        // Determine if this place should use a specific route color
+        final String cat = (categoryName ?? '').toLowerCase();
+        final String name = place.name.toLowerCase();
+        final bool isBusStop = cat.contains('bus') || 
+                               cat.contains('stop') || 
+                               cat.contains('transit') || 
+                               name.contains('bus stop') || 
+                               name.contains('ចំណត');
+        final Color? transitColor = isBusStop ? Colors.blue : null;
+
         // --- PROFESSIONAL SIZING ---
         // Shrunk sizes: 24px for normal, 30px for recent
         final double iconSize = isRecent ? 30.0 : 24.0;
@@ -32,9 +42,9 @@ class PlaceMarkersLayer extends StatelessWidget {
 
         return fm.Marker(
           point: LatLng(place.latitude, place.longitude),
-          width: 150, // Wide enough to hold text on the side
+          width: iconSize, // The marker box is now exactly the size of the icon
           height: iconSize,
-          // CRUCIAL: Use center alignment so the anchor is the middle of the Stack
+          // This centers the icon exactly on the GPS coordinate
           alignment: Alignment.center,
           child: GestureDetector(
             onTap: () => onTap(context, place),
@@ -47,7 +57,7 @@ class PlaceMarkersLayer extends StatelessWidget {
                   width: iconSize,
                   height: iconSize,
                   decoration: BoxDecoration(
-                    color: getColorForCategory(categoryName),
+                    color: transitColor ?? getColorForCategory(categoryName),
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 2),
                     boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 3)],
@@ -62,20 +72,27 @@ class PlaceMarkersLayer extends StatelessWidget {
                 // 2. THE NAME LABEL (Positioned to the right of the icon)
                 if (showName)
                   Positioned(
-                    left: iconSize + 4, // Starts right after the circle
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.black12),
-                      ),
-                      child: Text(
-                        place.name,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                    // Anchored to the center and pushed right
+                    left: (iconSize / 2) + 16, 
+                    top: -10, // Allows vertical centering room
+                    bottom: -10,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.black12),
+                        ),
+                        child: Text(
+                          place.name,
+                          softWrap: false, // Keep name on one line
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
                         ),
                       ),
                     ),

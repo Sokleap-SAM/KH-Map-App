@@ -8,6 +8,8 @@ import '../../models/route_plan.dart';
 const Color _kNavBorder = Color(0xFF1565C0);
 const Color _kNavFill = Colors.white;
 const Color _kFirstBoardColor = Colors.red;
+const Color _kStartColor = Colors.green;
+const Color _kDestinationColor = Color(0xFFD32F2F);
 
 /// Draws the routing overlay for one [RouteOption] (the currently selected tab).
 ///
@@ -107,8 +109,11 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
 
         // Walking person icon at the walk start point.
         if (seg.from != null) {
+          final isFirstPoint = i == 0;
           markers.add(
-            _stopMarker(seg.from!.coordinates, Icons.directions_walk),
+            _stopMarker(seg.from!.coordinates, 
+                isFirstPoint ? Icons.my_location : Icons.directions_walk,
+                color: isFirstPoint ? _kStartColor : _kNavBorder),
           );
         }
       } else if (seg.isBus) {
@@ -144,7 +149,12 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
             color: firstBusSeen ? _kNavBorder : _kFirstBoardColor,
           ),
         );
-        markers.add(_stopMarker(alightAt.coordinates, Icons.flag));
+        
+        final isLastSegment = i == option.segments.length - 1;
+        markers.add(_stopMarker(
+          alightAt.coordinates, 
+          isLastSegment ? Icons.location_on : Icons.flag,
+          color: isLastSegment ? _kDestinationColor : _kNavBorder));
         firstBusSeen = true;
 
         // Collect live board stops — rendered separately as pulsing dots.

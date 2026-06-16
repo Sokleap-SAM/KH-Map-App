@@ -11,12 +11,14 @@ class TransitRouteLayer extends StatelessWidget {
     required this.routes,
     required this.routeStops,
     required this.routeColors,
+    required this.onStopTap,
     required this.currentZoom,
   });
 
   final List<TransitRoute> routes;
   final Map<String, List<RouteStop>> routeStops;
   final Map<String, Color> routeColors;
+  final void Function(LatLng latLng) onStopTap;
   final double currentZoom;
   List<LatLng> _buildRoutePath(List<RouteStop> stops) {
     final points = <LatLng>[];
@@ -64,20 +66,23 @@ class TransitRouteLayer extends StatelessWidget {
               point: stop.location,
               width: stopSize,
               height: stopSize,
-              alignment: Alignment.center, // Keep centered
-              child: Container(
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: isZoomedIn ? 2 : 1,
+              alignment: Alignment.center,
+              child: GestureDetector(
+                onTap: () => onStopTap(stop.location),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.blue,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white,
+                      width: isZoomedIn ? 2 : 1,
+                    ),
                   ),
+                  //only show bus icon if zoom in close
+                  child: isZoomedIn
+                      ? const Icon(Icons.directions_bus, color: Colors.white, size: 10)
+                      : null,
                 ),
-                //only show bus icon if zoom in close
-                child: isZoomedIn
-                    ? const Icon(Icons.directions_bus, color: Colors.white, size: 10)
-                    : null,
               ),
             ),
           );
