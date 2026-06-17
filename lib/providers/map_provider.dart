@@ -121,12 +121,31 @@ class MapProvider extends ChangeNotifier {
   // ── Route search overlay ─────────────────────────────────────────────────
   bool _showRouteSearch = false;
   RouteSearchSelection? _routeSearchDestination;
+
+  /// Pre-filled origin for the overlay. Null in the normal flow (the overlay
+  /// defaults the origin to the user's live location); set when opening a saved
+  /// favorite route so its fixed origin is shown instead.
+  RouteSearchSelection? _routeSearchOrigin;
   bool _isMapPickMode = false;
   void Function(RouteSearchSelection)? _mapPickCallback;
 
+  /// One-shot camera target consumed by the map screen — e.g. to frame a
+  /// favorite route's origin when it's opened from another tab.
+  LatLng? _cameraMoveTarget;
+
+  /// Live preview of the origin/destination chosen in the route search overlay.
+  /// Rendered on the map as numbered pins (1 = origin, 2 = destination) so the
+  /// user can see what they've selected before submitting the route.
+  LatLng? _routeSearchOriginPin;
+  LatLng? _routeSearchDestinationPin;
+
   bool get showRouteSearch => _showRouteSearch;
   RouteSearchSelection? get routeSearchDestination => _routeSearchDestination;
+  RouteSearchSelection? get routeSearchOrigin => _routeSearchOrigin;
+  LatLng? get cameraMoveTarget => _cameraMoveTarget;
   bool get isMapPickMode => _isMapPickMode;
+  LatLng? get routeSearchOriginPin => _routeSearchOriginPin;
+  LatLng? get routeSearchDestinationPin => _routeSearchDestinationPin;
 
   // ── Routing state (State A → B → C per ROUTING.md) ───────────────────────
   bool _showBusLines = true;
@@ -144,12 +163,19 @@ class MapProvider extends ChangeNotifier {
   /// Last destination passed to [startRouting]; used when [setPlanType] triggers a re-fetch.
   LatLng? _routingDestination;
   LatLng? _routingOrigin;
+  String? _routingOriginLabel;
+  String? _routingDestinationLabel;
   bool _useLiveCurrentOrigin = true;
 
   /// Polls the route plan every 5 s while routing is active.
   Timer? _routePollTimer;
   bool _refreshInProgress = false;
   static const Duration _pollInterval = Duration(seconds: 5);
+
+  /// When non-null, the route info card is showing a saved favorite route, so
+  /// the bookmark icon renders as already-saved. The route itself is re-planned
+  /// through the normal `/transit/plan` flow (which polls for live ETAs).
+  String? _activeFavoriteId;
 
   LatLng? get currentPosition => _currentPosition;
   bool get locationError => _locationError;
@@ -165,6 +191,20 @@ class MapProvider extends ChangeNotifier {
   RoutePlanResult? get routePlan => _routePlan;
   int get activeOptionIndex => _activeOptionIndex;
   String get planType => _planType;
+
+  /// Origin/destination of the active routing flow, for persisting a favorite.
+  LatLng? get routingOrigin => _routingOrigin;
+  LatLng? get routingDestination => _routingDestination;
+  String? get routingOriginLabel => _routingOriginLabel;
+  String? get routingDestinationLabel => _routingDestinationLabel;
+
+  /// True when the active route's origin tracks the user's live location (so a
+  /// saved favorite should resolve a stable address instead of a "current
+  /// location" label).
+  bool get useLiveCurrentOrigin => _useLiveCurrentOrigin;
+
+  /// Id of the saved favorite currently displayed, or null for a planned trip.
+  String? get activeFavoriteId => _activeFavoriteId;
 
   /// The currently selected [RouteOption], or null when no route is loaded.
   RouteOption? get activeOption {
@@ -281,17 +321,135 @@ class MapProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reverse-geocodes [point] to a short human label (first address
+  /// component), falling back to a `lat, lng` string when the lookup fails.
+  /// Used when persisting a favorite route so a fixed saved origin isn't
+  /// mislabelled "Current location" after the user moves.
+  Future<String> reverseGeocodeLabel(LatLng point) async {
+    final fallback =
+        '${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}';
+    try {
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?format=json&lat=${point.latitude}&lon=${point.longitude}'
+        '&zoom=18&addressdetails=1',
+      );
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': 'kh_map_app/1.0'},
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final displayName = data['display_name'] as String?;
+        if (displayName != null && displayName.trim().isNotEmpty) {
+          return displayName.split(',').first.trim();
+        }
+      }
+    } catch (_) {
+      // Fall through to coordinate label.
+    }
+    return fallback;
+  }
+
   // ── Route search overlay ──────────────────────────────────────────────────
+
+  /// Consumed by the map screen after it moves the camera, so the move only
+  /// happens once.
+  void consumeCameraMoveTarget() {
+    _cameraMoveTarget = null;
+  }
+
+  /// Displays a saved favorite route on the map: the overlay pre-filled with
+  /// its fixed origin/destination, the route info card, and the drawn polyline
+  /// — showing ONLY the saved [option] (already rebuilt with live ETAs by the
+  /// backend's `/favorites/:id/live`). Unlike the normal flow it does NOT call
+  /// `/transit/plan` (which returns several alternatives) and does not poll.
+  void openFavoriteRoute({
+    required String favoriteId,
+    required RouteSearchSelection origin,
+    required RouteSearchSelection destination,
+  }) {
+    // Overlay fields + preview pins.
+    _routeSearchOrigin = origin;
+    _routeSearchDestination = destination;
+    _routeSearchOriginPin = origin.location;
+    _routeSearchDestinationPin = destination.location;
+    _showRouteSearch = true;
+
+    // Camera: frame the origin once.
+    _followUser = false;
+    _cameraMoveTarget = origin.location;
+
+    // Mark which favorite this is so the route info card shows it as saved.
+    // Set AFTER routing kicks off because _fetchRoutePlan no longer clears it.
+    _activeFavoriteId = favoriteId;
+    _planType = 'transit';
+    notifyListeners();
+    // Re-plan from the saved endpoints through the normal flow (route card,
+    // polyline, live 5 s poll). The favorite stores only origin/destination.
+    startRoutingFrom(
+      origin: origin.location,
+      destination: destination.location,
+      originLabel: origin.label,
+      destinationLabel: destination.label,
+    );
+  }
+
+  /// Clears the active-favorite marker (e.g. after the user removes it from the
+  /// route info card) so the bookmark icon stops showing as saved.
+  void clearActiveFavoriteId() {
+    if (_activeFavoriteId == null) return;
+    _activeFavoriteId = null;
+    notifyListeners();
+  }
 
   void openRouteSearch(RouteSearchSelection destination) {
     _routeSearchDestination = destination;
+    _routeSearchOrigin = null;
+    _activeFavoriteId = null;
+    _routeSearchDestinationPin = destination.location;
+    // Default origin is the user's current location; the overlay overrides
+    // this via [updateRouteSearchPins] if the user picks a different origin.
+    _routeSearchOriginPin = _currentPosition;
     _showRouteSearch = true;
+    notifyListeners();
+    // Auto-fetch the plan immediately so the route info card streams in
+    // without the user having to hit a "Go" button.
+    final origin = _currentPosition;
+    if (origin != null) {
+      submitRouteSearch(
+        origin: RouteSearchSelection(
+          label: 'Current location',
+          location: origin,
+          useLiveCurrentLocation: true,
+        ),
+        destination: destination,
+      );
+    }
+  }
+
+  /// Updates the live origin/destination preview pins. Called by the route
+  /// search overlay whenever either field changes (search-screen pick,
+  /// map-pick, or reset-to-current-location).
+  void updateRouteSearchPins({LatLng? origin, LatLng? destination}) {
+    if (_routeSearchOriginPin == origin &&
+        _routeSearchDestinationPin == destination) {
+      return;
+    }
+    _routeSearchOriginPin = origin;
+    _routeSearchDestinationPin = destination;
     notifyListeners();
   }
 
   void closeRouteSearch() {
     _showRouteSearch = false;
     _routeSearchDestination = null;
+    _routeSearchOrigin = null;
+    _routeSearchOriginPin = null;
+    _routeSearchDestinationPin = null;
+    _routeSearchOrigin = null;
+    _routeSearchOriginPin = null;
+    _routeSearchDestinationPin = null;
     _isMapPickMode = false;
     _mapPickCallback = null;
     notifyListeners();
@@ -345,11 +503,15 @@ class MapProvider extends ChangeNotifier {
     required RouteSearchSelection origin,
     required RouteSearchSelection destination,
   }) async {
+    // A user-driven search (or overlay edit) is no longer a saved favorite.
+    _activeFavoriteId = null;
     await setPlanType('transit');
     await startRoutingFrom(
       origin: origin.location,
       destination: destination.location,
       useLiveCurrentOrigin: origin.useLiveCurrentLocation,
+      originLabel: origin.label,
+      destinationLabel: destination.label,
     );
   }
 
@@ -367,12 +529,16 @@ class MapProvider extends ChangeNotifier {
     required LatLng? origin,
     required LatLng destination,
     bool useLiveCurrentOrigin = false,
+    String? originLabel,
+    String? destinationLabel,
   }) async {
     final resolvedOrigin = useLiveCurrentOrigin ? _currentPosition : origin;
     if (resolvedOrigin == null) return;
     _routingOrigin = resolvedOrigin;
     _useLiveCurrentOrigin = useLiveCurrentOrigin;
     _routingDestination = destination;
+    _routingOriginLabel = originLabel;
+    _routingDestinationLabel = destinationLabel;
     _showBusLines = false;
     _isRoutingActive = true;
     _stopPollTimer();
@@ -432,6 +598,8 @@ class MapProvider extends ChangeNotifier {
     required LatLng origin,
     required LatLng destination,
   }) async {
+    // A real /plan fetch means we're no longer showing a saved favorite.
+    _activeFavoriteId = null;
     _isLoadingRoute = true;
     _routeError = null;
     _routePlan = null;
@@ -459,6 +627,7 @@ class MapProvider extends ChangeNotifier {
   /// Returns to State A: shows bus lines, clears routing overlay.
   void clearRouting() {
     _stopPollTimer();
+    _activeFavoriteId = null;
     _showBusLines = true;
     _isRoutingActive = false;
     _isLoadingRoute = false;
@@ -467,6 +636,8 @@ class MapProvider extends ChangeNotifier {
     _activeOptionIndex = 0;
     _routingOrigin = null;
     _routingDestination = null;
+    _routingOriginLabel = null;
+    _routingDestinationLabel = null;
     _useLiveCurrentOrigin = true;
     notifyListeners();
   }
