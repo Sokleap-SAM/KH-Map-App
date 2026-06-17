@@ -8,6 +8,8 @@ import '../../models/route_plan.dart';
 const Color _kNavBorder = Color(0xFF1565C0);
 const Color _kNavFill = Colors.white;
 const Color _kFirstBoardColor = Colors.red;
+const Color _kStartColor = Colors.green;
+const Color _kDestinationColor = Color(0xFFD32F2F);
 
 // Numbered waypoint colours (1 = origin, intermediate = get-off, last = destination).
 const Color _kOriginColor = Color(0xFF22C55E); // emerald
@@ -118,6 +120,16 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
             strokeCap: StrokeCap.round,
           ),
         );
+
+        // Walking person icon at the walk start point.
+        if (seg.from != null) {
+          final isFirstPoint = i == 0;
+          markers.add(
+            _stopMarker(seg.from!.coordinates, 
+                isFirstPoint ? Icons.my_location : Icons.directions_walk,
+                color: isFirstPoint ? _kStartColor : _kNavBorder),
+          );
+        }
       } else if (seg.isBus) {
         final boardAt = seg.boardAt;
         final alightAt = seg.alightAt;
@@ -151,6 +163,12 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
             color: firstBusSeen ? _kNavBorder : _kFirstBoardColor,
           ),
         );
+        
+        final isLastSegment = i == option.segments.length - 1;
+        markers.add(_stopMarker(
+          alightAt.coordinates, 
+          isLastSegment ? Icons.location_on : Icons.flag,
+          color: isLastSegment ? _kDestinationColor : _kNavBorder));
         firstBusSeen = true;
 
         // Collect live board stops — rendered separately as pulsing dots.

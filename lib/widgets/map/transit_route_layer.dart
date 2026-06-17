@@ -11,19 +11,15 @@ class TransitRouteLayer extends StatelessWidget {
     required this.routes,
     required this.routeStops,
     required this.routeColors,
+    required this.onStopTap,
     required this.currentZoom,
-    this.onStopTap,
   });
 
   final List<TransitRoute> routes;
   final Map<String, List<RouteStop>> routeStops;
   final Map<String, Color> routeColors;
+  final void Function(LatLng latLng) onStopTap;
   final double currentZoom;
-
-  /// Fired when the user taps a stop. The route is included so the host can
-  /// show context (route code, color) alongside the stop name.
-  final void Function(RouteStop stop, TransitRoute route)? onStopTap;
-
   List<LatLng> _buildRoutePath(List<RouteStop> stops) {
     final points = <LatLng>[];
     for (final stop in stops) {
@@ -44,10 +40,7 @@ class TransitRouteLayer extends StatelessWidget {
     double lineWidth = currentZoom > 14 ? 5.0 : 2.5;
     bool showMarkers = currentZoom > 12.0;
     bool useDetailedIcons = currentZoom >= 14.5;
-    double visualSize = useDetailedIcons ? 22.0 : 8.0;
-    // Hit area is always large enough to tap reliably, regardless of the
-    // visual size at the current zoom.
-    const double hitSize = 32.0;
+    double markerSize = useDetailedIcons ? 22.0 : 8.0;
 
     for (final route in routes) {
       final stops = routeStops[route.id] ?? [];
@@ -57,42 +50,38 @@ class TransitRouteLayer extends StatelessWidget {
       if (points.isNotEmpty) {
         polylines.add(
           Polyline(
-            points: points,
-            color: color.withValues(alpha: 0.8),
+            points: points, 
+            color: color.withOpacity(0.8),
             strokeWidth: lineWidth,
-          ),
+          )
         );
       }
       if (showMarkers) {
         for (final stop in stops) {
+          bool isZoomedIn = currentZoom >= 15.0;
+          double stopSize = isZoomedIn ? 20.0 : 6.0; // Tiny 6px dot when far
+
           markers.add(
             Marker(
               point: stop.location,
-              width: hitSize,
-              height: hitSize,
+              width: stopSize,
+              height: stopSize,
+              alignment: Alignment.center,
               child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onStopTap == null ? null : () => onStopTap!(stop, route),
-                child: Center(
-                  child: Container(
-                    width: visualSize,
-                    height: visualSize,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white,
-                        width: useDetailedIcons ? 2 : 1,
-                      ),
+                onTap: () => onStopTap(stop.location),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.blue,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white,
+                      width: isZoomedIn ? 2 : 1,
                     ),
-                    child: useDetailedIcons
-                        ? const Icon(
-                            Icons.directions_bus,
-                            color: Colors.white,
-                            size: 10,
-                          )
-                        : null,
                   ),
+                  //only show bus icon if zoom in close
+                  child: isZoomedIn
+                      ? const Icon(Icons.directions_bus, color: Colors.white, size: 10)
+                      : null,
                 ),
               ),
             ),
