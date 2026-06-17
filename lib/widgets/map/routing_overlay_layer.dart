@@ -87,7 +87,8 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
     var firstBusSeen = false;
 
     // ── Polylines + board markers ────────────────────────────────────────
-    for (final seg in segments) {
+    for (var i = 0; i < segments.length; i++) {
+      final seg = segments[i];
       if (seg.isWalk) {
         // Use road-following path from backend; fall back to straight line.
         List<LatLng> points;
@@ -125,9 +126,11 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
         if (seg.from != null) {
           final isFirstPoint = i == 0;
           boardMarkers.add(
-            _stopMarker(seg.from!.coordinates, 
-                isFirstPoint ? Icons.my_location : Icons.directions_walk,
-                color: isFirstPoint ? _kStartColor : _kNavBorder),
+            _stopMarker(
+              seg.from!.coordinates,
+              isFirstPoint ? Icons.my_location : Icons.directions_walk,
+              color: isFirstPoint ? _kStartColor : _kNavBorder,
+            ),
           );
         }
       } else if (seg.isBus) {
@@ -163,12 +166,15 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
             color: firstBusSeen ? _kNavBorder : _kFirstBoardColor,
           ),
         );
-        
+
         final isLastSegment = i == option.segments.length - 1;
-        boardMarkers.add(_stopMarker(
-          alightAt.coordinates, 
-          isLastSegment ? Icons.location_on : Icons.flag,
-          color: isLastSegment ? _kDestinationColor : _kNavBorder));
+        boardMarkers.add(
+          _stopMarker(
+            alightAt.coordinates,
+            isLastSegment ? Icons.location_on : Icons.flag,
+            color: isLastSegment ? _kDestinationColor : _kNavBorder,
+          ),
+        );
         firstBusSeen = true;
 
         // Collect live board stops — rendered separately as pulsing dots.

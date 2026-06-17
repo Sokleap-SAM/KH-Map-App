@@ -39,8 +39,6 @@ class TransitRouteLayer extends StatelessWidget {
     final markers = <Marker>[];
     double lineWidth = currentZoom > 14 ? 5.0 : 2.5;
     bool showMarkers = currentZoom > 12.0;
-    bool useDetailedIcons = currentZoom >= 14.5;
-    double markerSize = useDetailedIcons ? 22.0 : 8.0;
 
     for (final route in routes) {
       final stops = routeStops[route.id] ?? [];
@@ -80,7 +78,11 @@ class TransitRouteLayer extends StatelessWidget {
                   ),
                   //only show bus icon if zoom in close
                   child: isZoomedIn
-                      ? const Icon(Icons.directions_bus, color: Colors.white, size: 10)
+                      ? const Icon(
+                          Icons.directions_bus,
+                          color: Colors.white,
+                          size: 10,
+                        )
                       : null,
                 ),
               ),
