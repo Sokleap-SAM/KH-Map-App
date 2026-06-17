@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/place.dart';
 import '../models/route_plan.dart';
@@ -24,6 +25,10 @@ class MapProvider extends ChangeNotifier {
   bool _locationError = false;
   bool _followUser = true;
   StreamSubscription<LatLng>? _positionSub;
+
+  LatLng? get currentPosition => _currentPosition;
+  bool get locationError => _locationError;
+  bool get followUser => _followUser;
 
   // ── Places ────────────────────────────────────────────────────────────────
   List<Place> _places = [];
@@ -118,6 +123,11 @@ class MapProvider extends ChangeNotifier {
   String? _droppedPinRoad;
   bool _isLoadingPinInfo = false;
 
+  LatLng? get droppedPin => _droppedPin;
+  String? get droppedPinPlace => _droppedPinPlace;
+  String? get droppedPinRoad => _droppedPinRoad;
+  bool get isLoadingPinInfo => _isLoadingPinInfo;
+
   // ── Route search overlay ─────────────────────────────────────────────────
   bool _showRouteSearch = false;
   RouteSearchSelection? _routeSearchDestination;
@@ -154,20 +164,14 @@ class MapProvider extends ChangeNotifier {
   String? _routeError;
   RoutePlanResult? _routePlan;
 
-  /// Index of the currently selected route option (0 = fastest by default).
   int _activeOptionIndex = 0;
-
-  /// The plan mode: "walk" | "transit" (default: transit).
-  String _planType = 'transit';
-
-  /// Last destination passed to [startRouting]; used when [setPlanType] triggers a re-fetch.
+  String _planType = 'transit'; // "walk" | "transit"
   LatLng? _routingDestination;
   LatLng? _routingOrigin;
   String? _routingOriginLabel;
   String? _routingDestinationLabel;
   bool _useLiveCurrentOrigin = true;
 
-  /// Polls the route plan every 5 s while routing is active.
   Timer? _routePollTimer;
   bool _refreshInProgress = false;
   static const Duration _pollInterval = Duration(seconds: 5);
@@ -177,13 +181,6 @@ class MapProvider extends ChangeNotifier {
   /// through the normal `/transit/plan` flow (which polls for live ETAs).
   String? _activeFavoriteId;
 
-  LatLng? get currentPosition => _currentPosition;
-  bool get locationError => _locationError;
-  bool get followUser => _followUser;
-  LatLng? get droppedPin => _droppedPin;
-  String? get droppedPinPlace => _droppedPinPlace;
-  String? get droppedPinRoad => _droppedPinRoad;
-  bool get isLoadingPinInfo => _isLoadingPinInfo;
   bool get showBusLines => _showBusLines;
   bool get isRoutingActive => _isRoutingActive;
   bool get isLoadingRoute => _isLoadingRoute;
@@ -191,6 +188,10 @@ class MapProvider extends ChangeNotifier {
   RoutePlanResult? get routePlan => _routePlan;
   int get activeOptionIndex => _activeOptionIndex;
   String get planType => _planType;
+
+  // ── Recent Searches ───────────────────────────────────────────────────────
+  final List<String> _recentSearchIds = [];
+  List<String> get recentSearchIds => _recentSearchIds;
 
   /// Origin/destination of the active routing flow, for persisting a favorite.
   LatLng? get routingOrigin => _routingOrigin;
@@ -214,29 +215,7 @@ class MapProvider extends ChangeNotifier {
     return plan.options[idx];
   }
 
-  /// Switch the active route option tab without re-fetching.
-  void setActiveOptionIndex(int index) {
-    if (_routePlan == null) return;
-    final clamped = index.clamp(0, _routePlan!.options.length - 1);
-    if (_activeOptionIndex == clamped) return;
-    _activeOptionIndex = clamped;
-    notifyListeners();
-  }
-
-  /// Switch between "walk" and "transit" plans.
-  /// Re-fetches immediately if routing is already active.
-  Future<void> setPlanType(String type) async {
-    if (_planType == type) return;
-    _planType = type;
-    notifyListeners();
-    if (_isRoutingActive && _routingDestination != null) {
-      final origin = _activeOriginForQuery();
-      if (origin == null) return;
-      _stopPollTimer();
-      await _fetchRoutePlan(origin: origin, destination: _routingDestination!);
-      _startPollTimer();
-    }
-  }
+  // ── Initialization & Core Setup ───────────────────────────────────────────
 
   Future<void> init() async {
     final initial = await _locationService.getCurrentPosition();
@@ -247,12 +226,14 @@ class MapProvider extends ChangeNotifier {
     }
     _currentPosition = initial;
     notifyListeners();
+
     _positionSub = _locationService.positionStream.listen((latLng) {
       _currentPosition = latLng;
       if (_activeCategoryKey != null) _recomputeNearbyCategory();
       notifyListeners();
     });
-    // Load places after location is known.
+    await _loadRecentSearches();
+
     await loadPlaces();
   }
 
@@ -278,6 +259,8 @@ class MapProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Pins Management ───────────────────────────────────────────────────────
+
   Future<void> dropPin(LatLng position) async {
     _droppedPin = position;
     _droppedPinPlace = null;
@@ -298,19 +281,33 @@ class MapProvider extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        _droppedPinPlace = data['display_name'];
+        final String fullAddress = data['display_name'] ?? "";
+
+        // Filter out segments that look like IDs or numbers (e.g. "12345678")
+        final segments = fullAddress
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty && !RegExp(r'^\d+$').hasMatch(s))
+            .toList();
+
+        if (segments.isNotEmpty) {
+          _droppedPinPlace = segments.first;
+        } else {
+          _droppedPinPlace = "Dropped Pin";
+        }
+
         final address = data['address'] as Map<String, dynamic>?;
         if (address != null) {
           _droppedPinRoad =
               address['road'] ?? address['pedestrian'] ?? address['footway'];
         }
       }
-    } catch (_) {
-      // Reverse geocoding failed — coordinates will still display
+    } catch (e) {
+      debugPrint('MapProvider: Reverse geocoding failed: $e');
+    } finally {
+      _isLoadingPinInfo = false;
+      notifyListeners();
     }
-
-    _isLoadingPinInfo = false;
-    notifyListeners();
   }
 
   void removePin() {
@@ -467,15 +464,16 @@ class MapProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Reverse-geocodes [latLng] and fires the pending map-pick callback.
   Future<void> handleMapPickTap(LatLng latLng) async {
     if (!_isMapPickMode || _mapPickCallback == null) return;
     final cb = _mapPickCallback!;
     _isMapPickMode = false;
     _mapPickCallback = null;
     notifyListeners();
+
+    // Use a friendly label for map picks instead of raw coordinate "IDs"
     String label =
-        '${latLng.latitude.toStringAsFixed(6)}, ${latLng.longitude.toStringAsFixed(6)}';
+        'Point (${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)})';
     try {
       final url = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse'
@@ -494,11 +492,10 @@ class MapProvider extends ChangeNotifier {
         }
       }
     } catch (_) {}
+
     cb(RouteSearchSelection(label: label, location: latLng));
   }
 
-  /// Submits the route search: sets plan type to transit and starts routing.
-  /// The overlay stays visible until the user dismisses the route card.
   Future<void> submitRouteSearch({
     required RouteSearchSelection origin,
     required RouteSearchSelection destination,
@@ -515,16 +512,33 @@ class MapProvider extends ChangeNotifier {
     );
   }
 
-  /// Transitions to State C: hides bus lines, fetches the route plan,
-  /// then starts polling every 5 s for live-ETA updates.
+  // ── Routing Logic & State Management ──────────────────────────────────────
+
+  void setActiveOptionIndex(int index) {
+    if (_routePlan == null) return;
+    final clamped = index.clamp(0, _routePlan!.options.length - 1);
+    if (_activeOptionIndex == clamped) return;
+    _activeOptionIndex = clamped;
+    notifyListeners();
+  }
+
+  Future<void> setPlanType(String type) async {
+    if (_planType == type) return;
+    _planType = type;
+    notifyListeners();
+    if (_isRoutingActive && _routingDestination != null) {
+      final origin = _activeOriginForQuery();
+      if (origin == null) return;
+      _stopPollTimer();
+      await _fetchRoutePlan(origin: origin, destination: _routingDestination!);
+      _startPollTimer();
+    }
+  }
+
   Future<void> startRouting(LatLng destination) async {
     await startRoutingFrom(origin: _currentPosition, destination: destination);
   }
 
-  /// Starts routing from a specific [origin] to [destination].
-  ///
-  /// Set [useLiveCurrentOrigin] to true to keep refreshing with the user's
-  /// current location during polling; otherwise the chosen origin is fixed.
   Future<void> startRoutingFrom({
     required LatLng? origin,
     required LatLng destination,
@@ -548,7 +562,9 @@ class MapProvider extends ChangeNotifier {
 
   void _startPollTimer() {
     _routePollTimer?.cancel();
-    _routePollTimer = Timer(_pollInterval, _scheduledRefresh);
+    if (_isRoutingActive) {
+      _routePollTimer = Timer(_pollInterval, _scheduledRefresh);
+    }
   }
 
   void _stopPollTimer() {
@@ -556,25 +572,21 @@ class MapProvider extends ChangeNotifier {
     _routePollTimer = null;
   }
 
-  /// Called by the timer — runs a silent refresh then reschedules itself.
-  /// Uses a single-shot Timer (not periodic) so a slow response can never
-  /// cause concurrent requests to pile up and overload the backend.
   Future<void> _scheduledRefresh() async {
+    if (!_isRoutingActive) return;
     await _silentRefresh();
-    // Only reschedule if routing is still active (timer may have been
-    // cancelled by clearRouting / setPlanType while we were awaiting).
-    if (_isRoutingActive && _routePollTimer != null) {
+    // Re-verify routing flag after network delay to ensure it wasn't cancelled mid-flight
+    if (_isRoutingActive) {
       _routePollTimer = Timer(_pollInterval, _scheduledRefresh);
     }
   }
 
-  /// Re-fetches the active route plan without resetting [_routePlan] or
-  /// showing the loading indicator — so the UI updates smoothly.
   Future<void> _silentRefresh() async {
-    if (_refreshInProgress) return; // guard against overlap
+    if (_refreshInProgress) return;
     final dest = _routingDestination;
     final origin = _activeOriginForQuery();
     if (dest == null || origin == null || !_isRoutingActive) return;
+
     _refreshInProgress = true;
     try {
       final plan = await _transitService.fetchRoutePlan(
@@ -584,10 +596,11 @@ class MapProvider extends ChangeNotifier {
         destLng: dest.longitude,
         type: _planType,
       );
-      _routePlan = plan;
-      notifyListeners();
+      if (_isRoutingActive) {
+        _routePlan = plan;
+        notifyListeners();
+      }
     } catch (e) {
-      // Silent — keep showing the last good result.
       debugPrint('MapProvider: silent refresh failed: $e');
     } finally {
       _refreshInProgress = false;
@@ -624,7 +637,6 @@ class MapProvider extends ChangeNotifier {
     }
   }
 
-  /// Returns to State A: shows bus lines, clears routing overlay.
   void clearRouting() {
     _stopPollTimer();
     _activeFavoriteId = null;
@@ -643,8 +655,51 @@ class MapProvider extends ChangeNotifier {
   }
 
   LatLng? _activeOriginForQuery() {
-    if (_useLiveCurrentOrigin) return _currentPosition;
-    return _routingOrigin;
+    return _useLiveCurrentOrigin ? _currentPosition : _routingOrigin;
+  }
+
+  // ── Recent Searches Logic ──────────────────────────────────────────────────
+
+  Future<void> _loadRecentSearches() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final List<String>? savedIds = prefs.getStringList('recent_searches');
+      if (savedIds != null) {
+        _recentSearchIds.clear();
+        _recentSearchIds.addAll(savedIds);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('MapProvider: Failed to load recent searches: $e');
+    }
+  }
+
+  Future<void> addToRecentSearches(String placeId) async {
+    // Remove if exists to avoid duplicates, then insert at top
+    _recentSearchIds.remove(placeId);
+    _recentSearchIds.insert(0, placeId);
+
+    // Limit to 5 items
+    if (_recentSearchIds.length > 5) {
+      _recentSearchIds.removeLast();
+    }
+
+    notifyListeners();
+
+    // Persist to disk
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('recent_searches', _recentSearchIds);
+    } catch (e) {
+      debugPrint('MapProvider: Failed to save recent searches: $e');
+    }
+  }
+
+  Future<void> clearRecentSearches() async {
+    _recentSearchIds.clear();
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('recent_searches');
   }
 
   @override
