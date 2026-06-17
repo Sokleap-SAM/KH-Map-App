@@ -66,18 +66,11 @@ class FavoriteRouteCard extends StatelessWidget {
   }
 
   Widget _details() {
-    final transfers = favorite.transferCount;
-    final transferLabel = transfers == 0
-        ? 'ផ្ទាល់ · គ្មានការប្តូរ'
-        : 'ប្តូរ $transfers ដង';
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          favorite.label?.trim().isNotEmpty == true
-              ? favorite.label!
-              : favorite.displayTitle,
+          favorite.displayTitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.notoSansKhmer(
@@ -93,10 +86,10 @@ class FavoriteRouteCard extends StatelessWidget {
         const SizedBox(height: 5),
         Row(
           children: [
-            const Icon(Icons.swap_horiz, size: 13, color: Colors.white38),
+            const Icon(Icons.bookmark, size: 13, color: Colors.white38),
             const SizedBox(width: 5),
             Text(
-              '$transferLabel · ${favoriteSavedLabel(favorite.savedAt)}',
+              favoriteSavedLabel(favorite.savedAt),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.notoSansKhmer(

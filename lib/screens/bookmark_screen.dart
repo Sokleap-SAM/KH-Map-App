@@ -315,31 +315,30 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   }
 
   void _openRouteDetail(FavoriteRoute r) async {
-    final result = await showModalBottomSheet<Object>(
+    final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => FavoriteRouteSheet(favorite: r),
     );
     if (result == kFavRouteSheetRemove) _removeRoute(r);
-    if (result is FavoriteRouteLive) _goToRoute(result);
+    if (result == kFavRouteSheetGo) _goToRoute(r);
   }
 
-  /// Opens the saved route on the map: feeds its fixed origin/destination and
-  /// the single live-rebuilt option into the routing flow (overlay + route info
-  /// card + drawn polyline) then switches to the map tab. Shows only this route.
-  void _goToRoute(FavoriteRouteLive live) {
-    context.read<MapProvider>().showFavoriteRoute(
-      favoriteId: live.favoriteId,
+  /// Opens the saved route on the map: feeds its fixed origin/destination into
+  /// the routing flow (overlay + route info card + drawn polyline, re-planned
+  /// from the saved endpoints) then switches to the map tab.
+  void _goToRoute(FavoriteRoute r) {
+    context.read<MapProvider>().openFavoriteRoute(
+      favoriteId: r.id,
       origin: RouteSearchSelection(
-        label: live.origin.name.isEmpty ? 'ដើម' : live.origin.name,
-        location: live.origin.coordinates,
+        label: r.origin.name.isEmpty ? 'ដើម' : r.origin.name,
+        location: r.origin.coordinates,
       ),
       destination: RouteSearchSelection(
-        label: live.destination.name.isEmpty ? 'គោលដៅ' : live.destination.name,
-        location: live.destination.coordinates,
+        label: r.destination.name.isEmpty ? 'គោលដៅ' : r.destination.name,
+        location: r.destination.coordinates,
       ),
-      option: live.option,
     );
     widget.onNavigateToMap?.call();
   }

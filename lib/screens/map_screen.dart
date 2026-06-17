@@ -14,7 +14,7 @@ import 'package:kh_map_app/widgets/map/routing_overlay_layer.dart';
 import 'package:kh_map_app/widgets/map/transit_route_layer.dart';
 import 'package:kh_map_app/widgets/map_screen/pin.dart';
 import 'package:kh_map_app/models/trip_eta.dart';
-import 'package:kh_map_app/services/transit_service.dart';
+import 'package:kh_map_app/services/mqtt_service.dart';
 import 'package:kh_map_app/utils/eta.dart';
 import 'package:kh_map_app/widgets/map_screen/place_detail_sheet.dart';
 import 'package:kh_map_app/widgets/map_screen/search_bar.dart';
@@ -133,8 +133,7 @@ class _MapScreenState extends State<MapScreen> {
     final originPos = provider.routingOrigin;
     final destPos = provider.routingDestination;
 
-    final legs = FavoriteRoutesService.legsFromOption(option);
-    if (originPos == null || destPos == null || legs == null) {
+    if (originPos == null || destPos == null) {
       _snack('មិនអាចរក្សាទុកផ្លូវនេះបានទេ');
       return null;
     }
@@ -159,7 +158,6 @@ class _MapScreenState extends State<MapScreen> {
       final saved = await _favoriteRoutesService.add(
         origin: origin,
         destination: destination,
-        legs: legs,
         label: '${origin.name} → ${destination.name}',
       );
       _snack('បានរក្សាទុកផ្លូវទៅចំណាំ');
@@ -1386,25 +1384,48 @@ class _LiveEtaBox extends StatefulWidget {
 class _LiveEtaBoxState extends State<_LiveEtaBox> {
   TripEtaSnapshot? _snapshot;
   bool _snapshotLoaded = false;
+  VoidCallback? _unsubscribeDetail;
 
   @override
   void initState() {
     super.initState();
-    _fetchSnapshot();
+    _subscribeDetail();
   }
 
-  Future<void> _fetchSnapshot() async {
+  @override
+  void dispose() {
+    _unsubscribeDetail?.call();
+    super.dispose();
+  }
+
+  Future<void> _subscribeDetail() async {
     try {
-      final snap = await TransitService().fetchTripEta(widget.tripId);
+      final unsub = await MqttService.instance.subscribeToTripDetail(
+        widget.tripId,
+        _onDetail,
+      );
+      if (!mounted) {
+        unsub();
+        return;
+      }
+      _unsubscribeDetail = unsub;
+    } catch (e) {
+      debugPrint('_LiveEtaBox: detail subscribe failed: $e');
       if (!mounted) return;
+      setState(() => _snapshotLoaded = true);
+    }
+  }
+
+  void _onDetail(Map<String, dynamic> json) {
+    if (!mounted) return;
+    try {
+      final snap = TripEtaSnapshot.fromJson(json);
       setState(() {
         _snapshot = snap;
         _snapshotLoaded = true;
       });
     } catch (e) {
-      debugPrint('_LiveEtaBox: snapshot fetch failed: $e');
-      if (!mounted) return;
-      setState(() => _snapshotLoaded = true);
+      debugPrint('_LiveEtaBox: bad detail payload: $e');
     }
   }
 

@@ -60,6 +60,7 @@ class BusPosition {
 }
 
 typedef PositionHandler = void Function(BusPosition);
+typedef DetailHandler = void Function(Map<String, dynamic> json);
 
 /// Process-wide singleton MQTT client managed entirely through console logs.
 class MqttService {
@@ -71,6 +72,7 @@ class MqttService {
 
   final Set<String> _activeTopics = {};
   final Map<String, List<PositionHandler>> _handlers = {};
+  final Map<String, List<DetailHandler>> _detailHandlers = {};
 
   String _brokerUrl() => dotenv.env['MQTT_URL'] ?? 'ws://10.0.2.2:9001';
 
@@ -144,13 +146,28 @@ class MqttService {
   void _onMessages(List<MqttReceivedMessage<MqttMessage>> events) {
     for (final event in events) {
       final topic = event.topic;
-      final handlers = _handlers[topic];
-      if (handlers == null || handlers.isEmpty) continue;
-
       final msg = event.payload as MqttPublishMessage;
       final payloadStr = utf8.decode(msg.payload.message);
 
       debugPrint('MqttService: Incoming data received on topic [$topic]');
+
+      final detailHandlers = _detailHandlers[topic];
+      if (detailHandlers != null && detailHandlers.isNotEmpty) {
+        Map<String, dynamic> json;
+        try {
+          json = jsonDecode(payloadStr) as Map<String, dynamic>;
+        } catch (e) {
+          debugPrint('MqttService: Failed to parse detail payload on $topic: $e');
+          continue;
+        }
+        for (final h in List<DetailHandler>.from(detailHandlers)) {
+          h(json);
+        }
+        continue;
+      }
+
+      final handlers = _handlers[topic];
+      if (handlers == null || handlers.isEmpty) continue;
 
       BusPosition position;
       try {
@@ -211,6 +228,51 @@ class MqttService {
             _client?.unsubscribe(topic);
             debugPrint('MqttService: Unsubscribed from broker topic -> $topic');
           }
+        }
+      }
+    };
+  }
+
+  /// Subscribe to the retained detail message for [tripId]. Broker is
+  /// expected to publish on `transit/trip/<tripId>/detail` with `retain=true`,
+  /// so a fresh subscriber gets the last value immediately — no spinner.
+  Future<VoidCallback> subscribeToTripDetail(
+    String tripId,
+    DetailHandler onDetail,
+  ) async {
+    final topic = 'transit/trip/$tripId/detail';
+
+    _activeTopics.add(topic);
+    (_detailHandlers[topic] ??= <DetailHandler>[]).add(onDetail);
+    debugPrint('MqttService: Local detail handler registered for trip: $tripId');
+
+    try {
+      await _ensureConnected();
+    } catch (e) {
+      debugPrint(
+        'MqttService: Delayed detail subscription. Will retry on reconnect sync. Error: $e',
+      );
+    }
+
+    if (_client?.connectionStatus?.state == MqttConnectionState.connected) {
+      _client!.subscribe(topic, MqttQos.atMostOnce);
+      debugPrint(
+        'MqttService: Active detail subscription dispatched for topic -> $topic',
+      );
+    }
+
+    return () {
+      final list = _detailHandlers[topic];
+      if (list == null) return;
+      list.remove(onDetail);
+      debugPrint('MqttService: Local detail handler removed for trip: $tripId');
+
+      if (list.isEmpty) {
+        _detailHandlers.remove(topic);
+        _activeTopics.remove(topic);
+        if (_client?.connectionStatus?.state == MqttConnectionState.connected) {
+          _client?.unsubscribe(topic);
+          debugPrint('MqttService: Unsubscribed from detail topic -> $topic');
         }
       }
     };

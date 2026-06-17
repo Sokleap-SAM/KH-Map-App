@@ -8,7 +8,6 @@ import 'package:latlong2/latlong.dart';
 import '../models/place.dart';
 import '../models/route_plan.dart';
 import '../models/route_search_selection.dart';
-import '../services/favorite_routes_service.dart';
 import '../services/location_service.dart';
 import '../services/place_service.dart';
 import '../services/transit_service.dart';
@@ -17,7 +16,6 @@ class MapProvider extends ChangeNotifier {
   final LocationService _locationService;
   final TransitService _transitService = TransitService();
   final PlaceService _placeService = PlaceService();
-  final FavoriteRoutesService _favoriteRoutesService = FavoriteRoutesService();
 
   MapProvider(this._locationService);
 
@@ -96,11 +94,10 @@ class MapProvider extends ChangeNotifier {
   bool _refreshInProgress = false;
   static const Duration _pollInterval = Duration(seconds: 5);
 
-  /// When non-null, the route info card is showing a saved favorite route (not
-  /// a freshly-planned trip). Drives the filled bookmark state and the
-  /// favorite-live poll instead of the `/transit/plan` poll.
+  /// When non-null, the route info card is showing a saved favorite route, so
+  /// the bookmark icon renders as already-saved. The route itself is re-planned
+  /// through the normal `/transit/plan` flow (which polls for live ETAs).
   String? _activeFavoriteId;
-  Timer? _favoritePollTimer;
 
   LatLng? get currentPosition => _currentPosition;
   bool get locationError => _locationError;
@@ -287,11 +284,10 @@ class MapProvider extends ChangeNotifier {
   /// — showing ONLY the saved [option] (already rebuilt with live ETAs by the
   /// backend's `/favorites/:id/live`). Unlike the normal flow it does NOT call
   /// `/transit/plan` (which returns several alternatives) and does not poll.
-  void showFavoriteRoute({
+  void openFavoriteRoute({
     required String favoriteId,
     required RouteSearchSelection origin,
     required RouteSearchSelection destination,
-    required RouteOption option,
   }) {
     // Overlay fields + preview pins.
     _routeSearchOrigin = origin;
@@ -304,27 +300,19 @@ class MapProvider extends ChangeNotifier {
     _followUser = false;
     _cameraMoveTarget = origin.location;
 
-    // Routing state — a single fixed option from the saved favorite.
-    _stopPollTimer();
+    // Mark which favorite this is so the route info card shows it as saved.
+    // Set AFTER routing kicks off because _fetchRoutePlan no longer clears it.
     _activeFavoriteId = favoriteId;
-    _routingOrigin = origin.location;
-    _routingDestination = destination.location;
-    _useLiveCurrentOrigin = false;
     _planType = 'transit';
-    _showBusLines = false;
-    _isRoutingActive = true;
-    _isLoadingRoute = false;
-    _routeError = null;
-    _activeOptionIndex = 0;
-    _routePlan = RoutePlanResult(
-      found: true,
-      type: 'transit',
-      options: [option],
-    );
     notifyListeners();
-    // Refresh ETAs from /favorites/:id/live on the same cadence as the plan
-    // poll, so the saved route's bus times stay live without re-planning.
-    _startFavoritePoll();
+    // Re-plan from the saved endpoints through the normal flow (route card,
+    // polyline, live 5 s poll). The favorite stores only origin/destination.
+    startRoutingFrom(
+      origin: origin.location,
+      destination: destination.location,
+      originLabel: origin.label,
+      destinationLabel: destination.label,
+    );
   }
 
   /// Clears the active-favorite marker (e.g. after the user removes it from the
@@ -332,53 +320,13 @@ class MapProvider extends ChangeNotifier {
   void clearActiveFavoriteId() {
     if (_activeFavoriteId == null) return;
     _activeFavoriteId = null;
-    _stopFavoritePoll();
     notifyListeners();
-  }
-
-  void _startFavoritePoll() {
-    _favoritePollTimer?.cancel();
-    _favoritePollTimer = Timer(_pollInterval, _scheduledFavoriteRefresh);
-  }
-
-  void _stopFavoritePoll() {
-    _favoritePollTimer?.cancel();
-    _favoritePollTimer = null;
-  }
-
-  Future<void> _scheduledFavoriteRefresh() async {
-    await _silentFavoriteRefresh();
-    if (_isRoutingActive &&
-        _activeFavoriteId != null &&
-        _favoritePollTimer != null) {
-      _favoritePollTimer = Timer(_pollInterval, _scheduledFavoriteRefresh);
-    }
-  }
-
-  /// Re-fetches the saved favorite's live option and swaps it in without a
-  /// loading flicker. Keeps the last good result on failure.
-  Future<void> _silentFavoriteRefresh() async {
-    final id = _activeFavoriteId;
-    if (id == null || !_isRoutingActive || _refreshInProgress) return;
-    _refreshInProgress = true;
-    try {
-      final live = await _favoriteRoutesService.fetchLive(id);
-      _routePlan = RoutePlanResult(
-        found: true,
-        type: 'transit',
-        options: [live.option],
-      );
-      notifyListeners();
-    } catch (e) {
-      debugPrint('MapProvider: favorite refresh failed: $e');
-    } finally {
-      _refreshInProgress = false;
-    }
   }
 
   void openRouteSearch(RouteSearchSelection destination) {
     _routeSearchDestination = destination;
     _routeSearchOrigin = null;
+    _activeFavoriteId = null;
     _routeSearchDestinationPin = destination.location;
     // Default origin is the user's current location; the overlay overrides
     // this via [updateRouteSearchPins] if the user picks a different origin.
@@ -472,6 +420,8 @@ class MapProvider extends ChangeNotifier {
     required RouteSearchSelection origin,
     required RouteSearchSelection destination,
   }) async {
+    // A user-driven search (or overlay edit) is no longer a saved favorite.
+    _activeFavoriteId = null;
     await setPlanType('transit');
     await startRoutingFrom(
       origin: origin.location,
@@ -565,9 +515,6 @@ class MapProvider extends ChangeNotifier {
     required LatLng origin,
     required LatLng destination,
   }) async {
-    // A real /plan fetch means we're no longer showing a saved favorite.
-    _activeFavoriteId = null;
-    _stopFavoritePoll();
     _isLoadingRoute = true;
     _routeError = null;
     _routePlan = null;
@@ -595,7 +542,6 @@ class MapProvider extends ChangeNotifier {
   /// Returns to State A: shows bus lines, clears routing overlay.
   void clearRouting() {
     _stopPollTimer();
-    _stopFavoritePoll();
     _activeFavoriteId = null;
     _showBusLines = true;
     _isRoutingActive = false;
@@ -619,7 +565,6 @@ class MapProvider extends ChangeNotifier {
   @override
   void dispose() {
     _stopPollTimer();
-    _stopFavoritePoll();
     _positionSub?.cancel();
     super.dispose();
   }
