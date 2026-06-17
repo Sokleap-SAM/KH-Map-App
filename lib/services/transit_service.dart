@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
@@ -9,7 +10,6 @@ import '../models/route_plan.dart';
 import '../models/route_stop.dart';
 import '../models/transit_route.dart';
 import '../models/trip.dart';
-import '../models/trip_eta.dart';
 
 class TransitService {
   static String get _baseUrl =>
@@ -61,20 +61,6 @@ class TransitService {
     return data.map((e) => Trip.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  /// One-shot ETA snapshot. Returns `null` when the trip has no live
-  /// position yet — callers should fall back to MQTT-derived ETA.
-  Future<TripEtaSnapshot?> fetchTripEta(String tripId) async {
-    final uri = Uri.parse('$_baseUrl/transit/trips/$tripId/eta');
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
-    if (response.statusCode != 200) {
-      throw Exception('Failed to fetch trip ETA (${response.statusCode})');
-    }
-    if (response.body.isEmpty || response.body.trim() == 'null') return null;
-    final decoded = jsonDecode(response.body);
-    if (decoded == null) return null;
-    return TripEtaSnapshot.fromJson(decoded as Map<String, dynamic>);
-  }
-
   Future<Trip> startTrip(String id) async {
     final uri = Uri.parse('$_baseUrl/transit/trips/$id/start');
     final response = await http.post(uri).timeout(const Duration(seconds: 10));
@@ -115,6 +101,13 @@ class TransitService {
     }
 
     final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+    // FIX #5: Removed the large debug debugPrint block — not suitable for
+    // production builds. Re-add behind a kDebugMode guard if needed:
+    //
+    //   if (kDebugMode) {
+    //     debugPrint('[TransitService] found=${body['found']}');
+    //   }
 
     return RoutePlanResult.fromJson(body);
   }

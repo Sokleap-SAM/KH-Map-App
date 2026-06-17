@@ -14,9 +14,7 @@ import '../widgets/search_screen/search_quick_category.dart';
 import '../widgets/search_screen/search_results_list.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key, this.initialQuery});
-
-  final String? initialQuery;
+  const SearchScreen({super.key});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -39,14 +37,6 @@ class _SearchScreenState extends State<SearchScreen> {
   void initState() {
     super.initState();
     _controller.addListener(_onQueryChanged);
-    final initial = widget.initialQuery;
-    if (initial != null && initial.isNotEmpty) {
-      _controller.text = initial;
-      _controller.selection = TextSelection.fromPosition(
-        TextPosition(offset: initial.length),
-      );
-      _query = initial;
-    }
     _loadPlaces();
     _loadHistory();
   }
@@ -151,13 +141,6 @@ class _SearchScreenState extends State<SearchScreen> {
         .trim();
   }
 
-  void _onQuickCategorySelected(String query) {
-    _controller.text = query;
-    _controller.selection = TextSelection.fromPosition(
-      TextPosition(offset: query.length),
-    );
-  }
-
   Future<void> _onResultTap(Place place) async {
     final updated = await _historyService.add(place);
     if (!mounted) return;
@@ -205,11 +188,9 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
             if (!hasQuery) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: SearchQuickCategoryRow(
-                  onCategorySelected: _onQuickCategorySelected,
-                ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: SearchQuickCategoryRow(),
               ),
               const Divider(
                 color: Colors.white12,

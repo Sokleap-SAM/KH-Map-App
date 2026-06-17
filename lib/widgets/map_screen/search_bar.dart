@@ -4,85 +4,14 @@ import '../../models/place.dart';
 import '../../screens/search_screen.dart';
 import '../../utils/constants/colors.dart';
 
-/// A category shown under the search bar. Tapping it filters the map to the
-/// nearby places whose category name contains any of [keywords].
-class MapCategory {
-  final String key;
-  final IconData icon;
-  final String label;
-  final Color color;
-  final List<String> keywords;
-
-  const MapCategory({
-    required this.key,
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.keywords,
-  });
-}
-
-const List<MapCategory> kMapCategories = [
-  MapCategory(
-    key: 'restaurant',
-    icon: Icons.restaurant,
-    label: 'ភោជនីយដ្ឋាន',
-    color: AppColors.buttonCategoryBlueColor,
-    keywords: ['restaurant', 'food', 'ភោជន'],
-  ),
-  MapCategory(
-    key: 'hotel',
-    icon: Icons.hotel,
-    label: 'សណ្ឋាគារ',
-    color: AppColors.buttonCategoryBrownColor,
-    keywords: ['hotel', 'guesthouse', 'lodging', 'សណ្ឋាគារ'],
-  ),
-  MapCategory(
-    key: 'market',
-    icon: Icons.shopping_cart_outlined,
-    label: 'ផ្សារ',
-    color: AppColors.buttonCategoryPurpleColor,
-    keywords: ['market', 'shopping', 'mall', 'supermarket', 'ផ្សារ'],
-  ),
-  MapCategory(
-    key: 'entertainment',
-    icon: Icons.attractions,
-    label: 'កន្លែងកម្សាន្ត',
-    color: AppColors.buttonCategoryYellowColor,
-    keywords: ['park', 'entertainment', 'attraction', 'amusement', 'កម្សាន្ត'],
-  ),
-  MapCategory(
-    key: 'coffee',
-    icon: Icons.local_cafe_outlined,
-    label: 'ហាងកាហ្វេ',
-    color: AppColors.buttonCategoryPinkColor,
-    keywords: ['coffee', 'cafe', 'កាហ្វេ'],
-  ),
-];
-
 class MapSearchBar extends StatelessWidget {
   final ValueChanged<Place>? onPlaceSelected;
 
-  /// Key of the currently active nearby-category filter, used to highlight
-  /// the matching button. Null when no filter is active.
-  final String? activeCategory;
+  const MapSearchBar({super.key, this.onPlaceSelected});
 
-  /// Called when a category icon is tapped. The map screen runs the nearby
-  /// search and fits the camera to the results.
-  final ValueChanged<MapCategory>? onCategorySelected;
-
-  const MapSearchBar({
-    super.key,
-    this.onPlaceSelected,
-    this.activeCategory,
-    this.onCategorySelected,
-  });
-
-  Future<void> _openSearch(BuildContext context, {String? initialQuery}) async {
+  Future<void> _openSearch(BuildContext context) async {
     final selected = await Navigator.of(context).push<Place>(
-      MaterialPageRoute(
-        builder: (_) => SearchScreen(initialQuery: initialQuery),
-      ),
+      MaterialPageRoute(builder: (_) => const SearchScreen()),
     );
     if (selected != null) {
       onPlaceSelected?.call(selected);
@@ -133,18 +62,35 @@ class MapSearchBar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          // Category buttons — tap to find that category near you on the map.
+          // Category buttons
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              for (final category in kMapCategories)
-                _CategoryButton(
-                  icon: category.icon,
-                  label: category.label,
-                  color: category.color,
-                  selected: activeCategory == category.key,
-                  onTap: () => onCategorySelected?.call(category),
-                ),
+              _CategoryButton(
+                icon: Icons.restaurant,
+                label: 'ភោជនីយដ្ឋាន',
+                color: AppColors.buttonCategoryBlueColor,
+              ),
+              _CategoryButton(
+                icon: Icons.hotel,
+                label: 'សណ្ឋាគារ',
+                color: AppColors.buttonCategoryBrownColor,
+              ),
+              _CategoryButton(
+                icon: Icons.shopping_cart_outlined,
+                label: 'ផ្សារ',
+                color: AppColors.buttonCategoryPurpleColor,
+              ),
+              _CategoryButton(
+                icon: Icons.attractions,
+                label: 'កន្លែងកម្សាន្ត',
+                color: AppColors.buttonCategoryYellowColor,
+              ),
+              _CategoryButton(
+                icon: Icons.local_cafe_outlined,
+                label: 'ហាងកាហ្វេ',
+                color: AppColors.buttonCategoryPinkColor,
+              ),
             ],
           ),
         ],
@@ -157,54 +103,38 @@ class _CategoryButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  final bool selected;
-  final VoidCallback onTap;
 
   const _CategoryButton({
     required this.icon,
     required this.label,
     required this.color,
-    required this.onTap,
-    this.selected = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: selected ? color : color.withAlpha(50),
-                borderRadius: BorderRadius.circular(10),
-                border: selected
-                    ? Border.all(color: Colors.white, width: 1.5)
-                    : null,
-              ),
-              child: Icon(
-                icon,
-                color: selected ? Colors.white : color,
-                size: 22,
-              ),
+    return GestureDetector(
+      onTap: () {},
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withAlpha(50),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: GoogleFonts.notoSansKhmer(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-              ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: GoogleFonts.notoSansKhmer(
+              color: Colors.white,
+              fontSize: 10,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

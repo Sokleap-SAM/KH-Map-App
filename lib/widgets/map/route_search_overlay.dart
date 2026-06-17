@@ -1,27 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/models/place.dart';
 import 'package:kh_map_app/models/route_search_selection.dart';
-import 'package:kh_map_app/screens/search_screen.dart';
 import 'package:latlong2/latlong.dart';
 
 class RouteSearchOverlay extends StatefulWidget {
   const RouteSearchOverlay({
     super.key,
+    required this.places,
     required this.currentLocation,
     required this.initialDestination,
     required this.onClose,
     required this.onSubmit,
-    this.initialOrigin,
     this.onRequestMapPick,
-    this.onSelectionChanged,
   });
 
+  final List<Place> places;
   final LatLng currentLocation;
   final RouteSearchSelection initialDestination;
-
-  /// Optional pre-filled origin (e.g. a saved favorite route's fixed origin).
-  /// When null, the origin defaults to the user's live current location.
-  final RouteSearchSelection? initialOrigin;
   final VoidCallback onClose;
   final Future<void> Function({
     required RouteSearchSelection origin,
@@ -35,11 +30,6 @@ class RouteSearchOverlay extends StatefulWidget {
   final void Function(void Function(RouteSearchSelection) onPicked)?
   onRequestMapPick;
 
-  /// Fired whenever either field changes so the host can update the live
-  /// preview pins on the map (numbered 1 = origin, 2 = destination).
-  final void Function({required LatLng origin, required LatLng destination})?
-  onSelectionChanged;
-
   @override
   State<RouteSearchOverlay> createState() => _RouteSearchOverlayState();
 }
@@ -51,16 +41,16 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
   late RouteSearchSelection _origin;
   late RouteSearchSelection _destination;
 
+  bool _submitting = false;
+
   @override
   void initState() {
     super.initState();
-    _origin =
-        widget.initialOrigin ??
-        RouteSearchSelection(
-          label: 'ទីតាំងបច្ចុប្បន្ន', // "Current location" in Khmer
-          location: widget.currentLocation,
-          useLiveCurrentLocation: true,
-        );
+    _origin = RouteSearchSelection(
+      label: 'Current location',
+      location: widget.currentLocation,
+      useLiveCurrentLocation: true,
+    );
     _destination = widget.initialDestination;
     _originCtrl = TextEditingController(text: _origin.label);
     _destinationCtrl = TextEditingController(text: _destination.label);
@@ -73,6 +63,15 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
     super.dispose();
   }
 
+  List<Place> _filterPlaces(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return widget.places.take(8).toList();
+    return widget.places
+        .where((p) => p.name.toLowerCase().contains(q))
+        .take(8)
+        .toList();
+  }
+
   void _applySelection(RouteSearchSelection selected, bool isOrigin) {
     setState(() {
       if (isOrigin) {
@@ -83,73 +82,184 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
         _destinationCtrl.text = selected.label;
       }
     });
-    widget.onSelectionChanged?.call(
-      origin: _origin.location,
-      destination: _destination.location,
+  }
+
+  Future<void> _pickOrigin() async {
+    final selected = await _showPlacePicker(
+      title: 'Choose origin',
+      includeCurrentLocation: true,
+      initialQuery: _originCtrl.text,
     );
-    // Re-fetch the plan immediately — no Go button.
-    widget.onSubmit(origin: _origin, destination: _destination);
+    if (selected == null) return;
+    _applySelection(selected, true);
   }
 
-  /// Pushes the full-screen [SearchScreen] and applies the returned [Place]
-  /// to the matching field. No-op when the user backs out.
-  Future<void> _pickViaSearchScreen({required bool isOrigin}) async {
-    final picked = await Navigator.of(
-      context,
-    ).push<Place>(MaterialPageRoute(builder: (_) => const SearchScreen()));
-    if (picked == null || !mounted) return;
-    _applySelection(
-      RouteSearchSelection(
-        label: picked.name,
-        location: LatLng(picked.latitude, picked.longitude),
-      ),
-      isOrigin,
+  Future<void> _pickDestination() async {
+    final selected = await _showPlacePicker(
+      title: 'Choose destination',
+      includeCurrentLocation: false,
+      initialQuery: _destinationCtrl.text,
+    );
+    if (selected == null) return;
+    _applySelection(selected, false);
+  }
+
+  void _pickOriginFromMap() {
+    widget.onRequestMapPick?.call(
+      (selection) => _applySelection(selection, true),
     );
   }
 
-  void _pickFromMap({required bool isOrigin}) {
-    widget.onRequestMapPick?.call((selection) async {
-      if (!mounted) return;
-      final confirmed = await _confirmChangeLocation(isOrigin: isOrigin);
-      if (!mounted || !confirmed) return;
-      _applySelection(selection, isOrigin);
-    });
+  void _pickDestinationFromMap() {
+    widget.onRequestMapPick?.call(
+      (selection) => _applySelection(selection, false),
+    );
   }
 
-  /// Confirmation popup shown after the user taps the map in pick mode.
-  /// Returning `false` (Cancel or dismiss) leaves the existing field value
-  /// untouched.
-  Future<bool> _confirmChangeLocation({required bool isOrigin}) async {
-    final label = isOrigin ? 'origin' : 'destination';
-    final result = await showDialog<bool>(
+  Future<RouteSearchSelection?> _showPlacePicker({
+    required String title,
+    required bool includeCurrentLocation,
+    required String initialQuery,
+  }) {
+    return showModalBottomSheet<RouteSearchSelection>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Change $label?'),
-        content: Text("Do you want to change your $label's location?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Yes'),
-          ),
-        ],
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1D2538),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
+      builder: (context) {
+        final queryController = TextEditingController(text: initialQuery);
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final filtered = _filterPlaces(queryController.text);
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close, color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                    TextField(
+                      controller: queryController,
+                      onChanged: (_) => setSheetState(() {}),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Search places',
+                        hintStyle: const TextStyle(color: Colors.white54),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: Colors.white70,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFF2B3448),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          if (includeCurrentLocation)
+                            ListTile(
+                              leading: const Icon(
+                                Icons.my_location,
+                                color: Colors.greenAccent,
+                              ),
+                              title: const Text(
+                                'Current location',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                              subtitle: Text(
+                                '${widget.currentLocation.latitude.toStringAsFixed(6)}, '
+                                '${widget.currentLocation.longitude.toStringAsFixed(6)}',
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                              onTap: () {
+                                Navigator.of(context).pop(
+                                  RouteSearchSelection(
+                                    label: 'Current location',
+                                    location: widget.currentLocation,
+                                    useLiveCurrentLocation: true,
+                                  ),
+                                );
+                              },
+                            ),
+                          ...filtered.map((place) {
+                            return ListTile(
+                              leading: const Icon(
+                                Icons.location_on,
+                                color: Colors.orangeAccent,
+                              ),
+                              title: Text(
+                                place.name,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                              subtitle: Text(
+                                place.category?.name ?? 'Place',
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                              onTap: () {
+                                Navigator.of(context).pop(
+                                  RouteSearchSelection(
+                                    label: place.name,
+                                    location: LatLng(
+                                      place.latitude,
+                                      place.longitude,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
-    return result ?? false;
   }
 
-  void _resetOriginToCurrentLocation() {
-    _applySelection(
-      RouteSearchSelection(
-        label: 'ទីតាំងបច្ចុប្បន្ន', // "Current location" in Khmer
-        location: widget.currentLocation,
-        useLiveCurrentLocation: true,
-      ),
-      true,
-    );
+  Future<void> _submit() async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
+    try {
+      await widget.onSubmit(origin: _origin, destination: _destination);
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -171,12 +281,26 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
                   ),
                   const Expanded(
                     child: Text(
-                      'គម្រោងធ្វើដំណើរ', // "Route Planner" in Khmer
+                      'Plan route',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _submitting ? null : _submit,
+                    icon: _submitting
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.directions),
+                    label: const Text('Go'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF2D8CFF),
                     ),
                   ),
                 ],
@@ -186,22 +310,19 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
                 controller: _originCtrl,
                 icon: Icons.trip_origin,
                 iconColor: Colors.greenAccent,
-                onTap: () => _pickViaSearchScreen(isOrigin: true),
+                onTap: _pickOrigin,
                 onPickFromMap: widget.onRequestMapPick != null
-                    ? () => _pickFromMap(isOrigin: true)
+                    ? _pickOriginFromMap
                     : null,
-                onUseCurrentLocation: _origin.useLiveCurrentLocation
-                    ? null
-                    : _resetOriginToCurrentLocation,
               ),
               const SizedBox(height: 8),
               _SearchFieldTile(
                 controller: _destinationCtrl,
                 icon: Icons.location_on,
                 iconColor: Colors.orangeAccent,
-                onTap: () => _pickViaSearchScreen(isOrigin: false),
+                onTap: _pickDestination,
                 onPickFromMap: widget.onRequestMapPick != null
-                    ? () => _pickFromMap(isOrigin: false)
+                    ? _pickDestinationFromMap
                     : null,
               ),
             ],
@@ -219,7 +340,6 @@ class _SearchFieldTile extends StatelessWidget {
     required this.iconColor,
     required this.onTap,
     this.onPickFromMap,
-    this.onUseCurrentLocation,
   });
 
   final TextEditingController controller;
@@ -228,34 +348,8 @@ class _SearchFieldTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onPickFromMap;
 
-  /// Optional shortcut (only used on the origin field) that snaps the value
-  /// back to the user's live location. Hidden when the field already shows
-  /// "Current location".
-  final VoidCallback? onUseCurrentLocation;
-
   @override
   Widget build(BuildContext context) {
-    final actions = <Widget>[
-      if (onUseCurrentLocation != null)
-        IconButton(
-          onPressed: onUseCurrentLocation,
-          icon: const Icon(Icons.my_location, color: Colors.white54),
-          tooltip: 'Use current location',
-          visualDensity: VisualDensity.compact,
-        ),
-      if (onPickFromMap != null)
-        IconButton(
-          onPressed: onPickFromMap,
-          icon: const Icon(Icons.pin_drop_outlined, color: Colors.white54),
-          tooltip: 'Pick from map',
-          visualDensity: VisualDensity.compact,
-        ),
-    ];
-
-    final Widget suffix = actions.isEmpty
-        ? const Icon(Icons.expand_more, color: Colors.white54)
-        : Row(mainAxisSize: MainAxisSize.min, children: actions);
-
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -276,7 +370,16 @@ class _SearchFieldTile extends StatelessWidget {
               vertical: 14,
             ),
             prefixIcon: Icon(icon, color: iconColor),
-            suffixIcon: suffix,
+            suffixIcon: onPickFromMap != null
+                ? IconButton(
+                    onPressed: onPickFromMap,
+                    icon: const Icon(
+                      Icons.pin_drop_outlined,
+                      color: Colors.white54,
+                    ),
+                    tooltip: 'Pick from map',
+                  )
+                : const Icon(Icons.expand_more, color: Colors.white54),
           ),
         ),
       ),
