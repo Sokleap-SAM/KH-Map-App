@@ -3,8 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/favorite_route.dart';
 import '../../utils/constants/colors.dart';
-import 'favorite_place_card.dart'
-    show kFavSurfaceColor, kFavBorderColor, favoriteSavedLabel;
+import 'favorite_place_card.dart' show kFavSurfaceColor, kFavBorderColor, favoriteSavedLabel;
 
 /// A saved transit route row in the bookmark screen, styled to match
 /// [FavoritePlaceCard]: a leading route badge, the origin → destination line,
@@ -67,11 +66,18 @@ class FavoriteRouteCard extends StatelessWidget {
   }
 
   Widget _details() {
+    final transfers = favorite.transferCount;
+    final transferLabel = transfers == 0
+        ? 'ផ្ទាល់ · គ្មានការប្តូរ'
+        : 'ប្តូរ $transfers ដង';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          favorite.displayTitle,
+          favorite.label?.trim().isNotEmpty == true
+              ? favorite.label!
+              : favorite.displayTitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.notoSansKhmer(
@@ -81,24 +87,16 @@ class FavoriteRouteCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        _endpointLine(
-          Icons.trip_origin,
-          Colors.greenAccent,
-          favorite.origin.name,
-        ),
+        _endpointLine(Icons.trip_origin, Colors.greenAccent, favorite.origin.name),
         const SizedBox(height: 3),
-        _endpointLine(
-          Icons.location_on,
-          const Color(0xFFF97316),
-          favorite.destination.name,
-        ),
+        _endpointLine(Icons.location_on, const Color(0xFFF97316), favorite.destination.name),
         const SizedBox(height: 5),
         Row(
           children: [
-            const Icon(Icons.bookmark, size: 13, color: Colors.white38),
+            const Icon(Icons.swap_horiz, size: 13, color: Colors.white38),
             const SizedBox(width: 5),
             Text(
-              favoriteSavedLabel(favorite.savedAt),
+              '$transferLabel · ${favoriteSavedLabel(favorite.savedAt)}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.notoSansKhmer(

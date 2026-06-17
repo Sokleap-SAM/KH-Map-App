@@ -2,20 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/favorite_route.dart';
-import '../../models/route_plan.dart';
-import '../../services/transit_service.dart';
+import '../../services/favorite_routes_service.dart';
 import '../../utils/constants/colors.dart';
 import '../map/route_info_card.dart' show RouteOptionDetails;
 
-/// Results returned from [FavoriteRouteSheet] via [Navigator.pop].
+/// Result returned from [FavoriteRouteSheet] via [Navigator.pop] for removal.
+/// The "Go" action instead pops the loaded [FavoriteRouteLive] object.
 const String kFavRouteSheetRemove = 'remove';
-const String kFavRouteSheetGo = 'go';
 
-/// Detail sheet for one saved transit route. The backend stores only the
-/// endpoints, so this previews the journey by re-planning origin → destination
-/// through `/transit/plan` and showing the fastest option. "Go" hands the same
-/// endpoints to the map's routing flow. Pops with [kFavRouteSheetRemove] when
-/// the user removes the route, or [kFavRouteSheetGo] to open it on the map.
+/// Detail sheet for one saved transit route. Fetches a freshly-rebuilt option
+/// from GET /transit/favorites/:id/live on open and renders it with the same
+/// [RouteOptionDetails] widget the live routing flow uses. Pops with
+/// [kFavRouteSheetRemove] when the user removes the route.
 class FavoriteRouteSheet extends StatefulWidget {
   final FavoriteRoute favorite;
 
@@ -26,11 +24,12 @@ class FavoriteRouteSheet extends StatefulWidget {
 }
 
 class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
-  final TransitService _transit = TransitService();
+  final FavoriteRoutesService _service = FavoriteRoutesService();
 
-  RoutePlanResult? _plan;
+  FavoriteRouteLive? _live;
   bool _loading = true;
   String? _error;
+  bool _stale = false;
 
   @override
   void initState() {
@@ -42,18 +41,25 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
     setState(() {
       _loading = true;
       _error = null;
+      _stale = false;
     });
     try {
-      final fav = widget.favorite;
-      final plan = await _transit.fetchRoutePlan(
-        originLat: fav.origin.coordinates.latitude,
-        originLng: fav.origin.coordinates.longitude,
-        destLat: fav.destination.coordinates.latitude,
-        destLng: fav.destination.coordinates.longitude,
-      );
+      final live = await _service.fetchLive(widget.favorite.id);
       if (!mounted) return;
       setState(() {
-        _plan = plan;
+        _live = live;
+        _loading = false;
+      });
+    } on FavoriteRouteStaleException {
+      if (!mounted) return;
+      setState(() {
+        _stale = true;
+        _loading = false;
+      });
+    } on FavoriteRouteUnavailableException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
         _loading = false;
       });
     } catch (e) {
@@ -175,12 +181,15 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
   }
 
   Widget _goButton() {
+    final live = _live;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: SizedBox(
         width: double.infinity,
         child: FilledButton.icon(
-          onPressed: () => Navigator.of(context).pop(kFavRouteSheetGo),
+          // Enabled only once the live route loads — we navigate with that exact
+          // option so the map shows just this saved route (not re-planned).
+          onPressed: live == null ? null : () => Navigator.of(context).pop(live),
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.secondaryColor,
             foregroundColor: AppColors.primaryColor,
@@ -211,6 +220,13 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
         ),
       );
     }
+    if (_stale) {
+      return _message(
+        icon: Icons.update_disabled_rounded,
+        title: 'ផ្លូវនេះលែងមានសុពលភាព',
+        subtitle: 'ខ្សែរត់ ឬចំណតបានផ្លាស់ប្តូរ។ សូមស្វែងរក និងរក្សាទុកឡើងវិញ។',
+      );
+    }
     if (_error != null) {
       return _message(
         icon: Icons.cloud_off_rounded,
@@ -219,21 +235,20 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
         onAction: _load,
       );
     }
-    final plan = _plan;
-    if (plan == null || !plan.found || plan.options.isEmpty) {
+    final live = _live;
+    if (live == null) {
       return _message(
-        icon: Icons.wrong_location_outlined,
-        title: plan?.message ?? 'រកមិនឃើញផ្លូវសម្រាប់ទីតាំងនេះទេ',
+        icon: Icons.error_outline,
+        title: 'មិនមានទិន្នន័យផ្លូវ',
       );
     }
-    // Preview the fastest option; the full set of alternatives is available
-    // after tapping "Go".
-    return RouteOptionDetails(option: plan.options.first);
+    return RouteOptionDetails(option: live.option);
   }
 
   Widget _message({
     required IconData icon,
     required String title,
+    String? subtitle,
     String? actionLabel,
     VoidCallback? onAction,
   }) {
@@ -252,6 +267,18 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
               fontWeight: FontWeight.w600,
             ),
           ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSansKhmer(
+                color: Colors.white54,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ],
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: 18),
             FilledButton(
@@ -259,10 +286,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.secondaryColor,
                 foregroundColor: AppColors.primaryColor,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 22,
-                  vertical: 12,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),

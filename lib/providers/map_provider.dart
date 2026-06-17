@@ -4,11 +4,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/place.dart';
 import '../models/route_plan.dart';
 import '../models/route_search_selection.dart';
+import '../services/favorite_routes_service.dart';
 import '../services/location_service.dart';
 import '../services/place_service.dart';
 import '../services/transit_service.dart';
@@ -17,6 +17,7 @@ class MapProvider extends ChangeNotifier {
   final LocationService _locationService;
   final TransitService _transitService = TransitService();
   final PlaceService _placeService = PlaceService();
+  final FavoriteRoutesService _favoriteRoutesService = FavoriteRoutesService();
 
   MapProvider(this._locationService);
 
@@ -25,10 +26,6 @@ class MapProvider extends ChangeNotifier {
   bool _locationError = false;
   bool _followUser = true;
   StreamSubscription<LatLng>? _positionSub;
-
-  LatLng? get currentPosition => _currentPosition;
-  bool get locationError => _locationError;
-  bool get followUser => _followUser;
 
   // ── Places ────────────────────────────────────────────────────────────────
   List<Place> _places = [];
@@ -39,94 +36,11 @@ class MapProvider extends ChangeNotifier {
   bool get placesLoading => _placesLoading;
   String? get placesError => _placesError;
 
-  // ── Category filter ──────────────────────────────────────────────────────
-  // When the user taps a category icon under the search bar, we show every
-  // place of that category on the map (sorted nearest-first when the user's
-  // location is known).
-  static const Distance _distance = Distance();
-
-  String? _activeCategoryKey;
-  List<String> _categoryKeywords = const [];
-  List<Place> _nearbyCategoryPlaces = [];
-
-  /// Identifier of the active category button (e.g. 'restaurant'), or null.
-  String? get activeCategoryKey => _activeCategoryKey;
-  bool get hasCategoryFilter => _activeCategoryKey != null;
-
-  /// Matching places for the active category, nearest first.
-  List<Place> get nearbyCategoryPlaces => _nearbyCategoryPlaces;
-
-  /// Places to draw on the map: only the category matches while a filter is
-  /// active, otherwise every loaded place.
-  List<Place> get displayPlaces =>
-      _activeCategoryKey != null ? _nearbyCategoryPlaces : _places;
-
-  /// Toggles the filter for a category. Tapping the active category again
-  /// clears it. Returns the resulting matches (empty when cleared).
-  List<Place> toggleCategoryFilter({
-    required String key,
-    required List<String> keywords,
-  }) {
-    if (_activeCategoryKey == key) {
-      clearCategoryFilter();
-      return const [];
-    }
-    _activeCategoryKey = key;
-    _categoryKeywords = keywords.map((k) => k.toLowerCase()).toList();
-    _recomputeNearbyCategory();
-    notifyListeners();
-    return _nearbyCategoryPlaces;
-  }
-
-  void clearCategoryFilter() {
-    if (_activeCategoryKey == null) return;
-    _activeCategoryKey = null;
-    _categoryKeywords = const [];
-    _nearbyCategoryPlaces = const [];
-    notifyListeners();
-  }
-
-  void _recomputeNearbyCategory() {
-    if (_activeCategoryKey == null) {
-      _nearbyCategoryPlaces = const [];
-      return;
-    }
-    final matches = <Place>[];
-    for (final p in _places) {
-      final name = p.category?.name.toLowerCase() ?? '';
-      if (name.isEmpty) continue;
-      if (_categoryKeywords.any(name.contains)) matches.add(p);
-    }
-    // Sort nearest-first when we know where the user is.
-    final origin = _currentPosition;
-    if (origin != null) {
-      matches.sort((a, b) {
-        final da = _distance.as(
-          LengthUnit.Meter,
-          origin,
-          LatLng(a.latitude, a.longitude),
-        );
-        final db = _distance.as(
-          LengthUnit.Meter,
-          origin,
-          LatLng(b.latitude, b.longitude),
-        );
-        return da.compareTo(db);
-      });
-    }
-    _nearbyCategoryPlaces = matches;
-  }
-
   // Dropped pin state
   LatLng? _droppedPin;
   String? _droppedPinPlace;
   String? _droppedPinRoad;
   bool _isLoadingPinInfo = false;
-
-  LatLng? get droppedPin => _droppedPin;
-  String? get droppedPinPlace => _droppedPinPlace;
-  String? get droppedPinRoad => _droppedPinRoad;
-  bool get isLoadingPinInfo => _isLoadingPinInfo;
 
   // ── Route search overlay ─────────────────────────────────────────────────
   bool _showRouteSearch = false;
@@ -164,22 +78,29 @@ class MapProvider extends ChangeNotifier {
   String? _routeError;
   RoutePlanResult? _routePlan;
 
+  /// Index of the currently selected route option (0 = fastest by default).
   int _activeOptionIndex = 0;
-  String _planType = 'transit'; // "walk" | "transit"
+
+  /// The plan mode: "walk" | "transit" (default: transit).
+  String _planType = 'transit';
+
+  /// Last destination passed to [startRouting]; used when [setPlanType] triggers a re-fetch.
   LatLng? _routingDestination;
   LatLng? _routingOrigin;
   String? _routingOriginLabel;
   String? _routingDestinationLabel;
   bool _useLiveCurrentOrigin = true;
 
+  /// Polls the route plan every 5 s while routing is active.
   Timer? _routePollTimer;
   bool _refreshInProgress = false;
   static const Duration _pollInterval = Duration(seconds: 5);
 
-  /// When non-null, the route info card is showing a saved favorite route, so
-  /// the bookmark icon renders as already-saved. The route itself is re-planned
-  /// through the normal `/transit/plan` flow (which polls for live ETAs).
+  /// When non-null, the route info card is showing a saved favorite route (not
+  /// a freshly-planned trip). Drives the filled bookmark state and the
+  /// favorite-live poll instead of the `/transit/plan` poll.
   String? _activeFavoriteId;
+  Timer? _favoritePollTimer;
 
   LatLng? get currentPosition => _currentPosition;
   bool get locationError => _locationError;
@@ -195,10 +116,6 @@ class MapProvider extends ChangeNotifier {
   RoutePlanResult? get routePlan => _routePlan;
   int get activeOptionIndex => _activeOptionIndex;
   String get planType => _planType;
-
-  // ── Recent Searches ───────────────────────────────────────────────────────
-  final List<String> _recentSearchIds = [];
-  List<String> get recentSearchIds => _recentSearchIds;
 
   /// Origin/destination of the active routing flow, for persisting a favorite.
   LatLng? get routingOrigin => _routingOrigin;
@@ -222,7 +139,29 @@ class MapProvider extends ChangeNotifier {
     return plan.options[idx];
   }
 
-  // ── Initialization & Core Setup ───────────────────────────────────────────
+  /// Switch the active route option tab without re-fetching.
+  void setActiveOptionIndex(int index) {
+    if (_routePlan == null) return;
+    final clamped = index.clamp(0, _routePlan!.options.length - 1);
+    if (_activeOptionIndex == clamped) return;
+    _activeOptionIndex = clamped;
+    notifyListeners();
+  }
+
+  /// Switch between "walk" and "transit" plans.
+  /// Re-fetches immediately if routing is already active.
+  Future<void> setPlanType(String type) async {
+    if (_planType == type) return;
+    _planType = type;
+    notifyListeners();
+    if (_isRoutingActive && _routingDestination != null) {
+      final origin = _activeOriginForQuery();
+      if (origin == null) return;
+      _stopPollTimer();
+      await _fetchRoutePlan(origin: origin, destination: _routingDestination!);
+      _startPollTimer();
+    }
+  }
 
   Future<void> init() async {
     final initial = await _locationService.getCurrentPosition();
@@ -233,14 +172,11 @@ class MapProvider extends ChangeNotifier {
     }
     _currentPosition = initial;
     notifyListeners();
-
     _positionSub = _locationService.positionStream.listen((latLng) {
       _currentPosition = latLng;
-      if (_activeCategoryKey != null) _recomputeNearbyCategory();
       notifyListeners();
     });
-    await _loadRecentSearches();
-
+    // Load places after location is known.
     await loadPlaces();
   }
 
@@ -250,7 +186,6 @@ class MapProvider extends ChangeNotifier {
     notifyListeners();
     try {
       _places = await _placeService.fetchPlaces();
-      if (_activeCategoryKey != null) _recomputeNearbyCategory();
     } catch (e) {
       _placesError = e.toString();
       debugPrint('MapProvider: failed to load places: $e');
@@ -265,8 +200,6 @@ class MapProvider extends ChangeNotifier {
     _followUser = value;
     notifyListeners();
   }
-
-  // ── Pins Management ───────────────────────────────────────────────────────
 
   Future<void> dropPin(LatLng position) async {
     _droppedPin = position;
@@ -288,32 +221,19 @@ class MapProvider extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final String fullAddress = data['display_name'] ?? "";
-
-        // Filter out segments that look like IDs or numbers (e.g. "12345678")
-        final segments = fullAddress.split(',')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty && !RegExp(r'^\d+$').hasMatch(s))
-            .toList();
-
-        if (segments.isNotEmpty) {
-          _droppedPinPlace = segments.first;
-        } else {
-          _droppedPinPlace = "Dropped Pin";
-        }
-
+        _droppedPinPlace = data['display_name'];
         final address = data['address'] as Map<String, dynamic>?;
         if (address != null) {
           _droppedPinRoad =
               address['road'] ?? address['pedestrian'] ?? address['footway'];
         }
       }
-    } catch (e) {
-      debugPrint('MapProvider: Reverse geocoding failed: $e');
-    } finally {
-      _isLoadingPinInfo = false;
-      notifyListeners();
+    } catch (_) {
+      // Reverse geocoding failed — coordinates will still display
     }
+
+    _isLoadingPinInfo = false;
+    notifyListeners();
   }
 
   void removePin() {
@@ -367,10 +287,11 @@ class MapProvider extends ChangeNotifier {
   /// — showing ONLY the saved [option] (already rebuilt with live ETAs by the
   /// backend's `/favorites/:id/live`). Unlike the normal flow it does NOT call
   /// `/transit/plan` (which returns several alternatives) and does not poll.
-  void openFavoriteRoute({
+  void showFavoriteRoute({
     required String favoriteId,
     required RouteSearchSelection origin,
     required RouteSearchSelection destination,
+    required RouteOption option,
   }) {
     // Overlay fields + preview pins.
     _routeSearchOrigin = origin;
@@ -383,19 +304,27 @@ class MapProvider extends ChangeNotifier {
     _followUser = false;
     _cameraMoveTarget = origin.location;
 
-    // Mark which favorite this is so the route info card shows it as saved.
-    // Set AFTER routing kicks off because _fetchRoutePlan no longer clears it.
+    // Routing state — a single fixed option from the saved favorite.
+    _stopPollTimer();
     _activeFavoriteId = favoriteId;
+    _routingOrigin = origin.location;
+    _routingDestination = destination.location;
+    _useLiveCurrentOrigin = false;
     _planType = 'transit';
-    notifyListeners();
-    // Re-plan from the saved endpoints through the normal flow (route card,
-    // polyline, live 5 s poll). The favorite stores only origin/destination.
-    startRoutingFrom(
-      origin: origin.location,
-      destination: destination.location,
-      originLabel: origin.label,
-      destinationLabel: destination.label,
+    _showBusLines = false;
+    _isRoutingActive = true;
+    _isLoadingRoute = false;
+    _routeError = null;
+    _activeOptionIndex = 0;
+    _routePlan = RoutePlanResult(
+      found: true,
+      type: 'transit',
+      options: [option],
     );
+    notifyListeners();
+    // Refresh ETAs from /favorites/:id/live on the same cadence as the plan
+    // poll, so the saved route's bus times stay live without re-planning.
+    _startFavoritePoll();
   }
 
   /// Clears the active-favorite marker (e.g. after the user removes it from the
@@ -403,13 +332,53 @@ class MapProvider extends ChangeNotifier {
   void clearActiveFavoriteId() {
     if (_activeFavoriteId == null) return;
     _activeFavoriteId = null;
+    _stopFavoritePoll();
     notifyListeners();
+  }
+
+  void _startFavoritePoll() {
+    _favoritePollTimer?.cancel();
+    _favoritePollTimer = Timer(_pollInterval, _scheduledFavoriteRefresh);
+  }
+
+  void _stopFavoritePoll() {
+    _favoritePollTimer?.cancel();
+    _favoritePollTimer = null;
+  }
+
+  Future<void> _scheduledFavoriteRefresh() async {
+    await _silentFavoriteRefresh();
+    if (_isRoutingActive &&
+        _activeFavoriteId != null &&
+        _favoritePollTimer != null) {
+      _favoritePollTimer = Timer(_pollInterval, _scheduledFavoriteRefresh);
+    }
+  }
+
+  /// Re-fetches the saved favorite's live option and swaps it in without a
+  /// loading flicker. Keeps the last good result on failure.
+  Future<void> _silentFavoriteRefresh() async {
+    final id = _activeFavoriteId;
+    if (id == null || !_isRoutingActive || _refreshInProgress) return;
+    _refreshInProgress = true;
+    try {
+      final live = await _favoriteRoutesService.fetchLive(id);
+      _routePlan = RoutePlanResult(
+        found: true,
+        type: 'transit',
+        options: [live.option],
+      );
+      notifyListeners();
+    } catch (e) {
+      debugPrint('MapProvider: favorite refresh failed: $e');
+    } finally {
+      _refreshInProgress = false;
+    }
   }
 
   void openRouteSearch(RouteSearchSelection destination) {
     _routeSearchDestination = destination;
     _routeSearchOrigin = null;
-    _activeFavoriteId = null;
     _routeSearchDestinationPin = destination.location;
     // Default origin is the user's current location; the overlay overrides
     // this via [updateRouteSearchPins] if the user picks a different origin.
@@ -450,9 +419,6 @@ class MapProvider extends ChangeNotifier {
     _routeSearchOrigin = null;
     _routeSearchOriginPin = null;
     _routeSearchDestinationPin = null;
-    _routeSearchOrigin = null;
-    _routeSearchOriginPin = null;
-    _routeSearchDestinationPin = null;
     _isMapPickMode = false;
     _mapPickCallback = null;
     notifyListeners();
@@ -470,15 +436,15 @@ class MapProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reverse-geocodes [latLng] and fires the pending map-pick callback.
   Future<void> handleMapPickTap(LatLng latLng) async {
     if (!_isMapPickMode || _mapPickCallback == null) return;
     final cb = _mapPickCallback!;
     _isMapPickMode = false;
     _mapPickCallback = null;
     notifyListeners();
-
-    // Use a friendly label for map picks instead of raw coordinate "IDs"
-    String label = 'Point (${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)})';
+    String label =
+        '${latLng.latitude.toStringAsFixed(6)}, ${latLng.longitude.toStringAsFixed(6)}';
     try {
       final url = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse'
@@ -497,16 +463,15 @@ class MapProvider extends ChangeNotifier {
         }
       }
     } catch (_) {}
-
     cb(RouteSearchSelection(label: label, location: latLng));
   }
 
+  /// Submits the route search: sets plan type to transit and starts routing.
+  /// The overlay stays visible until the user dismisses the route card.
   Future<void> submitRouteSearch({
     required RouteSearchSelection origin,
     required RouteSearchSelection destination,
   }) async {
-    // A user-driven search (or overlay edit) is no longer a saved favorite.
-    _activeFavoriteId = null;
     await setPlanType('transit');
     await startRoutingFrom(
       origin: origin.location,
@@ -517,33 +482,16 @@ class MapProvider extends ChangeNotifier {
     );
   }
 
-  // ── Routing Logic & State Management ──────────────────────────────────────
-
-  void setActiveOptionIndex(int index) {
-    if (_routePlan == null) return;
-    final clamped = index.clamp(0, _routePlan!.options.length - 1);
-    if (_activeOptionIndex == clamped) return;
-    _activeOptionIndex = clamped;
-    notifyListeners();
-  }
-
-  Future<void> setPlanType(String type) async {
-    if (_planType == type) return;
-    _planType = type;
-    notifyListeners();
-    if (_isRoutingActive && _routingDestination != null) {
-      final origin = _activeOriginForQuery();
-      if (origin == null) return;
-      _stopPollTimer();
-      await _fetchRoutePlan(origin: origin, destination: _routingDestination!);
-      _startPollTimer();
-    }
-  }
-
+  /// Transitions to State C: hides bus lines, fetches the route plan,
+  /// then starts polling every 5 s for live-ETA updates.
   Future<void> startRouting(LatLng destination) async {
     await startRoutingFrom(origin: _currentPosition, destination: destination);
   }
 
+  /// Starts routing from a specific [origin] to [destination].
+  ///
+  /// Set [useLiveCurrentOrigin] to true to keep refreshing with the user's
+  /// current location during polling; otherwise the chosen origin is fixed.
   Future<void> startRoutingFrom({
     required LatLng? origin,
     required LatLng destination,
@@ -567,9 +515,7 @@ class MapProvider extends ChangeNotifier {
 
   void _startPollTimer() {
     _routePollTimer?.cancel();
-    if (_isRoutingActive) {
-      _routePollTimer = Timer(_pollInterval, _scheduledRefresh);
-    }
+    _routePollTimer = Timer(_pollInterval, _scheduledRefresh);
   }
 
   void _stopPollTimer() {
@@ -577,21 +523,25 @@ class MapProvider extends ChangeNotifier {
     _routePollTimer = null;
   }
 
+  /// Called by the timer — runs a silent refresh then reschedules itself.
+  /// Uses a single-shot Timer (not periodic) so a slow response can never
+  /// cause concurrent requests to pile up and overload the backend.
   Future<void> _scheduledRefresh() async {
-    if (!_isRoutingActive) return;
     await _silentRefresh();
-    // Re-verify routing flag after network delay to ensure it wasn't cancelled mid-flight
-    if (_isRoutingActive) {
+    // Only reschedule if routing is still active (timer may have been
+    // cancelled by clearRouting / setPlanType while we were awaiting).
+    if (_isRoutingActive && _routePollTimer != null) {
       _routePollTimer = Timer(_pollInterval, _scheduledRefresh);
     }
   }
 
+  /// Re-fetches the active route plan without resetting [_routePlan] or
+  /// showing the loading indicator — so the UI updates smoothly.
   Future<void> _silentRefresh() async {
-    if (_refreshInProgress) return;
+    if (_refreshInProgress) return; // guard against overlap
     final dest = _routingDestination;
     final origin = _activeOriginForQuery();
     if (dest == null || origin == null || !_isRoutingActive) return;
-
     _refreshInProgress = true;
     try {
       final plan = await _transitService.fetchRoutePlan(
@@ -601,11 +551,10 @@ class MapProvider extends ChangeNotifier {
         destLng: dest.longitude,
         type: _planType,
       );
-      if (_isRoutingActive) {
-        _routePlan = plan;
-        notifyListeners();
-      }
+      _routePlan = plan;
+      notifyListeners();
     } catch (e) {
+      // Silent — keep showing the last good result.
       debugPrint('MapProvider: silent refresh failed: $e');
     } finally {
       _refreshInProgress = false;
@@ -618,6 +567,7 @@ class MapProvider extends ChangeNotifier {
   }) async {
     // A real /plan fetch means we're no longer showing a saved favorite.
     _activeFavoriteId = null;
+    _stopFavoritePoll();
     _isLoadingRoute = true;
     _routeError = null;
     _routePlan = null;
@@ -642,8 +592,10 @@ class MapProvider extends ChangeNotifier {
     }
   }
 
+  /// Returns to State A: shows bus lines, clears routing overlay.
   void clearRouting() {
     _stopPollTimer();
+    _stopFavoritePoll();
     _activeFavoriteId = null;
     _showBusLines = true;
     _isRoutingActive = false;
@@ -660,56 +612,14 @@ class MapProvider extends ChangeNotifier {
   }
 
   LatLng? _activeOriginForQuery() {
-    return _useLiveCurrentOrigin ? _currentPosition : _routingOrigin;
-  }
-
-  // ── Recent Searches Logic ──────────────────────────────────────────────────
-
-  Future<void> _loadRecentSearches() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final List<String>? savedIds = prefs.getStringList('recent_searches');
-      if (savedIds != null) {
-        _recentSearchIds.clear();
-        _recentSearchIds.addAll(savedIds);
-        notifyListeners();
-      }
-    } catch (e) {
-      debugPrint('MapProvider: Failed to load recent searches: $e');
-    }
-  }
-
-  Future<void> addToRecentSearches(String placeId) async {
-    // Remove if exists to avoid duplicates, then insert at top
-    _recentSearchIds.remove(placeId);
-    _recentSearchIds.insert(0, placeId);
-
-    // Limit to 5 items
-    if (_recentSearchIds.length > 5) {
-      _recentSearchIds.removeLast();
-    }
-
-    notifyListeners();
-
-    // Persist to disk
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList('recent_searches', _recentSearchIds);
-    } catch (e) {
-      debugPrint('MapProvider: Failed to save recent searches: $e');
-    }
-  }
-
-  Future<void> clearRecentSearches() async {
-    _recentSearchIds.clear();
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('recent_searches');
+    if (_useLiveCurrentOrigin) return _currentPosition;
+    return _routingOrigin;
   }
 
   @override
   void dispose() {
     _stopPollTimer();
+    _stopFavoritePoll();
     _positionSub?.cancel();
     super.dispose();
   }

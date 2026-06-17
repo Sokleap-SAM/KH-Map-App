@@ -180,7 +180,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
-                            'ឡានក្រុង',
+                            'Route',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -244,14 +244,14 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                     child: Row(
                       children: [
                         _PlanTypeChip(
-                          label: 'ដើរ',
+                          label: 'Walk',
                           icon: Icons.directions_walk,
                           selected: planType == 'walk',
                           onTap: () => provider.setPlanType('walk'),
                         ),
                         const SizedBox(width: 8),
                         _PlanTypeChip(
-                          label: 'ឡានក្រុង',
+                          label: 'Transit',
                           icon: Icons.directions_bus,
                           selected: planType == 'transit',
                           onTap: () => provider.setPlanType('transit'),
@@ -279,7 +279,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                           ),
                           SizedBox(width: 12),
                           Text(
-                            'ស្វែងរកផ្លូវ…',
+                            'Finding route…',
                             style: TextStyle(
                               color: Colors.white54,
                               fontSize: 14,
@@ -662,7 +662,7 @@ class _WalkSegmentTile extends StatelessWidget {
             const SizedBox(width: 6),
           ],
           Text(
-            'ដើរ${label.isNotEmpty ? ' $label' : ''}',
+            'Walk${label.isNotEmpty ? ' $label' : ''}',
             style: const TextStyle(color: Colors.white, fontSize: 14),
           ),
         ],

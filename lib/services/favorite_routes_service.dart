@@ -6,14 +6,23 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/favorite_route.dart';
+import '../models/route_plan.dart';
+
+/// Thrown when GET /transit/favorites/:id/live reports the saved skeleton is
+/// stale (410 Gone) and the user must re-save from a fresh plan.
+class FavoriteRouteStaleException implements Exception {
+  const FavoriteRouteStaleException();
+}
+
+/// Thrown when a favorite id no longer exists (404), or a guest-local favorite
+/// has no backend record to rebuild from.
+class FavoriteRouteUnavailableException implements Exception {
+  const FavoriteRouteUnavailableException(this.message);
+  final String message;
+}
 
 /// Persists the user's saved transit routes against `/transit/favorites`,
 /// mirroring the token-or-local-guest auth logic of [FavoritesService].
-///
-/// The backend stores only the endpoints (`{ user, label?, origin,
-/// destination }`); the journey is re-planned on demand by feeding those
-/// endpoints back into the normal transit planner — so no leg/stop data is
-/// persisted here.
 class FavoriteRoutesService {
   static const String _keyPrefix = 'favorite_routes_';
   static const String _guestSuffix = 'guest';
@@ -58,10 +67,30 @@ class FavoriteRoutesService {
     }
   }
 
+  /// Builds the bus-leg skeleton from a planned [option]. Returns `null` when
+  /// the option has no bus legs, or any bus leg is missing a board/alight stop
+  /// id (the backend can't rebuild without them).
+  static List<FavoriteRouteLeg>? legsFromOption(RouteOption option) {
+    final legs = <FavoriteRouteLeg>[];
+    for (final seg in option.segments) {
+      if (!seg.isBus) continue;
+      final route = seg.route?.id;
+      final board = seg.boardAt?.stopId;
+      final alight = seg.alightAt?.stopId;
+      if (route == null || route.isEmpty) return null;
+      if (board == null || board.isEmpty) return null;
+      if (alight == null || alight.isEmpty) return null;
+      legs.add(
+        FavoriteRouteLeg(route: route, boardStop: board, alightStop: alight),
+      );
+    }
+    return legs.isEmpty ? null : legs;
+  }
+
   Map<String, String> _authHeaders(String? token, {bool json = false}) => {
-    if (token != null) 'Authorization': 'Bearer $token',
-    if (json) 'Content-Type': 'application/json',
-  };
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (json) 'Content-Type': 'application/json',
+      };
 
   // ---------- Load ----------
 
@@ -77,9 +106,8 @@ class FavoriteRoutesService {
 
   Future<List<FavoriteRoute>?> _remoteLoad(String token, String userId) async {
     try {
-      final uri = Uri.parse(
-        '$_baseUrl/transit/favorites',
-      ).replace(queryParameters: {'user': userId});
+      final uri = Uri.parse('$_baseUrl/transit/favorites')
+          .replace(queryParameters: {'user': userId});
       final res = await http
           .get(uri, headers: _authHeaders(token))
           .timeout(const Duration(seconds: 10));
@@ -96,6 +124,7 @@ class FavoriteRoutesService {
   Future<FavoriteRoute> add({
     required FavoriteRouteEndpoint origin,
     required FavoriteRouteEndpoint destination,
+    required List<FavoriteRouteLeg> legs,
     String? label,
   }) async {
     final token = await _accessToken();
@@ -107,6 +136,7 @@ class FavoriteRoutesService {
         userId: userId,
         origin: origin,
         destination: destination,
+        legs: legs,
         label: label,
       );
       if (saved == null) {
@@ -116,6 +146,7 @@ class FavoriteRoutesService {
     saved ??= await _localAdd(
       origin: origin,
       destination: destination,
+      legs: legs,
       label: label,
     );
     changes.value++;
@@ -127,6 +158,7 @@ class FavoriteRoutesService {
     required String userId,
     required FavoriteRouteEndpoint origin,
     required FavoriteRouteEndpoint destination,
+    required List<FavoriteRouteLeg> legs,
     String? label,
   }) async {
     final uri = Uri.parse('$_baseUrl/transit/favorites');
@@ -136,6 +168,7 @@ class FavoriteRoutesService {
         if (label != null && label.trim().isNotEmpty) 'label': label.trim(),
         'origin': origin.toJson(),
         'destination': destination.toJson(),
+        'legs': legs.map((l) => l.toJson()).toList(),
       });
       final res = await http
           .post(uri, headers: _authHeaders(token, json: true), body: body)
@@ -182,6 +215,37 @@ class FavoriteRoutesService {
     }
   }
 
+  // ---------- Live rebuild ----------
+
+  /// Rebuilds a full transit option for the saved favorite [id].
+  ///
+  /// Throws [FavoriteRouteStaleException] (410) when the favorite is stale and
+  /// [FavoriteRouteUnavailableException] (404 / guest-local) otherwise.
+  Future<FavoriteRouteLive> fetchLive(String id) async {
+    final token = await _accessToken();
+    if (_isLocalId(id)) {
+      throw const FavoriteRouteUnavailableException(
+        'សូមចូលគណនី ដើម្បីមើលផ្លូវផ្ទាល់',
+      );
+    }
+    final uri = Uri.parse('$_baseUrl/transit/favorites/$id/live');
+    final res = await http
+        .get(uri, headers: _authHeaders(token))
+        .timeout(const Duration(seconds: 12));
+    if (res.statusCode == 410) throw const FavoriteRouteStaleException();
+    if (res.statusCode == 404) {
+      throw const FavoriteRouteUnavailableException('រកមិនឃើញផ្លូវនេះទេ');
+    }
+    if (res.statusCode != 200) {
+      throw FavoriteRouteUnavailableException(
+        'មិនអាចទាញយកផ្លូវបានទេ (${res.statusCode})',
+      );
+    }
+    return FavoriteRouteLive.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+  }
+
   List<FavoriteRoute> _parseList(String body) {
     final decoded = jsonDecode(body);
     if (decoded is! List) return <FavoriteRoute>[];
@@ -214,6 +278,7 @@ class FavoriteRoutesService {
   Future<FavoriteRoute> _localAdd({
     required FavoriteRouteEndpoint origin,
     required FavoriteRouteEndpoint destination,
+    required List<FavoriteRouteLeg> legs,
     String? label,
   }) async {
     final entries = await _localLoad();
@@ -222,6 +287,7 @@ class FavoriteRoutesService {
       label: label,
       origin: origin,
       destination: destination,
+      legs: legs,
       savedAt: DateTime.now(),
     );
     entries.insert(0, fav);

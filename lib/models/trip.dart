@@ -13,7 +13,6 @@ class Trip {
   final int nextStopIndex;
   final LatLng? currentLocation;
   final int passengerCount;
-  final double? bearing;
   final String busImage;
   final String nextStopName;
   final String direction;
@@ -47,7 +46,6 @@ class Trip {
     required this.nextStopIndex,
     this.currentLocation,
     required this.passengerCount,
-    this.bearing,
     required this.busImage,
     required this.nextStopName,
     required this.direction,
@@ -105,11 +103,9 @@ class Trip {
     final routeRaw = json['route'];
     String routeId;
     String? routeName;
-    String? routeCode;
     if (routeRaw is Map) {
       routeId = routeRaw['_id'] as String;
       routeName = routeRaw['name'] as String?;
-      routeCode = routeRaw['code'] as String?;
     } else {
       routeId = routeRaw as String;
     }
@@ -117,10 +113,8 @@ class Trip {
     // bus can be a populated object or a bare string ID
     final busRaw = json['bus'];
     String busId;
-    String? busNumberFromObj;
     if (busRaw is Map) {
       busId = busRaw['_id'] as String;
-      busNumberFromObj = busRaw['busNumber'] as String?;
     } else {
       busId = busRaw as String;
     }
@@ -135,65 +129,30 @@ class Trip {
       );
     }
 
-    final double? bearing = (json['bearing'] as num?)?.toDouble();
-
     return Trip(
       id: json['_id'] as String,
       routeId: routeId,
       routeName: routeName,
-      routeNumber: routeCode ?? '??',
+      routeNumber: json['route']?['code'] ?? json['routeNumber'] ?? '??',
 
       // 2. Bus Number (Check if it's inside 'bus' object)
-      busNumber: busNumberFromObj ?? json['busNumber'] ?? 'N/A',
+      busNumber: json['bus']?['busNumber'] ?? json['busNumber'] ?? 'N/A',
 
       // 3. Next Stop Name
       nextStopName: json['nextStopName'] ?? 'N/A',
       busId: busId,
+      // busNumber: json['busNumber'] as String? ?? 'N/A',
       status: json['status'] as String,
       currentStopIndex: (json['currentStopIndex'] as int?) ?? 0,
       nextStopIndex: (json['nextStopIndex'] as int?) ?? 1,
       currentLocation: currentLocation,
       passengerCount: (json['passengerCount'] as int?) ?? 0,
-      bearing: bearing,
-      busImage: _resolveBusImage(bearing, json['busImage'] as String?),
+      busImage: json['busImage'] as String? ?? 'bus_go_right.png',
+      // nextStopName: json['nextStopName'] ?? 'N/A',
       direction: json['direction'] ?? 'N/A',
       allStops: List<String>.from(json['allStops'] ?? []),
       notDepartingUntilMs: (json['notDepartingUntilMs'] as num?)?.toInt(),
       etaSeconds: (json['etaSeconds'] as num?)?.toInt(),
     );
-  }
-
-  Map<String, dynamic> toJsonForBearingUpdate() {
-    return {
-      '_id': id,
-      'route': {'_id': routeId, 'name': routeName, 'code': routeNumber},
-      'bus': {'_id': busId, 'busNumber': busNumber},
-      'status': status,
-      'currentStopIndex': currentStopIndex,
-      'nextStopIndex': nextStopIndex,
-      'currentLocation': currentLocation != null 
-          ? {'coordinates': [currentLocation!.longitude, currentLocation!.latitude]} 
-          : null,
-      'passengerCount': passengerCount,
-      'nextStopName': nextStopName,
-      'direction': direction,
-      'allStops': allStops,
-      'busImage': busImage,
-    };
-  }
-
-  static String _resolveBusImage(double? bearing, String? fallback) {
-    if (bearing == null) return fallback ?? 'bus_go_right.png';
-    
-    // Normalize bearing to 0-359 degrees
-    // 0 is North, 90 is East, 180 is South, 270 is West
-    final double b = (bearing % 360 + 360) % 360;
-
-    // Upward/Eastward movement uses Right image, Downward/Westward uses Left image
-    if (b >= 0 && b < 180) {
-      return 'bus_go_right.png';
-    } else {
-      return 'bus_go_left.png';
-    }
   }
 }
