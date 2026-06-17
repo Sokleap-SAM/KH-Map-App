@@ -12,7 +12,7 @@ IconData getIconForCategory(String? categoryName) {
       return Icons.hotel;
     case 'hospital':
       return Icons.local_hospital;
-    case 'education':
+    case 'school':
       return Icons.school;
     case 'gas_station':
       return Icons.local_gas_station;
@@ -32,8 +32,6 @@ IconData getIconForCategory(String? categoryName) {
       return Icons.local_pharmacy;
     case 'gym':
       return Icons.fitness_center;
-    case 'vetinary': 
-      return Icons.local_hospital;
     default:
       return Icons.location_on;
   }
@@ -51,8 +49,8 @@ Color getColorForCategory(String? categoryName) {
       return Colors.blue;
     case 'hospital':
       return Colors.red;
-    case 'education':
-      return const Color.fromARGB(255, 0, 200, 255);
+    case 'school':
+      return Colors.green;
     case 'gas_station':
       return Colors.grey;
     case 'shopping':
@@ -71,8 +69,6 @@ Color getColorForCategory(String? categoryName) {
       return Colors.red;
     case 'gym':
       return Colors.orange;
-    case 'vetinary':
-      return Colors.red;
     default:
       return Colors.deepPurple;
   }

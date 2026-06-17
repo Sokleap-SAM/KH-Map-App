@@ -3,10 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/screens/login_screen.dart';
-import 'package:kh_map_app/services/auth_service.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
 import 'package:provider/provider.dart';
-import 'package:kh_map_app/utils/jwt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
 
@@ -18,11 +16,11 @@ class AccountScreen extends StatefulWidget {
 }
 
 class _AccountScreenState extends State<AccountScreen> {
-  String userName = "មិនមានគណនី";
+  String userName = "មិនមានគណនី"; 
   bool isLoggedIn = false;
   bool isLoading = true;
 
-  final String baseUrl = AuthService.baseUrl;
+  final String baseUrl = AppConfig.baseUrl;
 
   @override
   void initState() {
@@ -33,10 +31,6 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> _fetchProfile() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
-
-    // Logging in as a driver swaps this whole shell out, disposing this
-    // screen while the request is still in flight — guard every setState.
-    if (!mounted) return;
 
     if (token == null) {
       setState(() => isLoading = false);
@@ -49,46 +43,29 @@ class _AccountScreenState extends State<AccountScreen> {
         headers: {"Authorization": "Bearer $token"},
       );
 
-      if (!mounted) return;
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
         print("PROFILE DATA FROM BACKEND: $data");
 
         setState(() {
-          userName = data['name'] ?? "No Name Found";
+          userName = data['name'] ??"No Name Found";
           isLoggedIn = true;
         });
-      } else if (response.statusCode == 401) {
-        // Token genuinely invalid/expired — treat as logged out.
-        setState(() => isLoggedIn = false);
       } else {
-        // Endpoint not authorized for this role (e.g. 403 for drivers).
-        // We still hold a valid session — show the name from the JWT.
-        _fallbackToTokenName(token);
+        // If token is invalid or expired
+        setState(() => isLoggedIn = false);
       }
     } catch (e) {
       debugPrint("Error fetching profile: $e");
-      // Network error but we have a token — stay logged in using JWT claims.
-      _fallbackToTokenName(token);
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      setState(() => isLoading = false);
     }
   }
 
-  void _fallbackToTokenName(String token) {
-    if (!mounted) return;
-    final claims = decodeJwtPayload(token);
-    setState(() {
-      userName = (claims?['name'] as String?) ?? "Driver";
-      isLoggedIn = true;
-    });
-  }
-
   Future<void> _handleLogout() async {
-    await AuthService().logout();
-    if (!mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('access_token');
     setState(() {
       isLoggedIn = false;
       userName = "មិនមានគណនី";

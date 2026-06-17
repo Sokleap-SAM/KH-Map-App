@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
 class Trip {
@@ -19,22 +18,6 @@ class Trip {
   final String direction;
   final List<String> allStops;
 
-  // Live-position fields. Populated from MQTT updates, null until the first
-  // position message arrives for a given trip.
-  final double? heading;
-  final double? speed;
-  final DateTime? recordedAt;
-
-  /// Epoch-ms wall-clock departure time for parked buses. Carried by both
-  /// the `/transit/trips/:id/eta` snapshot and MQTT position messages whose
-  /// `status == 'scheduled'`. Absent once the bus is moving.
-  final int? notDepartingUntilMs;
-
-  /// Server-computed ETA from the one-shot `/transit/trips/:id/eta` snapshot.
-  /// Not refreshed by MQTT — once we have live position + speed, the UI
-  /// re-derives ETA locally via [etaToNextStopSeconds].
-  final int? etaSeconds;
-
   Trip({
     required this.id,
     required this.routeId,
@@ -52,47 +35,7 @@ class Trip {
     required this.nextStopName,
     required this.direction,
     required this.allStops,
-    this.heading,
-    this.speed,
-    this.recordedAt,
-    this.notDepartingUntilMs,
-    this.etaSeconds,
   });
-
-  Trip copyWith({
-    int? currentStopIndex,
-    int? nextStopIndex,
-    LatLng? currentLocation,
-    String? nextStopName,
-    double? heading,
-    double? speed,
-    DateTime? recordedAt,
-    int? notDepartingUntilMs,
-    int? etaSeconds,
-  }) {
-    return Trip(
-      id: id,
-      routeId: routeId,
-      routeName: routeName,
-      routeNumber: routeNumber,
-      busId: busId,
-      busNumber: busNumber,
-      status: status,
-      currentStopIndex: currentStopIndex ?? this.currentStopIndex,
-      nextStopIndex: nextStopIndex ?? this.nextStopIndex,
-      currentLocation: currentLocation ?? this.currentLocation,
-      passengerCount: passengerCount,
-      busImage: busImage,
-      nextStopName: nextStopName ?? this.nextStopName,
-      direction: direction,
-      allStops: allStops,
-      heading: heading ?? this.heading,
-      speed: speed ?? this.speed,
-      recordedAt: recordedAt ?? this.recordedAt,
-      notDepartingUntilMs: notDepartingUntilMs ?? this.notDepartingUntilMs,
-      etaSeconds: etaSeconds ?? this.etaSeconds,
-    );
-  }
 
   bool get isScheduled => status == 'scheduled';
   bool get isInProgress => status == 'in-progress';
@@ -100,16 +43,16 @@ class Trip {
   bool get isCancelled => status == 'cancelled';
 
   factory Trip.fromJson(Map<String, dynamic> json) {
-    debugPrint('Trip.fromJson: $json');
+    print("DEBUG TRIP JSON: $json");
     // route can be a populated object or a bare string ID
     final routeRaw = json['route'];
     String routeId;
     String? routeName;
-    String? routeCode;
+    String? routeNumber;
     if (routeRaw is Map) {
       routeId = routeRaw['_id'] as String;
       routeName = routeRaw['name'] as String?;
-      routeCode = routeRaw['code'] as String?;
+      routeNumber = routeRaw['routeNumber'] as String?;
     } else {
       routeId = routeRaw as String;
     }
@@ -117,10 +60,10 @@ class Trip {
     // bus can be a populated object or a bare string ID
     final busRaw = json['bus'];
     String busId;
-    String? busNumberFromObj;
+    String? busNumber;
     if (busRaw is Map) {
       busId = busRaw['_id'] as String;
-      busNumberFromObj = busRaw['busNumber'] as String?;
+      busNumber = busRaw['busNumber'] as String?;
     } else {
       busId = busRaw as String;
     }
@@ -141,12 +84,8 @@ class Trip {
       id: json['_id'] as String,
       routeId: routeId,
       routeName: routeName,
-      routeNumber: routeCode ?? '??',
-
-      // 2. Bus Number (Check if it's inside 'bus' object)
-      busNumber: busNumberFromObj ?? json['busNumber'] ?? 'N/A',
-
-      // 3. Next Stop Name
+      routeNumber: json['route']?['code'] ?? json['routeNumber'] ?? '??',
+      busNumber: json['bus']?['busNumber'] ?? json['busNumber'] ?? 'N/A',
       nextStopName: json['nextStopName'] ?? 'N/A',
       busId: busId,
       status: json['status'] as String,
@@ -158,8 +97,6 @@ class Trip {
       busImage: _resolveBusImage(bearing, json['busImage'] as String?),
       direction: json['direction'] ?? 'N/A',
       allStops: List<String>.from(json['allStops'] ?? []),
-      notDepartingUntilMs: (json['notDepartingUntilMs'] as num?)?.toInt(),
-      etaSeconds: (json['etaSeconds'] as num?)?.toInt(),
     );
   }
 

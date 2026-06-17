@@ -5,11 +5,6 @@ class SegmentStop {
   final String name;
   final LatLng coordinates;
 
-  /// Backend stop id, when present. Needed to persist a favorite route's
-  /// board/alight stops (POST /transit/favorites expects stop ids). Null when
-  /// the plan response omits it.
-  final String? stopId;
-
   /// Road-aligned geometry FROM the previous stop TO this stop.
   /// Same structure as [RouteStop.segmentPath] — a GeoJSON LineString
   /// `{"type":"LineString","coordinates":[[lng,lat],...]}` in the backend
@@ -19,7 +14,6 @@ class SegmentStop {
   SegmentStop({
     required this.name,
     required this.coordinates,
-    this.stopId,
     this.segmentPath,
   });
 
@@ -38,7 +32,6 @@ class SegmentStop {
 
     return SegmentStop(
       name: json['name'] as String,
-      stopId: (json['stopId'] ?? json['id'] ?? json['_id'])?.toString(),
       // GeoJSON order: [lng, lat]
       coordinates: LatLng(
         (coords[1] as num).toDouble(),
@@ -96,19 +89,6 @@ class RouteSegment {
   final int? totalLegMinutes;
   final bool? hasLiveEta;
 
-  /// Specific active trip the backend recommends boarding (used to look up
-  /// live trip metadata in the bus-detail view).
-  final String? tripId;
-
-  /// The bus running [tripId]. Useful for fleet-side lookups.
-  final String? busId;
-
-  /// Upcoming arrivals at [boardAt] in minutes from now, sorted ascending.
-  final List<int> busEtas;
-
-  /// Convenience shortcut: first entry of [busEtas].
-  final int? nextBusInMinutes;
-
   // Common
   final int? estimatedMinutes;
 
@@ -127,10 +107,6 @@ class RouteSegment {
     this.rideMinutes,
     this.totalLegMinutes,
     this.hasLiveEta,
-    this.tripId,
-    this.busId,
-    this.busEtas = const [],
-    this.nextBusInMinutes,
     this.estimatedMinutes,
   });
 
@@ -176,7 +152,6 @@ class RouteSegment {
       final stops = rawStops
           .map((s) => SegmentStop.fromJson(s as Map<String, dynamic>))
           .toList();
-      final etasRaw = json['busEtas'] as List? ?? const [];
       return RouteSegment(
         type: type,
         route: BusRouteInfo.fromJson(json['route'] as Map<String, dynamic>),
@@ -191,10 +166,6 @@ class RouteSegment {
         rideMinutes: (json['rideMinutes'] as num?)?.toInt(),
         totalLegMinutes: (json['totalLegMinutes'] as num?)?.toInt(),
         hasLiveEta: json['hasLiveEta'] as bool?,
-        tripId: json['tripId'] as String?,
-        busId: json['busId'] as String?,
-        busEtas: etasRaw.map((e) => (e as num).toInt()).toList(),
-        nextBusInMinutes: (json['nextBusInMinutes'] as num?)?.toInt(),
         estimatedMinutes: (json['estimatedMinutes'] as num?)?.toInt(),
       );
     }

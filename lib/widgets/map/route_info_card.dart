@@ -8,31 +8,9 @@ import '../../providers/map_provider.dart';
 const _kSnapSizes = [0.2, 0.5, 0.88];
 
 class RouteInfoCard extends StatefulWidget {
-  const RouteInfoCard({
-    super.key,
-    required this.onClear,
-    this.onShowBusDetail,
-    this.onSaveFavorite,
-    this.onRemoveFavorite,
-  });
+  const RouteInfoCard({super.key, required this.onClear});
 
   final VoidCallback onClear;
-
-  /// Invoked when the user taps the "View" button on a bus segment.
-  /// Receives the segment's `tripId`. The caller is responsible for
-  /// resolving it to a live trip and displaying details.
-  final void Function(String tripId)? onShowBusDetail;
-
-  /// Invoked when the user taps the bookmark icon to save the active option
-  /// as a favorite route. Returns the new favorite's id on success (so the icon
-  /// can switch to its filled state and later remove it), or null on failure.
-  /// Null hides the icon entirely.
-  final Future<String?> Function(RouteOption option)? onSaveFavorite;
-
-  /// Invoked when the user taps the filled bookmark to remove the favorite
-  /// saved during this view. Receives the id returned by [onSaveFavorite].
-  /// Returns `true` when the removal succeeded.
-  final Future<bool> Function(String favoriteId)? onRemoveFavorite;
 
   @override
   State<RouteInfoCard> createState() => _RouteInfoCardState();
@@ -42,57 +20,10 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
   final DraggableScrollableController _controller =
       DraggableScrollableController();
 
-  /// Option index saved during this view + the favorite's id, so the bookmark
-  /// shows filled and a second tap removes it. Reset when the user switches to
-  /// a different option tab.
-  int? _savedOptionIndex;
-  String? _savedFavoriteId;
-  bool _busy = false;
-
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
-  }
-
-  Future<void> _handleToggle(
-    int optionIndex,
-    RouteOption option,
-    String? providerFavoriteId,
-  ) async {
-    final onSave = widget.onSaveFavorite;
-    if (onSave == null || _busy) return;
-    setState(() => _busy = true);
-
-    // Id to remove: a session-saved one for this option, else the favorite this
-    // view was opened from.
-    final localId = _savedOptionIndex == optionIndex ? _savedFavoriteId : null;
-    final removeId = localId ?? providerFavoriteId;
-
-    if (removeId != null) {
-      final onRemove = widget.onRemoveFavorite;
-      final ok = onRemove == null ? false : await onRemove(removeId);
-      if (!mounted) return;
-      // Clear the provider marker so the bookmark stops showing as saved.
-      if (ok) context.read<MapProvider>().clearActiveFavoriteId();
-      setState(() {
-        _busy = false;
-        if (ok) {
-          _savedFavoriteId = null;
-          _savedOptionIndex = null;
-        }
-      });
-    } else {
-      final id = await onSave(option);
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        if (id != null) {
-          _savedFavoriteId = id;
-          _savedOptionIndex = optionIndex;
-        }
-      });
-    }
   }
 
   @override
@@ -112,29 +43,6 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
             final planType = provider.planType;
             final isLoading = provider.isLoadingRoute;
             final error = provider.routeError;
-
-            final hasOptions =
-                routePlan != null &&
-                routePlan.found &&
-                routePlan.options.isNotEmpty;
-            final clampedIndex = hasOptions
-                ? activeOptionIndex.clamp(0, routePlan.options.length - 1)
-                : 0;
-            final activeOpt = hasOptions
-                ? routePlan.options[clampedIndex]
-                : null;
-            // Saving only makes sense for a transit plan that has bus legs.
-            final canSave =
-                widget.onSaveFavorite != null &&
-                planType == 'transit' &&
-                activeOpt != null &&
-                activeOpt.segments.any((s) => s.isBus);
-            // Saved when either the user saved it this session, or we're
-            // displaying an existing favorite route opened from the bookmarks.
-            final providerFavoriteId = provider.activeFavoriteId;
-            final localSaved =
-                _savedOptionIndex == clampedIndex && _savedFavoriteId != null;
-            final isSaved = localSaved || providerFavoriteId != null;
 
             return Container(
               decoration: const BoxDecoration(
@@ -180,7 +88,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
-                            'ឡានក្រុង',
+                            'Route',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -188,40 +96,6 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                             ),
                           ),
                         ),
-                        if (canSave)
-                          IconButton(
-                            onPressed: _busy
-                                ? null
-                                : () => _handleToggle(
-                                    clampedIndex,
-                                    activeOpt,
-                                    providerFavoriteId,
-                                  ),
-                            icon: _busy
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white54,
-                                    ),
-                                  )
-                                : Icon(
-                                    isSaved
-                                        ? Icons.bookmark
-                                        : Icons.bookmark_add_outlined,
-                                    color: isSaved
-                                        ? const Color(0xFFD5AC79)
-                                        : Colors.white70,
-                                    size: 20,
-                                  ),
-                            tooltip: isSaved
-                                ? 'ដកចេញ​ថ្លូវធ្វើដំណើរពីចំណាំ' // "Remove from favorites" in Khmer
-                                : 'រក្សាទុក​ថ្លូវធ្វើដំណើរពីជាចំណាំ', // "Save route to favorites"
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                        if (canSave) const SizedBox(width: 12),
                         IconButton(
                           onPressed: widget.onClear,
                           icon: const Icon(
@@ -244,14 +118,14 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                     child: Row(
                       children: [
                         _PlanTypeChip(
-                          label: 'ដើរ',
+                          label: 'Walk',
                           icon: Icons.directions_walk,
                           selected: planType == 'walk',
                           onTap: () => provider.setPlanType('walk'),
                         ),
                         const SizedBox(width: 8),
                         _PlanTypeChip(
-                          label: 'ឡានក្រុង',
+                          label: 'Transit',
                           icon: Icons.directions_bus,
                           selected: planType == 'transit',
                           onTap: () => provider.setPlanType('transit'),
@@ -279,7 +153,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                           ),
                           SizedBox(width: 12),
                           Text(
-                            'ស្វែងរកផ្លូវ…',
+                            'Finding route…',
                             style: TextStyle(
                               color: Colors.white54,
                               fontSize: 14,
@@ -325,9 +199,12 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                     const Divider(color: Color(0xFF333333), height: 1),
 
                     // ── Active option details ──────────────────────────────
-                    RouteOptionDetails(
-                      option: routePlan.options[clampedIndex],
-                      onShowBusDetail: widget.onShowBusDetail,
+                    _OptionDetails(
+                      option:
+                          routePlan.options[activeOptionIndex.clamp(
+                            0,
+                            routePlan.options.length - 1,
+                          )],
                     ),
                   ],
 
@@ -344,31 +221,6 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
 
 // ── Tab bar ──────────────────────────────────────────────────────────────────
 
-/// Rank-based palette: fastest → slowest. Index 0 is the fastest option the
-/// backend returned; later indices fade through warmer hues to red.
-const List<Color> _kRankColors = [
-  Color(0xFF22C55E), // emerald — fastest
-  Color(0xFF84CC16), // lime
-  Color(0xFFEAB308), // amber
-  Color(0xFFF97316), // orange
-  Color(0xFFEF4444), // red — slowest
-];
-
-Color _rankColor(int index, int total) {
-  if (total <= 1) return _kRankColors.first;
-  // Spread the available options evenly across the palette so 2 options use
-  // green + red, 3 use green + yellow + red, etc.
-  final slot = ((index / (total - 1)) * (_kRankColors.length - 1)).round();
-  return _kRankColors[slot.clamp(0, _kRankColors.length - 1)];
-}
-
-String _formatRouteDuration(int minutes) {
-  if (minutes < 60) return '${minutes}m';
-  final h = minutes ~/ 60;
-  final m = minutes % 60;
-  return m == 0 ? '${h}h' : '${h}h ${m}m';
-}
-
 class _OptionTabBar extends StatelessWidget {
   const _OptionTabBar({
     required this.options,
@@ -380,56 +232,77 @@ class _OptionTabBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onTap;
 
+  IconData _iconForType(String type) {
+    switch (type) {
+      case 'walk':
+        return Icons.directions_walk;
+      case 'fastest':
+        return Icons.bolt;
+      case 'fast':
+        return Icons.directions_run;
+      case 'average':
+        return Icons.directions_bus;
+      case 'slower':
+      case 'slowest':
+        return Icons.transfer_within_a_station;
+      default:
+        return Icons.directions_bus;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
       child: Row(
         children: List.generate(options.length, (i) {
           final opt = options[i];
+          final icon = _iconForType(opt.type);
+          final label = opt.label;
+
           final selected = i == selectedIndex;
-          final rank = _rankColor(i, options.length);
           return Expanded(
             child: GestureDetector(
               onTap: () => onTap(i),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOut,
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
-                  color: selected ? rank : rank.withAlpha(160),
-                  borderRadius: BorderRadius.circular(12),
-                  // Constant-width border so tab sizes don't jump on tap.
-                  border: Border.all(
-                    color: selected ? Colors.white : Colors.transparent,
-                    width: 2,
-                  ),
-                  boxShadow: selected
-                      ? [
-                          BoxShadow(
-                            color: rank.withAlpha(140),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ]
-                      : null,
+                  color: selected
+                      ? const Color(0xFF1565C0)
+                      : const Color(0xFF2A2A2A),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      _formatRouteDuration(opt.totalEstimatedMinutes),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      color: selected ? Colors.white : Colors.white54,
+                      size: 18,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: selected ? 16 : 14,
+                        color: selected ? Colors.white : Colors.white54,
+                        fontSize: 10,
                         fontWeight: selected
-                            ? FontWeight.w800
-                            : FontWeight.w600,
-                        letterSpacing: 0.2,
+                            ? FontWeight.w600
+                            : FontWeight.normal,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '~${opt.totalEstimatedMinutes} min',
+                      style: TextStyle(
+                        color: selected ? Colors.white70 : Colors.white38,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -447,18 +320,10 @@ String _formatDistance(int meters) {
   return '${(meters / 1000).toStringAsFixed(1)} km';
 }
 
-/// Renders a single [RouteOption] — its summary chips, optional warning, and
-/// the walk/bus segment list. Shared by [RouteInfoCard] (the live routing
-/// flow) and the saved favorite-route detail sheet.
-class RouteOptionDetails extends StatelessWidget {
-  const RouteOptionDetails({
-    super.key,
-    required this.option,
-    this.onShowBusDetail,
-  });
+class _OptionDetails extends StatelessWidget {
+  const _OptionDetails({required this.option});
 
   final RouteOption option;
-  final void Function(String tripId)? onShowBusDetail;
 
   @override
   Widget build(BuildContext context) {
@@ -529,12 +394,7 @@ class RouteOptionDetails extends StatelessWidget {
           child: Column(
             children: option.segments.map((seg) {
               if (seg.isWalk) return _WalkSegmentTile(seg: seg);
-              if (seg.isBus) {
-                return _BusSegmentTile(
-                  seg: seg,
-                  onShowBusDetail: onShowBusDetail,
-                );
-              }
+              if (seg.isBus) return _BusSegmentTile(seg: seg);
               return const SizedBox.shrink();
             }).toList(),
           ),
@@ -662,7 +522,7 @@ class _WalkSegmentTile extends StatelessWidget {
             const SizedBox(width: 6),
           ],
           Text(
-            'ដើរ${label.isNotEmpty ? ' $label' : ''}',
+            'Walk${label.isNotEmpty ? ' $label' : ''}',
             style: const TextStyle(color: Colors.white, fontSize: 14),
           ),
         ],
@@ -681,10 +541,9 @@ class _WalkSegmentTile extends StatelessWidget {
 // ── Bus segment tile ──────────────────────────────────────────────────────────
 
 class _BusSegmentTile extends StatelessWidget {
-  const _BusSegmentTile({required this.seg, this.onShowBusDetail});
+  const _BusSegmentTile({required this.seg});
 
   final RouteSegment seg;
-  final void Function(String tripId)? onShowBusDetail;
 
   @override
   Widget build(BuildContext context) {
@@ -702,9 +561,6 @@ class _BusSegmentTile extends StatelessWidget {
       seg.rideMinutes != null || seg.distanceMeters != null,
     ].where((v) => v).length;
 
-    final tripId = seg.tripId;
-    final canViewDetail = tripId != null && onShowBusDetail != null;
-
     return ListTile(
       dense: true,
       leading: const Icon(
@@ -712,34 +568,6 @@ class _BusSegmentTile extends StatelessWidget {
         color: Colors.white70,
         size: 20,
       ),
-      trailing: canViewDetail
-          ? TextButton(
-              onPressed: () => onShowBusDetail!(tripId),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF1565C0),
-                backgroundColor: const Color(0xFF1565C0).withAlpha(38),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'View',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                  ),
-                  Icon(Icons.chevron_right, size: 16),
-                ],
-              ),
-            )
-          : null,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -807,7 +635,7 @@ class _BusSegmentTile extends StatelessWidget {
           if (wait != null)
             Text(
               live
-                  ? 'Wait time in ~$wait min 🟢 Live'
+                  ? 'Bus in ~$wait min 🟢 Live'
                   : '~$wait min wait (estimated)',
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
