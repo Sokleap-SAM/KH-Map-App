@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:kh_map_app/screens/login_screen.dart';
 import 'package:kh_map_app/services/auth_service.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
+import 'package:kh_map_app/utils/jwt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AccountScreen extends StatefulWidget {
@@ -14,12 +15,11 @@ class AccountScreen extends StatefulWidget {
 }
 
 class _AccountScreenState extends State<AccountScreen> {
-  String userName = "មិនមានគណនី"; 
+  String userName = "មិនមានគណនី";
   bool isLoggedIn = false;
-  bool isLoading = true; // Added to prevent flickering
+  bool isLoading = true;
 
-  // IMPORTANT: Use your computer's IPv4 address here for LD Player
-  final String baseUrl = "http://10.0.2.2:3000"; 
+  final String baseUrl = AuthService.baseUrl;
 
   @override
   void initState() {
@@ -30,6 +30,10 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> _fetchProfile() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
+
+    // Logging in as a driver swaps this whole shell out, disposing this
+    // screen while the request is still in flight — guard every setState.
+    if (!mounted) return;
 
     if (token == null) {
       setState(() => isLoading = false);
@@ -42,28 +46,46 @@ class _AccountScreenState extends State<AccountScreen> {
         headers: {"Authorization": "Bearer $token"},
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
         print("PROFILE DATA FROM BACKEND: $data");
 
         setState(() {
-          userName = data['name'] ??"No Name Found";
+          userName = data['name'] ?? "No Name Found";
           isLoggedIn = true;
         });
-      } else {
-        // If token is invalid or expired
+      } else if (response.statusCode == 401) {
+        // Token genuinely invalid/expired — treat as logged out.
         setState(() => isLoggedIn = false);
+      } else {
+        // Endpoint not authorized for this role (e.g. 403 for drivers).
+        // We still hold a valid session — show the name from the JWT.
+        _fallbackToTokenName(token);
       }
     } catch (e) {
       debugPrint("Error fetching profile: $e");
+      // Network error but we have a token — stay logged in using JWT claims.
+      _fallbackToTokenName(token);
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
+  }
+
+  void _fallbackToTokenName(String token) {
+    if (!mounted) return;
+    final claims = decodeJwtPayload(token);
+    setState(() {
+      userName = (claims?['name'] as String?) ?? "Driver";
+      isLoggedIn = true;
+    });
   }
 
   Future<void> _handleLogout() async {
     await AuthService().logout();
+    if (!mounted) return;
     setState(() {
       isLoggedIn = false;
       userName = "មិនមានគណនី";
@@ -75,92 +97,129 @@ class _AccountScreenState extends State<AccountScreen> {
     return Scaffold(
       backgroundColor: AppColors.primaryColor,
       body: SafeArea(
-        child: isLoading 
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8B67D)))
-          : Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 30),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 60),
+        child: isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFE8B67D)),
+              )
+            : Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 30),
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 60),
 
-                      // 1. Profile Icon (Static)
-                      const Center(
-                        child: CircleAvatar(
-                          radius: 50,
-                          backgroundColor: Colors.transparent,
-                          backgroundImage: AssetImage('assets/images/defaultAccountIcon.png'),
+                            // 1. Profile Icon (Static)
+                            const Center(
+                              child: CircleAvatar(
+                                radius: 50,
+                                backgroundColor: Colors.transparent,
+                                backgroundImage: AssetImage(
+                                  'assets/images/defaultAccountIcon.png',
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // --- START CONDITIONAL UI ---
+                            if (!isLoggedIn) ...[
+                              // UI FOR LOGGED OUT USERS
+                              const Text(
+                                "មិនមានគណនី",
+                                style: TextStyle(
+                                  color: Color(0xFFE8B67D),
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 25),
+
+                              _buildDescriptionBox(),
+
+                              const SizedBox(height: 40),
+
+                              _buildLoginButton(context),
+
+                              const SizedBox(height: 15),
+
+                              const Text(
+                                "ចូលជាមួយ",
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                ),
+                              ),
+
+                              const SizedBox(height: 15),
+
+                              _buildSocialRow(),
+                            ] else ...[
+                              // UI FOR LOGGED IN USERS
+                              Text(
+                                userName,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 25),
+
+                              // "Change Account" Box (Acts as Logout)
+                              GestureDetector(
+                                onTap: _handleLogout,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 15,
+                                    vertical: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFAAB8DA),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        "ផ្លាស់ប្តូរគណនី",
+                                        style: TextStyle(
+                                          color: Colors.black87,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.keyboard_arrow_down,
+                                        color: Colors.black87,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+
+                            // --- END CONDITIONAL UI ---
+                            const SizedBox(height: 60),
+                            const Text(
+                              "...",
+                              style: TextStyle(
+                                color: Colors.white24,
+                                fontSize: 30,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-
-                      const SizedBox(height: 20),
-
-                      // --- START CONDITIONAL UI ---
-                      if (!isLoggedIn) ...[
-                        // UI FOR LOGGED OUT USERS
-                        const Text(
-                          "មិនមានគណនី", 
-                          style: TextStyle(color: Color(0xFFE8B67D), fontSize: 22, fontWeight: FontWeight.bold)
-                        ),
-                        const SizedBox(height: 25),
-                        
-                        _buildDescriptionBox(),
-                        
-                        const SizedBox(height: 40),
-                        
-                        _buildLoginButton(context),
-                        
-                        const SizedBox(height: 15),
-                        
-                        const Text("ចូលជាមួយ", style: TextStyle(color: Colors.white54, fontSize: 12)),
-                        
-                        const SizedBox(height: 15),
-                        
-                        _buildSocialRow(),
-                      ] else ...[
-                        // UI FOR LOGGED IN USERS
-                        Text(
-                          userName, 
-                          style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)
-                        ),
-                        const SizedBox(height: 25),
-                        
-                        // "Change Account" Box (Acts as Logout)
-                        GestureDetector(
-                          onTap: _handleLogout,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFAAB8DA),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text("ផ្លាស់ប្តូរគណនី", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
-                                Icon(Icons.keyboard_arrow_down, color: Colors.black87),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                      // --- END CONDITIONAL UI ---
-
-                      const SizedBox(height: 60),
-                      const Text("...", style: TextStyle(color: Colors.white24, fontSize: 30)),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ),
 
-            // Settings Bar (Always visible at the bottom)
-            _buildSupportBar(),
-          ],
-        ),
+                  // Settings Bar (Always visible at the bottom)
+                  _buildSupportBar(),
+                ],
+              ),
       ),
     );
   }
@@ -200,10 +259,15 @@ class _AccountScreenState extends State<AccountScreen> {
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF91A5D4),
           foregroundColor: Colors.black,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(vertical: 12),
         ),
-        child: const Text("ចូលគណនី", style: TextStyle(fontWeight: FontWeight.bold)),
+        child: const Text(
+          "ចូលគណនី",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
@@ -234,7 +298,13 @@ class _AccountScreenState extends State<AccountScreen> {
           children: [
             Icon(Icons.settings_outlined, color: Colors.black87),
             SizedBox(width: 10),
-            Text("បច្ចេកទេស", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+            Text(
+              "បច្ចេកទេស",
+              style: TextStyle(
+                color: Colors.black87,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
       ),
@@ -244,8 +314,10 @@ class _AccountScreenState extends State<AccountScreen> {
   Widget _socialIcon(String imagePath) {
     return Image.asset(
       imagePath,
-      width: 25, height: 25,
-      errorBuilder: (context, error, stackTrace) => const Icon(Icons.error, color: Colors.white),
+      width: 25,
+      height: 25,
+      errorBuilder: (context, error, stackTrace) =>
+          const Icon(Icons.error, color: Colors.white),
     );
   }
 }
