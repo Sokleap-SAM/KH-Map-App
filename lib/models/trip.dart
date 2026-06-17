@@ -103,9 +103,11 @@ class Trip {
     final routeRaw = json['route'];
     String routeId;
     String? routeName;
+    String? routeCode;
     if (routeRaw is Map) {
       routeId = routeRaw['_id'] as String;
       routeName = routeRaw['name'] as String?;
+      routeCode = routeRaw['code'] as String?;
     } else {
       routeId = routeRaw as String;
     }
@@ -113,8 +115,10 @@ class Trip {
     // bus can be a populated object or a bare string ID
     final busRaw = json['bus'];
     String busId;
+    String? busNumberFromObj;
     if (busRaw is Map) {
       busId = busRaw['_id'] as String;
+      busNumberFromObj = busRaw['busNumber'] as String?;
     } else {
       busId = busRaw as String;
     }
@@ -133,10 +137,10 @@ class Trip {
       id: json['_id'] as String,
       routeId: routeId,
       routeName: routeName,
-      routeNumber: json['route']?['code'] ?? json['routeNumber'] ?? '??',
+      routeNumber: routeCode ?? '??',
 
       // 2. Bus Number (Check if it's inside 'bus' object)
-      busNumber: json['bus']?['busNumber'] ?? json['busNumber'] ?? 'N/A',
+      busNumber: busNumberFromObj ?? json['busNumber'] ?? 'N/A',
 
       // 3. Next Stop Name
       nextStopName: json['nextStopName'] ?? 'N/A',
