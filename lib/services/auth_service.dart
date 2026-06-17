@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const String baseUrl = "http://127.0.0.1:3000";
+  static String baseUrl = dotenv.env['BASE_URL'] ?? 'http://10.0.2.2:3000';
   static const String _tokenKey = 'access_token';
 
   // Broadcasts the current access token. Listeners (e.g. MapScreen) react

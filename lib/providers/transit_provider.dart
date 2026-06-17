@@ -58,6 +58,10 @@ class TransitProvider extends ChangeNotifier {
     Colors.teal,
     Colors.indigo,
     Colors.amber,
+    Colors.lime,
+    Colors.deepOrange,
+    Colors.deepPurple,
+    Colors.pink,
   ];
 
   List<TransitRoute> _lineRoutes = [];

@@ -149,7 +149,9 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
   List<FavoritePlace> _visibleFavorites(LatLng? user) {
     final list = _favorites
-        .where((f) => _categoryFilter == null || f.categoryName == _categoryFilter)
+        .where(
+          (f) => _categoryFilter == null || f.categoryName == _categoryFilter,
+        )
         .toList();
     switch (_sort) {
       case 'name':
@@ -315,31 +317,30 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   }
 
   void _openRouteDetail(FavoriteRoute r) async {
-    final result = await showModalBottomSheet<Object>(
+    final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => FavoriteRouteSheet(favorite: r),
     );
     if (result == kFavRouteSheetRemove) _removeRoute(r);
-    if (result is FavoriteRouteLive) _goToRoute(result);
+    if (result == kFavRouteSheetGo) _goToRoute(r);
   }
 
-  /// Opens the saved route on the map: feeds its fixed origin/destination and
-  /// the single live-rebuilt option into the routing flow (overlay + route info
-  /// card + drawn polyline) then switches to the map tab. Shows only this route.
-  void _goToRoute(FavoriteRouteLive live) {
-    context.read<MapProvider>().showFavoriteRoute(
-      favoriteId: live.favoriteId,
+  /// Opens the saved route on the map: feeds its fixed origin/destination into
+  /// the routing flow (overlay + route info card + drawn polyline, re-planned
+  /// from the saved endpoints) then switches to the map tab.
+  void _goToRoute(FavoriteRoute r) {
+    context.read<MapProvider>().openFavoriteRoute(
+      favoriteId: r.id,
       origin: RouteSearchSelection(
-        label: live.origin.name.isEmpty ? 'ដើម' : live.origin.name,
-        location: live.origin.coordinates,
+        label: r.origin.name.isEmpty ? 'ដើម' : r.origin.name,
+        location: r.origin.coordinates,
       ),
       destination: RouteSearchSelection(
-        label: live.destination.name.isEmpty ? 'គោលដៅ' : live.destination.name,
-        location: live.destination.coordinates,
+        label: r.destination.name.isEmpty ? 'គោលដៅ' : r.destination.name,
+        location: r.destination.coordinates,
       ),
-      option: live.option,
     );
     widget.onNavigateToMap?.call();
   }
@@ -349,10 +350,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
       SnackBar(
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
-        content: Text(
-          message,
-          style: GoogleFonts.notoSansKhmer(fontSize: 13),
-        ),
+        content: Text(message, style: GoogleFonts.notoSansKhmer(fontSize: 13)),
       ),
     );
   }
@@ -529,8 +527,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   }
 
   Widget _header() {
-    final hasLocation =
-        context.read<MapProvider>().currentPosition != null;
+    final hasLocation = context.read<MapProvider>().currentPosition != null;
     final isPlaces = _tab == _BookmarkTab.places;
     final count = isPlaces ? _favorites.length : _routes.length;
     final loading = isPlaces ? _loading : _routesLoading;
@@ -556,8 +553,8 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                   loading
                       ? 'កំពុងផ្ទុក...'
                       : isPlaces
-                          ? '$count ទីកន្លែងបានរក្សាទុក'
-                          : '$count ផ្លូវបានរក្សាទុក',
+                      ? '$count ទីកន្លែងបានរក្សាទុក'
+                      : '$count ផ្លូវបានរក្សាទុក',
                   style: GoogleFonts.notoSansKhmer(
                     color: AppColors.secondaryTextColor,
                     fontSize: 12.5,
@@ -694,7 +691,11 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    const Icon(Icons.lock_outline, size: 13, color: Colors.white54),
+                    const Icon(
+                      Icons.lock_outline,
+                      size: 13,
+                      color: Colors.white54,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'បញ្ជីឯកជន · ${_favorites.length} ទីកន្លែង',

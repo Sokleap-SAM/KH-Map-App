@@ -26,7 +26,9 @@ class Place {
     return Place(
       id: json['_id'] as String,
       name: json['name'] as String,
-      category: json['category'] != null
+      // `category` may be a populated object or a bare id string (e.g. right
+      // after create); only parse it when it's an object.
+      category: json['category'] is Map<String, dynamic>
           ? PlaceCategory.fromJson(json['category'] as Map<String, dynamic>)
           : null,
       longitude: (coords[0] as num).toDouble(),
