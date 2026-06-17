@@ -229,9 +229,7 @@ class _MapScreenState extends State<MapScreen> {
     if (results.isEmpty) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(content: Text('រកមិនឃើញ${category.label}ទេ')),
-        );
+        ..showSnackBar(SnackBar(content: Text('រកមិនឃើញ${category.label}ទេ')));
       if (user != null) _mapController.move(user, 15);
       return;
     }
@@ -1110,7 +1108,7 @@ class _MapScreenState extends State<MapScreen> {
         // ── Map ───────────────────────────────────────────────────────────
         FlutterMap(
           mapController: _mapController,
-          options: MapOptions(  
+          options: MapOptions(
             initialCenter: provider.currentPosition!,
             initialZoom: _currentZoom,
             minZoom: 5,
@@ -1288,11 +1286,7 @@ class _NearbyResultsBanner extends StatelessWidget {
       padding: const EdgeInsets.only(left: 16, right: 8, bottom: 10),
       child: Row(
         children: [
-          const Icon(
-            Icons.near_me,
-            color: AppColors.secondaryColor,
-            size: 16,
-          ),
+          const Icon(Icons.near_me, color: AppColors.secondaryColor, size: 16),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -1319,6 +1313,12 @@ class _NearbyResultsBanner extends StatelessWidget {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
 class BusPulseIndicator extends StatefulWidget {
   const BusPulseIndicator({super.key});
 
