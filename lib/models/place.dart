@@ -26,8 +26,8 @@ class Place {
     return Place(
       id: json['_id'] as String,
       name: json['name'] as String,
-      // `category` may be a populated object or a bare id string (e.g. right
-      // after create); only parse it when it's an object.
+      // `category` is a populated object on list/detail responses, but only a
+      // raw id string on the create response — guard for both.
       category: json['category'] is Map<String, dynamic>
           ? PlaceCategory.fromJson(json['category'] as Map<String, dynamic>)
           : null,
