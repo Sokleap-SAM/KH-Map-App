@@ -97,7 +97,13 @@ class PlaceMarkersLayer extends StatelessWidget {
                       ),
                     ),
                   ),
-              ],
+                ],
+              ),
+              child: Icon(
+                getIconForCategory(categoryName),
+                color: Colors.white,
+                size: 15,
+              ),
             ),
           ),
         );

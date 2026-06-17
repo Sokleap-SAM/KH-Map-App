@@ -11,12 +11,26 @@ const Color _kFirstBoardColor = Colors.red;
 const Color _kStartColor = Colors.green;
 const Color _kDestinationColor = Color(0xFFD32F2F);
 
+// Numbered waypoint colours (1 = origin, intermediate = get-off, last = destination).
+const Color _kOriginColor = Color(0xFF22C55E); // emerald
+const Color _kAlightColor = _kNavBorder; // blue
+const Color _kDestColor = Color(0xFFEF4444); // red
+
 /// Draws the routing overlay for one [RouteOption] (the currently selected tab).
 ///
 /// All legs use the same navigation style: **blue outer / white inner**
 ///   - Walk legs  → dashed (road-following path from backend's `path` field;
 ///                falls back to a straight line when absent)
 ///   - Bus legs   → solid; live segments show a pulsing dot at the board stop
+///
+/// Numbered waypoint dots are painted on top:
+///   - **1** at the origin (green)
+///   - **2..N-1** at each bus get-off / alight stop (blue)
+///   - **N** at the destination (red)
+///
+/// Bus board stops keep their existing bus-icon markers — only get-offs and
+/// endpoints get numbered, so the sequence reads as the steps the user must
+/// take rather than every stop along the way.
 ///
 /// Two `PolylineLayer`s are stacked so all borders render below all fills.
 class RoutingOverlayLayer extends StatefulWidget {
@@ -64,16 +78,16 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
   @override
   Widget build(BuildContext context) {
     final option = widget.option;
+    final segments = option.segments;
 
     final borderPolylines = <Polyline>[];
     final fillPolylines = <Polyline>[];
-    final markers = <Marker>[];
+    final boardMarkers = <Marker>[];
     final liveBoards = <LatLng>[];
     var firstBusSeen = false;
 
-    for (var i = 0; i < option.segments.length; i++) {
-      final seg = option.segments[i];
-
+    // ── Polylines + board markers ────────────────────────────────────────
+    for (final seg in segments) {
       if (seg.isWalk) {
         // Use road-following path from backend; fall back to straight line.
         List<LatLng> points;
@@ -110,7 +124,7 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
         // Walking person icon at the walk start point.
         if (seg.from != null) {
           final isFirstPoint = i == 0;
-          markers.add(
+          boardMarkers.add(
             _stopMarker(seg.from!.coordinates, 
                 isFirstPoint ? Icons.my_location : Icons.directions_walk,
                 color: isFirstPoint ? _kStartColor : _kNavBorder),
@@ -142,7 +156,7 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
           ),
         );
 
-        markers.add(
+        boardMarkers.add(
           _stopMarker(
             boardAt.coordinates,
             Icons.directions_bus,
@@ -151,7 +165,7 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
         );
         
         final isLastSegment = i == option.segments.length - 1;
-        markers.add(_stopMarker(
+        boardMarkers.add(_stopMarker(
           alightAt.coordinates, 
           isLastSegment ? Icons.location_on : Icons.flag,
           color: isLastSegment ? _kDestinationColor : _kNavBorder));
@@ -164,12 +178,55 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
       }
     }
 
+    // ── Numbered waypoint dots: origin → each get-off → destination ──────
+    final numberedMarkers = <Marker>[];
+    if (segments.isNotEmpty) {
+      var n = 1;
+      // 1: origin (first segment's `from` if walk, else `boardAt`).
+      final firstSeg = segments.first;
+      final originPoint = firstSeg.isWalk
+          ? firstSeg.from?.coordinates
+          : firstSeg.boardAt?.coordinates;
+      if (originPoint != null) {
+        numberedMarkers.add(
+          _numberedMarker(originPoint, n++, color: _kOriginColor),
+        );
+      }
+
+      // 2..N-1: each bus segment's alight stop. If the very last leg is a
+      // bus (no trailing walk to a separate destination), that alight IS the
+      // destination and gets the destination colour.
+      final busSegs = segments.where((s) => s.isBus).toList();
+      final lastSeg = segments.last;
+      for (var idx = 0; idx < busSegs.length; idx++) {
+        final alight = busSegs[idx].alightAt;
+        if (alight == null) continue;
+        final isFinal = idx == busSegs.length - 1 && !lastSeg.isWalk;
+        numberedMarkers.add(
+          _numberedMarker(
+            alight.coordinates,
+            n++,
+            color: isFinal ? _kDestColor : _kAlightColor,
+          ),
+        );
+      }
+
+      // N: destination from the trailing walk (the common case).
+      if (lastSeg.isWalk && lastSeg.to != null) {
+        numberedMarkers.add(
+          _numberedMarker(lastSeg.to!.coordinates, n++, color: _kDestColor),
+        );
+      }
+    }
+
     return Stack(
       children: [
         // Border polylines first so fills paint on top
         PolylineLayer(polylines: borderPolylines),
         PolylineLayer(polylines: fillPolylines),
-        MarkerLayer(markers: markers),
+        // Board (bus-icon) markers under the numbered dots
+        MarkerLayer(markers: boardMarkers),
+        MarkerLayer(markers: numberedMarkers),
         // Pulsing live-bus markers on top of everything
         if (liveBoards.isNotEmpty)
           AnimatedBuilder(
@@ -183,6 +240,38 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
             },
           ),
       ],
+    );
+  }
+
+  Marker _numberedMarker(LatLng point, int number, {required Color color}) {
+    return Marker(
+      point: point,
+      width: 34,
+      height: 34,
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2.5),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black45,
+              blurRadius: 5,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '$number',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            height: 1.0,
+          ),
+        ),
+      ),
     );
   }
 

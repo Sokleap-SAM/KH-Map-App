@@ -50,10 +50,10 @@ class TransitRouteLayer extends StatelessWidget {
       if (points.isNotEmpty) {
         polylines.add(
           Polyline(
-            points: points, 
-            color: color.withOpacity(0.8),
+            points: points,
+            color: color.withValues(alpha: 0.8),
             strokeWidth: lineWidth,
-          )
+          ),
         );
       }
       if (showMarkers) {
