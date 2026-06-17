@@ -59,9 +59,9 @@ class FavoriteRoutesService {
   }
 
   Map<String, String> _authHeaders(String? token, {bool json = false}) => {
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (json) 'Content-Type': 'application/json',
-      };
+    if (token != null) 'Authorization': 'Bearer $token',
+    if (json) 'Content-Type': 'application/json',
+  };
 
   // ---------- Load ----------
 
@@ -77,8 +77,9 @@ class FavoriteRoutesService {
 
   Future<List<FavoriteRoute>?> _remoteLoad(String token, String userId) async {
     try {
-      final uri = Uri.parse('$_baseUrl/transit/favorites')
-          .replace(queryParameters: {'user': userId});
+      final uri = Uri.parse(
+        '$_baseUrl/transit/favorites',
+      ).replace(queryParameters: {'user': userId});
       final res = await http
           .get(uri, headers: _authHeaders(token))
           .timeout(const Duration(seconds: 10));

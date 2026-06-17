@@ -259,7 +259,10 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.secondaryColor,
                 foregroundColor: AppColors.primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),

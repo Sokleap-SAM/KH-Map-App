@@ -149,7 +149,9 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
   List<FavoritePlace> _visibleFavorites(LatLng? user) {
     final list = _favorites
-        .where((f) => _categoryFilter == null || f.categoryName == _categoryFilter)
+        .where(
+          (f) => _categoryFilter == null || f.categoryName == _categoryFilter,
+        )
         .toList();
     switch (_sort) {
       case 'name':
@@ -348,10 +350,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
       SnackBar(
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
-        content: Text(
-          message,
-          style: GoogleFonts.notoSansKhmer(fontSize: 13),
-        ),
+        content: Text(message, style: GoogleFonts.notoSansKhmer(fontSize: 13)),
       ),
     );
   }
@@ -528,8 +527,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   }
 
   Widget _header() {
-    final hasLocation =
-        context.read<MapProvider>().currentPosition != null;
+    final hasLocation = context.read<MapProvider>().currentPosition != null;
     final isPlaces = _tab == _BookmarkTab.places;
     final count = isPlaces ? _favorites.length : _routes.length;
     final loading = isPlaces ? _loading : _routesLoading;
@@ -555,8 +553,8 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                   loading
                       ? 'កំពុងផ្ទុក...'
                       : isPlaces
-                          ? '$count ទីកន្លែងបានរក្សាទុក'
-                          : '$count ផ្លូវបានរក្សាទុក',
+                      ? '$count ទីកន្លែងបានរក្សាទុក'
+                      : '$count ផ្លូវបានរក្សាទុក',
                   style: GoogleFonts.notoSansKhmer(
                     color: AppColors.secondaryTextColor,
                     fontSize: 12.5,
@@ -693,7 +691,11 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    const Icon(Icons.lock_outline, size: 13, color: Colors.white54),
+                    const Icon(
+                      Icons.lock_outline,
+                      size: 13,
+                      color: Colors.white54,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'បញ្ជីឯកជន · ${_favorites.length} ទីកន្លែង',

@@ -367,6 +367,9 @@ class MapProvider extends ChangeNotifier {
     _routeSearchOrigin = null;
     _routeSearchOriginPin = null;
     _routeSearchDestinationPin = null;
+    _routeSearchOrigin = null;
+    _routeSearchOriginPin = null;
+    _routeSearchDestinationPin = null;
     _isMapPickMode = false;
     _mapPickCallback = null;
     notifyListeners();
@@ -515,6 +518,8 @@ class MapProvider extends ChangeNotifier {
     required LatLng origin,
     required LatLng destination,
   }) async {
+    // A real /plan fetch means we're no longer showing a saved favorite.
+    _activeFavoriteId = null;
     _isLoadingRoute = true;
     _routeError = null;
     _routePlan = null;

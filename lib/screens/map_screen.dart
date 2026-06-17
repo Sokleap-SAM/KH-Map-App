@@ -142,13 +142,17 @@ class _MapScreenState extends State<MapScreen> {
     // label would be misleading once the user moves. Resolve the saved point to
     // a stable address (falling back to coordinates) in that case.
     final originLabel = provider.routingOriginLabel;
-    final originName = (provider.useLiveCurrentOrigin ||
+    final originName =
+        (provider.useLiveCurrentOrigin ||
             originLabel == null ||
             originLabel.trim().isEmpty)
         ? await provider.reverseGeocodeLabel(originPos)
         : originLabel;
 
-    final origin = FavoriteRouteEndpoint(name: originName, coordinates: originPos);
+    final origin = FavoriteRouteEndpoint(
+      name: originName,
+      coordinates: originPos,
+    );
     final destination = FavoriteRouteEndpoint(
       name: provider.routingDestinationLabel ?? 'គោលដៅ',
       coordinates: destPos,

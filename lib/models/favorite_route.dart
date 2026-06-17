@@ -20,9 +20,9 @@ class FavoriteRouteEndpoint {
   }
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'coordinates': [coordinates.longitude, coordinates.latitude],
-      };
+    'name': name,
+    'coordinates': [coordinates.longitude, coordinates.latitude],
+  };
 }
 
 /// A saved favorite transit route. The backend stores only the endpoints
@@ -44,10 +44,9 @@ class FavoriteRoute {
   });
 
   /// Display title — the stored [label] when present, otherwise "A → B".
-  String get displayTitle =>
-      (label != null && label!.trim().isNotEmpty)
-          ? label!
-          : '${origin.name} → ${destination.name}';
+  String get displayTitle => (label != null && label!.trim().isNotEmpty)
+      ? label!
+      : '${origin.name} → ${destination.name}';
 
   factory FavoriteRoute.fromJson(Map<String, dynamic> json) {
     final rawSaved = (json['createdAt'] ?? json['savedAt']) as String?;
@@ -65,10 +64,10 @@ class FavoriteRoute {
   }
 
   Map<String, dynamic> toJson() => {
-        '_id': id,
-        if (label != null) 'label': label,
-        'origin': origin.toJson(),
-        'destination': destination.toJson(),
-        'createdAt': savedAt.toIso8601String(),
-      };
+    '_id': id,
+    if (label != null) 'label': label,
+    'origin': origin.toJson(),
+    'destination': destination.toJson(),
+    'createdAt': savedAt.toIso8601String(),
+  };
 }
