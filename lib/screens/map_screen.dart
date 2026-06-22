@@ -687,275 +687,208 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.5,
-          maxChildSize: 0.9,
-          minChildSize: 0.4,
-          expand: false,
-          builder: (context, scrollController) {
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: const BoxDecoration(
-                color: Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ── FIXED HEADER ──────────────────────────────────────
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF1976D2),
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(28),
-                      ),
-                    ),
-                    child: Column(
+        return Container(
+          margin: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1976D2),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Center(
-                          child: Container(
-                            width: 40,
-                            height: 4,
-                            margin: const EdgeInsets.only(bottom: 15),
-                            decoration: BoxDecoration(
-                              color: Colors.white24,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  "ខ្សែរត់ · ROUTE",
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                Text(
-                                  trip.routeNumber ?? 'N/A',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
+                            const Text(
+                              "ខ្សែរត់ · ROUTE",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withAlpha(51),
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                              child: Column(
-                                children: [
-                                  const Text(
-                                    "ផ្លាកលេខ",
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                  Text(
-                                    trip.busNumber ?? '??z',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
+                            Text(
+                              trip.routeNumber ?? 'N/A',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 15),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.directions_bus_filled,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                trip.routeName ?? 'Unknown Route',
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(51),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text(
+                                "ផ្លាកលេខ",
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 10,
+                                ),
+                              ),
+                              Text(
+                                trip.busNumber ?? '??z',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 14,
-                                ),
-                                maxLines: 2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            const Expanded(
-                              child: _InfoBox(
-                                label: "ស្ថានភាព",
-                                content: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.circle,
-                                      color: Colors.green,
-                                      size: 10,
-                                    ),
-                                    SizedBox(width: 5),
-                                    Text(
-                                      "In service",
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(child: _LiveEtaBox(tripId: trip.id)),
-                      ],
-                    ),
-                  ),
-                  // ── SCROLLABLE CONTENT ────────────────────────────────
-                  Expanded(
-                    child: ListView(
-                      controller: scrollController,
-                      padding: const EdgeInsets.all(20),
-                      children: [
-                        Row(
-                          children: [
-                            _InfoBox(
-                              label: "ស្ថានភាព",
-                              content: Row(
-                                children: const [
-                                  Icon(
-                                    Icons.circle,
-                                    color: Colors.green,
-                                    size: 10,
-                                  ),
-                                  SizedBox(width: 5),
-                                  Text(
-                                    "In service",
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            _InfoBox(
-                              label: "ETA",
-                              content: const Text(
-                                "~4 min",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 15),
-                        Container(
-                          padding: const EdgeInsets.all(15),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withAlpha(13),
-                            borderRadius: BorderRadius.circular(15),
-                            border: Border.all(color: Colors.white12),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFEBD8),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(
-                                  Icons.bus_alert,
-                                  color: Color(0xFFE8B67D),
-                                ),
-                              ),
-                              const SizedBox(width: 15),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      "ចំណតបន្ទាប់ · NEXT STOP",
-                                      style: TextStyle(
-                                        color: Colors.white38,
-                                        fontSize: 10,
-                                      ),
-                                    ),
-                                    Text(
-                                      trip.nextStopName,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 15),
-                        Row(
-                          children: [
-                            _buildActionButton(
-                              Icons.list,
-                              "All stops",
-                              onTap: () {
-                                Navigator.pop(context);
-                                _showAllStopsPanel(trip);
-                              },
-                            ),
-                            const SizedBox(width: 10),
-                            _buildActionButton(
-                              Icons.map_outlined,
-                              "Directions",
-                              onTap: () {
-                                Navigator.pop(context);
-                                _showDirectionsPanel(trip);
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 15),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.directions_bus_filled,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            trip.routeName ?? 'Unknown Route',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                            maxLines: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            );
-          },
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: _InfoBox(
+                            label: "ស្ថានភាព",
+                            content: Row(
+                              children: [
+                                Icon(
+                                  Icons.circle,
+                                  color: Colors.green,
+                                  size: 10,
+                                ),
+                                SizedBox(width: 5),
+                                Text(
+                                  "In service",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(child: _LiveEtaBox(tripId: trip.id)),
+                      ],
+                    ),
+                    const SizedBox(height: 15),
+                    Container(
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(13),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFEBD8),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.bus_alert,
+                              color: Color(0xFFE8B67D),
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  "ចំណតបន្ទាប់ · NEXT STOP",
+                                  style: TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                                Text(
+                                  trip.nextStopName,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    Row(
+                      children: [
+                        _buildActionButton(
+                          Icons.list,
+                          "All stops",
+                          onTap: () {
+                            Navigator.pop(context);
+                            _showAllStopsPanel(trip);
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        _buildActionButton(
+                          Icons.map_outlined,
+                          "Directions",
+                          onTap: () {
+                            Navigator.pop(context);
+                            _showDirectionsPanel(trip);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -1287,15 +1220,22 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     final provider = context.watch<MapProvider>();
     final transitProvider = context.watch<TransitProvider>();
 
-    final List<Place> displayPlaces = provider.places.where((place) {
-      final bool isRecent = provider.recentSearchIds.contains(place.id);
+    final List<Place> displayPlaces;
+    if (provider.hasCategoryFilter) {
+      // A category is active — show every match for it at any zoom, so the
+      // results the banner counts are actually visible on the map.
+      displayPlaces = provider.nearbyCategoryPlaces;
+    } else {
+      displayPlaces = provider.places.where((place) {
+        final bool isRecent = provider.recentSearchIds.contains(place.id);
 
-      // 1. If it's a recent search, show it from Zoom 10.0 (Far away)
-      if (isRecent) return _currentZoom >= 10.0;
+        // 1. If it's a recent search, show it from Zoom 10.0 (Far away)
+        if (isRecent) return _currentZoom >= 10.0;
 
-      // 2. If it's a normal place, show it from Zoom 14.5 (Close up)
-      return _currentZoom >= 16.5;
-    }).toList();
+        // 2. If it's a normal place, show it from Zoom 16.5 (Close up)
+        return _currentZoom >= 16.5;
+      }).toList();
+    }
 
     // Seed the filter with every route once they load.
     if (transitProvider.lineRoutes.isNotEmpty && !_seededFilterFromRoutes) {
@@ -1814,6 +1754,7 @@ class _TripStopsListState extends State<TripStopsList> {
             bottom: 16,
             right: 16,
             child: FloatingActionButton(
+              heroTag: 'trip_stops_scroll',
               mini: true,
               backgroundColor: const Color(0xFF1976D2),
               onPressed: _handleScrollButtonPress,

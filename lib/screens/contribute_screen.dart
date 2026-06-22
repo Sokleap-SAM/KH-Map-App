@@ -287,6 +287,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
     return Scaffold(
       backgroundColor: AppColors.primaryColor,
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'contribute_fab',
         backgroundColor: AppColors.secondaryColor,
         foregroundColor: AppColors.primaryColor,
         onPressed: () => _openForm(),

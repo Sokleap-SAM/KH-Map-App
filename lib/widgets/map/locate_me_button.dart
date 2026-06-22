@@ -45,6 +45,7 @@ class LocateMeButton extends StatelessWidget {
               ),
             ),
           FloatingActionButton(
+            heroTag: 'locate_me',
             onPressed: onPressed,
             backgroundColor: Colors.white,
             child: Icon(
