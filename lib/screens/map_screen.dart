@@ -92,8 +92,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           ..clear()
           ..addAll(favorites.map((f) => f.placeId));
       });
-    } catch (e) {
-      debugPrint('Failed to load favorites: $e');
+    } catch (_) {
+      // favorites are best-effort
     }
   }
 
@@ -112,7 +112,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         await _favoritesService.remove(place.id);
       }
     } catch (e) {
-      debugPrint('Failed to persist favorite: $e');
       if (!mounted) return;
       setState(() {
         if (isFav) {
@@ -176,7 +175,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       _snack('បានរក្សាទុកផ្លូវទៅចំណាំ');
       return saved.id;
     } catch (e) {
-      debugPrint('Failed to save favorite route: $e');
       _snack('មិនអាចរក្សាទុកផ្លូវបានទេ');
       return null;
     }
@@ -189,7 +187,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       _snack('បានលុបផ្លូវចេញពីចំណាំ');
       return true;
     } catch (e) {
-      debugPrint('Failed to remove favorite route: $e');
       _snack('មិនអាចលុបផ្លូវបានទេ');
       return false;
     }
@@ -377,7 +374,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         cat.contains('transit') ||
         name.contains('bus stop') ||
         name.contains('ចំណត')) {
-      debugPrint("Opening specialized Bus Stop panel for: ${place.name}");
       _showBusStopPanel(place);
       return;
     }
@@ -411,7 +407,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Live bus details are not available right now.'),
+        content: Text('មិនអាចមើលព័ត៌មានរថយន្តបច្ចប្បន្នបានទេ'),
         duration: Duration(seconds: 2),
       ),
     );
@@ -598,7 +594,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withAlpha(13),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white12),
       ),
@@ -2014,7 +2010,6 @@ class _LiveEtaBoxState extends State<_LiveEtaBox> {
       }
       _unsubscribeDetail = unsub;
     } catch (e) {
-      debugPrint('_LiveEtaBox: detail subscribe failed: $e');
       if (!mounted) return;
       setState(() => _snapshotLoaded = true);
     }
@@ -2028,8 +2023,8 @@ class _LiveEtaBoxState extends State<_LiveEtaBox> {
         _snapshot = snap;
         _snapshotLoaded = true;
       });
-    } catch (e) {
-      debugPrint('_LiveEtaBox: bad detail payload: $e');
+    } catch (_) {
+      // ignore malformed detail payloads
     }
   }
 

@@ -18,8 +18,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool isLoginMode = true;
 
   void _handleSubmit() async {
-    print("Step 1: Button Clicked!");
-
     if (!isLoginMode) {
       if (passwordController.text != confirmPasswordController.text) {
         _showError("លេខសម្ងាត់មិនទាន់ត្រឹមត្រូវ (Passwords do not match)");
@@ -29,7 +27,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      print("Step 2: Sending data to: ${AuthService.baseUrl}");
       if (isLoginMode) {
         bool success = await _authService.login(
           emailController.text,
@@ -75,7 +72,6 @@ class _LoginScreenState extends State<LoginScreen> {
         } else {
           _showError("ការចុះឈ្មោះបរាជ័យ");
         }
-        print("Step 3: Response received! Status: ${response.statusCode}");
       }
     } catch (e) {
       _showError("មិនអាចភ្ជាប់ទៅកាន់ Server បានទេ");
@@ -95,7 +91,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showError(String msg) {
-    print("UI ERROR: $msg");
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -200,8 +195,6 @@ class _LoginScreenState extends State<LoginScreen> {
               child: ElevatedButton(
                 onPressed: () {
                   _isLoading ? null : _handleSubmit();
-                  print("Email: ${emailController.text}");
-                  print("Password: ${passwordController.text}");
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF91A5D4),
@@ -270,7 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
           borderSide: const BorderSide(color: Color(0xFFE8B67D)),
         ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
+        fillColor: Colors.white.withAlpha(13),
       ),
     );
   }

@@ -20,7 +20,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   void _handleSendCode() async {
     setState(() => _isLoading = true);
-    bool success = await _authService.sendForgotPasswordOtp(emailController.text);
+    bool success = await _authService.sendForgotPasswordOtp(
+      emailController.text,
+    );
     setState(() => _isLoading = false);
 
     if (success) {
@@ -56,7 +58,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.primaryColor,
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, iconTheme: const IconThemeData(color: Colors.white)),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(30),
         child: Column(
@@ -64,11 +70,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           children: [
             const Text(
               "ភ្លេចលេខសម្ងាត់",
-              style: TextStyle(color: Color(0xFFE8B67D), fontSize: 28, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Color(0xFFE8B67D),
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 10),
             Text(
-              _isCodeSent ? "សូមបញ្ចូលលេខកូដ ៦ ខ្ទង់ដែលបានផ្ញើទៅកាន់អ៊ីមែលរបស់អ្នក" : "សូមបញ្ចូលអ៊ីមែលរបស់អ្នកដើម្បីទទួលបានលេខកូដ",
+              _isCodeSent
+                  ? "សូមបញ្ចូលលេខកូដ ៦ ខ្ទង់ដែលបានផ្ញើទៅកាន់អ៊ីមែលរបស់អ្នក"
+                  : "សូមបញ្ចូលអ៊ីមែលរបស់អ្នកដើម្បីទទួលបានលេខកូដ",
               style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 40),
@@ -106,15 +118,22 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                onPressed: _isLoading ? null : (_isCodeSent ? _handleResetPassword : _handleSendCode),
+                onPressed: _isLoading
+                    ? null
+                    : (_isCodeSent ? _handleResetPassword : _handleSendCode),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF91A5D4),
                   foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
                 ),
-                child: _isLoading 
-                  ? const CircularProgressIndicator(color: Colors.black)
-                  : Text(_isCodeSent ? "ប្តូរលេខសម្ងាត់" : "ផ្ញើលេខកូដ", style: const TextStyle(fontWeight: FontWeight.bold)),
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.black)
+                    : Text(
+                        _isCodeSent ? "ប្តូរលេខសម្ងាត់" : "ផ្ញើលេខកូដ",
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
               ),
             ),
           ],
@@ -123,7 +142,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
-  Widget _buildTextField({required TextEditingController controller, required String label, required IconData icon, bool isPassword = false, bool enabled = true, TextInputType keyboardType = TextInputType.text}) {
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool isPassword = false,
+    bool enabled = true,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
     return TextField(
       controller: controller,
       enabled: enabled,
@@ -135,8 +161,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         labelStyle: const TextStyle(color: Colors.white54),
         prefixIcon: Icon(icon, color: Colors.white54),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+        fillColor: Colors.white.withAlpha(13),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: BorderSide.none,
+        ),
       ),
     );
   }

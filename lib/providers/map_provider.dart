@@ -246,7 +246,6 @@ class MapProvider extends ChangeNotifier {
       if (_activeCategoryKey != null) _recomputeNearbyCategory();
     } catch (e) {
       _placesError = e.toString();
-      debugPrint('MapProvider: failed to load places: $e');
     } finally {
       _placesLoading = false;
       notifyListeners();
@@ -302,8 +301,8 @@ class MapProvider extends ChangeNotifier {
               address['road'] ?? address['pedestrian'] ?? address['footway'];
         }
       }
-    } catch (e) {
-      debugPrint('MapProvider: Reverse geocoding failed: $e');
+    } catch (_) {
+      // reverse geocoding is best-effort
     } finally {
       _isLoadingPinInfo = false;
       notifyListeners();
@@ -600,8 +599,8 @@ class MapProvider extends ChangeNotifier {
         _routePlan = plan;
         notifyListeners();
       }
-    } catch (e) {
-      debugPrint('MapProvider: silent refresh failed: $e');
+    } catch (_) {
+      // silent refresh is best-effort; keep the existing plan on failure
     } finally {
       _refreshInProgress = false;
     }
@@ -630,7 +629,6 @@ class MapProvider extends ChangeNotifier {
       _routePlan = plan;
     } catch (e) {
       _routeError = e.toString();
-      debugPrint('MapProvider: routing failed: $e');
     } finally {
       _isLoadingRoute = false;
       notifyListeners();
@@ -669,8 +667,8 @@ class MapProvider extends ChangeNotifier {
         _recentSearchIds.addAll(savedIds);
         notifyListeners();
       }
-    } catch (e) {
-      debugPrint('MapProvider: Failed to load recent searches: $e');
+    } catch (_) {
+      // recent searches are best-effort
     }
   }
 
@@ -690,8 +688,8 @@ class MapProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('recent_searches', _recentSearchIds);
-    } catch (e) {
-      debugPrint('MapProvider: Failed to save recent searches: $e');
+    } catch (_) {
+      // recent searches are best-effort
     }
   }
 

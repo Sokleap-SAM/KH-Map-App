@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'driver_mqtt_publisher.dart';
@@ -47,13 +46,9 @@ class DriverLocationPublisher {
       );
     }
 
-    _gpsSub = Geolocator.getPositionStream(locationSettings: settings).listen(
-      _onPosition,
-      onError: (e) {
-        debugPrint('DriverLocationPublisher: GPS error: $e');
-      },
-    );
-    debugPrint('DriverLocationPublisher: started @ ${interval.inSeconds}s');
+    _gpsSub = Geolocator.getPositionStream(
+      locationSettings: settings,
+    ).listen(_onPosition, onError: (_) {});
   }
 
   void _onPosition(Position p) {
@@ -73,6 +68,5 @@ class DriverLocationPublisher {
   Future<void> stop() async {
     await _gpsSub?.cancel();
     _gpsSub = null;
-    debugPrint('DriverLocationPublisher: stopped');
   }
 }

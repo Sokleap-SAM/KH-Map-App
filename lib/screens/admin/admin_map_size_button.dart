@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../utils/constants/colors.dart';
 
-/// Small overlay control that cycles a map "banner" between height presets
-/// (60% → 30% → 10%). Tapping calls [onTap]; the label shows the current size.
 class MapSizeButton extends StatelessWidget {
   final double fraction;
   final VoidCallback onTap;

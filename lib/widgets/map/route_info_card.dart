@@ -304,7 +304,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                       child: Text(
                         routePlan.message ??
-                            'No route found — try a closer destination.',
+                            'គ្មានផ្លូវ — សូមព្យាយាមទម្តងទៀតនៅពេលក្រោយ',
                         style: const TextStyle(
                           color: Colors.white54,
                           fontSize: 14,
@@ -475,7 +475,7 @@ class RouteOptionDetails extends StatelessWidget {
             children: [
               _SummaryChip(
                 icon: Icons.schedule,
-                label: '~${option.totalEstimatedMinutes} min',
+                label: '~${option.totalEstimatedMinutes} នាទី',
               ),
               _SummaryChip(
                 icon: Icons.straighten,
@@ -483,13 +483,13 @@ class RouteOptionDetails extends StatelessWidget {
               ),
               _SummaryChip(
                 icon: Icons.directions_walk,
-                label: '${_formatDistance(option.totalWalkMeters)} walk',
+                label: 'ដើរ ${_formatDistance(option.totalWalkMeters)}',
               ),
               _SummaryChip(
                 icon: Icons.swap_horiz,
                 label: option.transferCount == 0
-                    ? 'No transfer'
-                    : '${option.transferCount} transfer'
+                    ? 'គ្មានការផ្ទេរ'
+                    : '${option.transferCount} ការផ្ទេរ'
                           '${option.transferCount > 1 ? 's' : ''}',
               ),
             ],
@@ -629,7 +629,7 @@ class _WalkSegmentTile extends StatelessWidget {
     final mins = seg.estimatedMinutes;
     final label = [
       if (dist != null) _formatDistance(dist),
-      if (mins != null) '~$mins min',
+      if (mins != null) '~$mins នាទី',
     ].join(' · ');
 
     final isTransfer = seg.isTransfer;
@@ -732,7 +732,7 @@ class _BusSegmentTile extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'View',
+                    'មើល',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                   ),
                   Icon(Icons.chevron_right, size: 16),
@@ -796,25 +796,25 @@ class _BusSegmentTile extends StatelessWidget {
         children: [
           if (seg.boardAt != null)
             Text(
-              'Board at ${seg.boardAt!.name}',
+              'ឡើងនៅចំណត ${seg.boardAt!.name}',
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
           if (seg.alightAt != null)
             Text(
-              'Get off at ${seg.alightAt!.name}',
+              'ចុះនៅចំណត ${seg.alightAt!.name}',
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
           if (wait != null)
             Text(
               live
-                  ? 'Wait time in ~$wait min 🟢 Live'
-                  : '~$wait min wait (estimated)',
+                  ? 'រយៈពេលរងចាំ ~$wait នាទី 🟢'
+                  : 'ចាំ​ ~$wait នាទី (ការប៉ាន់ស្មាន)',
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
           if (seg.rideMinutes != null || seg.distanceMeters != null)
             Text(
               [
-                if (seg.rideMinutes != null) 'ride ~${seg.rideMinutes} min',
+                if (seg.rideMinutes != null) 'ជិះ ~${seg.rideMinutes} នាទី',
                 if (seg.distanceMeters != null)
                   _formatDistance(seg.distanceMeters!),
               ].join(' · '),
@@ -822,7 +822,7 @@ class _BusSegmentTile extends StatelessWidget {
             ),
           if (seg.totalLegMinutes != null)
             Text(
-              'leg total ~${seg.totalLegMinutes} min',
+              'រយៈពេលសរុប ~${seg.totalLegMinutes} នាទី',
               style: const TextStyle(color: Colors.white38, fontSize: 11),
             ),
         ],

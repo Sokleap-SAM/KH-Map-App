@@ -49,8 +49,7 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
         _stops = stops;
         _loading = false;
       });
-    } catch (e) {
-      debugPrint('DriverTripDetail: stop load failed: $e');
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }

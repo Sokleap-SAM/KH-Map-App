@@ -5,8 +5,10 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/admin_dashboard.dart';
 import '../models/admin_route.dart';
 import '../models/place.dart';
+import '../models/place_category.dart';
 
 /// Typed exception carrying the backend's machine-readable message so the UI
 /// can surface it. Mirrors DriverApiException.
@@ -18,23 +20,30 @@ class AdminApiException implements Exception {
   String toString() => 'AdminApiException($statusCode): $message';
 }
 
-/// One item in the bulk route-stops body. A stop is a reference to an existing
-/// Place (`placeId`) plus the manually-drawn polyline connecting the PREVIOUS
-/// stop to this one.
+/// One item in the bulk route-stops body: a reference to an existing Place
+/// (`placeId`) plus, optionally, how to build the segment from the PREVIOUS
+/// stop to this one. All geometry is road-snapped server-side (Valhalla):
 ///
-/// Per BulkRouteStopItemDto: [segmentFromPrevious] is a list of `[lng, lat]`
-/// pairs whose first vertex matches the previous stop's coords and last vertex
-/// matches this stop's coords. The backend requires it for every stop at
-/// stopOrder >= 2 and rejects it on stopOrder == 1, so the caller sets it on
-/// all stops except the first stop of a brand-new route.
+/// - neither field set → the backend computes the road path (default),
+/// - [vias] (`[lng, lat]` each, max 10) → computed, forced through the vias,
+/// - [segmentFromPrevious] → stored verbatim (send suggest-path output the
+///   admin approved).
+///
+/// The first stop of a brand-new route must send neither.
 class BulkStopRef {
   final String placeId;
+  final List<List<double>>? vias;
   final List<List<double>>? segmentFromPrevious;
 
-  const BulkStopRef({required this.placeId, this.segmentFromPrevious});
+  const BulkStopRef({
+    required this.placeId,
+    this.vias,
+    this.segmentFromPrevious,
+  });
 
   Map<String, dynamic> toJson() => {
     'placeId': placeId,
+    'vias': ?vias,
     'segmentFromPrevious': ?segmentFromPrevious,
   };
 }
@@ -86,6 +95,23 @@ class AdminService {
 
   bool _ok(int code) => code == 200 || code == 201;
 
+  /// GET /transit/admin/dashboard — live/simulation mode + split
+  /// current/in-period counts for the given [period] (admin only).
+  Future<AdminDashboard> fetchDashboard([
+    DashboardPeriod period = DashboardPeriod.day,
+  ]) async {
+    final r = await http
+        .get(
+          Uri.parse(
+            '$_baseUrl/transit/admin/dashboard',
+          ).replace(queryParameters: {'period': period.value}),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) _throwFor(r);
+    return AdminDashboard.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
   /// GET /transit/routes — every route (lines + circular), for the list.
   Future<List<AdminRoute>> fetchAllRoutes() async {
     final r = await http
@@ -104,8 +130,31 @@ class AdminService {
 
   // ───────────────────────────── Places (stops) ─────────────────────────────
 
-  /// GET /places — all places (the "stops" managed in the Stops tab).
+  /// GET /places/stops — every Bus Stop place (category populated), the set
+  /// managed in the Stops tab.
   Future<List<Place>> fetchPlaces() async {
+    final r = await http
+        .get(Uri.parse('$_baseUrl/places/stops'), headers: await _authHeaders())
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) _throwFor(r);
+    final data = jsonDecode(r.body) as List;
+    return data.whereType<Map<String, dynamic>>().map(Place.fromJson).toList();
+  }
+
+  /// GET /places/:id — one place with full data (photos, category).
+  Future<Place> fetchPlace(String placeId) async {
+    final r = await http
+        .get(
+          Uri.parse('$_baseUrl/places/$placeId'),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) _throwFor(r);
+    return Place.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
+  /// GET /places — every place (all categories), for the Places screen.
+  Future<List<Place>> fetchAllPlaces() async {
     final r = await http
         .get(Uri.parse('$_baseUrl/places'), headers: await _authHeaders())
         .timeout(const Duration(seconds: 10));
@@ -114,47 +163,108 @@ class AdminService {
     return data.whereType<Map<String, dynamic>>().map(Place.fromJson).toList();
   }
 
-  /// Category id for the `bus_stop` Place category — admin-created stops are
-  /// bus stops, so we tag them on create.
-  static const String busStopCategoryId = '69e5ea7cfcfc727fba260bcd';
+  /// GET /places/categories — place categories for the filter / picker.
+  Future<List<PlaceCategory>> fetchCategories() async {
+    final r = await http
+        .get(
+          Uri.parse('$_baseUrl/places/categories'),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) _throwFor(r);
+    final data = jsonDecode(r.body) as List;
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(PlaceCategory.fromJson)
+        .toList();
+  }
 
-  /// POST /places — create a stop. Body per CreatePlaceDto:
-  /// `{ name, category, location: [lng, lat] }`.
-  Future<Place> createPlace({
+  /// POST /places — create a place in a chosen category. multipart/form-data:
+  /// `name`, `category`, `location` (JSON string `[lng, lat]`), plus optional
+  /// `photos` files (uploaded to Cloudinary by the backend).
+  Future<Place> createPlaceInCategory({
     required String name,
     required double longitude,
     required double latitude,
+    required String categoryId,
+    List<String> photoPaths = const [],
   }) async {
-    final r = await http
-        .post(
-          Uri.parse('$_baseUrl/places'),
-          headers: await _authHeaders(json: true),
-          body: jsonEncode(_placeBody(name, longitude, latitude)),
-        )
-        .timeout(const Duration(seconds: 10));
+    final req = http.MultipartRequest('POST', Uri.parse('$_baseUrl/places'));
+    final token = await _token();
+    if (token != null) req.headers['Authorization'] = 'Bearer $token';
+    req.fields['name'] = name;
+    req.fields['category'] = categoryId;
+    req.fields['location'] = jsonEncode([longitude, latitude]);
+    for (final path in photoPaths) {
+      req.files.add(await http.MultipartFile.fromPath('photos', path));
+    }
+    final streamed = await req.send().timeout(const Duration(seconds: 30));
+    final r = await http.Response.fromStream(streamed);
     if (!_ok(r.statusCode)) _throwFor(r);
     return Place.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
   }
 
-  /// PATCH /places/:id — edit a stop. Same body-shape caveat as createPlace.
+  /// POST /places/stops — create a bus stop. multipart/form-data body:
+  /// `name`, `location` (JSON string `[lng, lat]`), optional `photos` files.
+  /// The backend auto-assigns the "Bus Stop" category.
+  Future<Place> createPlace({
+    required String name,
+    required double longitude,
+    required double latitude,
+    List<http.MultipartFile>? photos,
+  }) async {
+    final req = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_baseUrl/places/stops'),
+    );
+    final token = await _token();
+    if (token != null) req.headers['Authorization'] = 'Bearer $token';
+    req.fields['name'] = name;
+    req.fields['location'] = jsonEncode([longitude, latitude]);
+    if (photos != null) req.files.addAll(photos);
+
+    final streamed = await req.send().timeout(const Duration(seconds: 30));
+    final r = await http.Response.fromStream(streamed);
+    if (!_ok(r.statusCode)) _throwFor(r);
+    return Place.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
+  /// PATCH /places/:id — edit a place. multipart/form-data so new `photos`
+  /// files can be appended (the controller wraps this route in a photos
+  /// FilesInterceptor). Only the provided fields are sent.
+  ///
+  /// [keepPhotoUrls], when non-null, is the list of EXISTING photo URLs to
+  /// keep — sent as the `photos` field so the backend can drop the removed
+  /// ones. New uploads in [photoPaths] are appended. (Requires UpdatePlaceDto
+  /// to accept a `photos: string[]` of URLs to keep.)
   Future<Place> updatePlace(
     String placeId, {
     String? name,
     double? longitude,
     double? latitude,
+    String? categoryId,
+    List<String> photoPaths = const [],
+    List<String>? keepPhotoUrls,
   }) async {
-    final body = <String, dynamic>{
-      'name': ?name,
-      if (longitude != null && latitude != null)
-        'location': [longitude, latitude],
-    };
-    final r = await http
-        .patch(
-          Uri.parse('$_baseUrl/places/$placeId'),
-          headers: await _authHeaders(json: true),
-          body: jsonEncode(body),
-        )
-        .timeout(const Duration(seconds: 10));
+    final req = http.MultipartRequest(
+      'PATCH',
+      Uri.parse('$_baseUrl/places/$placeId'),
+    );
+    final token = await _token();
+    if (token != null) req.headers['Authorization'] = 'Bearer $token';
+    if (name != null) req.fields['name'] = name;
+    if (categoryId != null) req.fields['category'] = categoryId;
+    if (longitude != null && latitude != null) {
+      req.fields['location'] = jsonEncode([longitude, latitude]);
+    }
+    if (keepPhotoUrls != null) {
+      req.fields['photos'] = jsonEncode(keepPhotoUrls);
+    }
+    for (final path in photoPaths) {
+      req.files.add(await http.MultipartFile.fromPath('photos', path));
+    }
+    final streamed = await req.send().timeout(const Duration(seconds: 30));
+    final r = await http.Response.fromStream(streamed);
     if (!_ok(r.statusCode)) _throwFor(r);
     return Place.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
   }
@@ -170,13 +280,6 @@ class AdminService {
         .timeout(const Duration(seconds: 10));
     if (!_ok(r.statusCode)) _throwFor(r);
   }
-
-  // Backend CreatePlaceDto expects GeoJSON-style `location: [lng, lat]`.
-  Map<String, dynamic> _placeBody(String name, double lng, double lat) => {
-    'name': name,
-    'category': busStopCategoryId,
-    'location': [lng, lat],
-  };
 
   /// GET /transit/stops/:stopId/routes — routes that reference a place.
   /// NOTE: response shape parsed tolerantly (list of route docs, or
@@ -205,29 +308,35 @@ class AdminService {
     return StopUsage(count: count ?? routes.length, routes: routes);
   }
 
-  /// GET /transit/admin/suggest-path — road-snapped polyline between two
-  /// points (Valhalla, can take a few seconds). Query params per SuggestPathDto:
-  /// fromLng, fromLat, toLng, toLat.
+  /// POST /transit/admin/suggest-path — road-snapped polyline between two
+  /// points (Valhalla, can take a few seconds). Body: `from`/`to` as
+  /// `[lng, lat]`, plus optional [vias] (`[lng, lat]` each, max 10) the path
+  /// is forced through when the default road is not the real bus corridor.
   ///
-  /// Returns the path as ordered LatLng vertices including both endpoints.
-  /// NOTE: response shape is parsed tolerantly (coordinates / path.coordinates
-  /// / raw list of [lng,lat]); confirm against the controller if it differs.
+  /// The returned polyline starts/ends at the ROAD nearest each stop, not at
+  /// the stop coordinates — render it as-is, never prepend/append the stops.
+  /// Throws 503 when Valhalla is down or no drivable road connects the points.
   Future<List<LatLng>> suggestPath({
     required LatLng from,
     required LatLng to,
+    List<LatLng> vias = const [],
   }) async {
-    final uri = Uri.parse('$_baseUrl/transit/admin/suggest-path').replace(
-      queryParameters: {
-        'fromLng': from.longitude.toString(),
-        'fromLat': from.latitude.toString(),
-        'toLng': to.longitude.toString(),
-        'toLat': to.latitude.toString(),
-      },
-    );
+    final body = <String, dynamic>{
+      'from': [from.longitude, from.latitude],
+      'to': [to.longitude, to.latitude],
+      if (vias.isNotEmpty)
+        'vias': [
+          for (final v in vias) [v.longitude, v.latitude],
+        ],
+    };
     final r = await http
-        .get(uri, headers: await _authHeaders())
+        .post(
+          Uri.parse('$_baseUrl/transit/admin/suggest-path'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode(body),
+        )
         .timeout(const Duration(seconds: 20));
-    if (r.statusCode != 200) _throwFor(r);
+    if (r.statusCode != 200 && r.statusCode != 201) _throwFor(r);
     return _parsePathCoordinates(jsonDecode(r.body));
   }
 
@@ -266,6 +375,8 @@ class AdminService {
     String? name,
     String? code,
     bool? isLine,
+    String? color,
+    String? direction,
   }) async {
     final body = <String, dynamic>{
       'stops': stops.map((s) => s.toJson()).toList(),
@@ -273,6 +384,8 @@ class AdminService {
       'name': ?name,
       'code': ?code,
       'isLine': ?isLine,
+      'color': ?color,
+      'direction': ?direction,
     };
     final r = await http
         .post(
@@ -280,7 +393,7 @@ class AdminService {
           headers: await _authHeaders(json: true),
           body: jsonEncode(body),
         )
-        .timeout(const Duration(seconds: 30));
+        .timeout(const Duration(seconds: 200));
     if (!_ok(r.statusCode)) _throwFor(r);
     // Append mode already knows the id; otherwise dig it out of the response.
     if (routeId != null) return routeId;
@@ -309,19 +422,71 @@ class AdminService {
     return null;
   }
 
-  /// PATCH /transit/route-stops/:id — edit a single stop's name/coordinates.
-  /// NOTE: this does NOT re-snap the polyline; the caller must warn the admin
-  /// when coordinates change.
-  Future<void> updateRouteStop(
-    String stopId, {
-    String? name,
-    double? longitude,
-    double? latitude,
+  /// PATCH /transit/routes/:id — flip just the route's status
+  /// ('active' | 'inactive'). Lightweight partial update for the list toggle.
+  Future<void> setRouteStatus(String routeId, String status) async {
+    final r = await http
+        .patch(
+          Uri.parse('$_baseUrl/transit/routes/$routeId'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode({'status': status}),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (!_ok(r.statusCode)) _throwFor(r);
+  }
+
+  /// PATCH /transit/routes/:id — edit a route's metadata (no stops/segments).
+  /// Sends the full editable field set; `code`/`direction` may be null (a loop
+  /// has no direction). NOTE: endpoint path + UpdateRouteDto field names are
+  /// assumed from the BusRoute schema — confirm if the backend differs.
+  Future<void> updateRoute(
+    String routeId, {
+    required String name,
+    String? code,
+    required String color,
+    required bool isLine,
+    String? direction,
+    required String status,
   }) async {
     final body = <String, dynamic>{
-      'name': ?name,
-      'longitude': ?longitude,
-      'latitude': ?latitude,
+      'name': name,
+      'code': code,
+      'color': color,
+      'isLine': isLine,
+      'direction': direction,
+      'status': status,
+    };
+    final r = await http
+        .patch(
+          Uri.parse('$_baseUrl/transit/routes/$routeId'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (!_ok(r.statusCode)) _throwFor(r);
+  }
+
+  /// PATCH /transit/route-stops/:id — fix ONE stop. Exactly one of:
+  ///
+  /// - [vias] (`[lng, lat]` each) — wrong road: the incoming segment is
+  ///   recomputed through the vias,
+  /// - [waypoints] — full replacement polyline (approved suggest-path output),
+  /// - [placeId] — wrong place: sent as `stop`; BOTH adjacent segments are
+  ///   recomputed.
+  ///
+  /// Editing the incoming segment re-stitches the NEXT stop's segment
+  /// server-side, so after a successful PATCH the caller must re-fetch the
+  /// route's stop list — up to TWO stops' segments may have changed.
+  Future<void> updateRouteStop(
+    String stopId, {
+    List<List<double>>? vias,
+    List<List<double>>? waypoints,
+    String? placeId,
+  }) async {
+    final body = <String, dynamic>{
+      'vias': ?vias,
+      'waypoints': ?waypoints,
+      'stop': ?placeId,
     };
     final r = await http
         .patch(
@@ -329,11 +494,13 @@ class AdminService {
           headers: await _authHeaders(json: true),
           body: jsonEncode(body),
         )
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 30));
     if (!_ok(r.statusCode)) _throwFor(r);
   }
 
-  /// DELETE /transit/route-stops/:id
+  /// DELETE /transit/route-stops/:id — the backend heals the chain (next
+  /// segment recomputed, stopOrders re-packed), so re-fetch the stop list
+  /// after. Throws 503 when Valhalla is down (the delete is aborted).
   Future<void> deleteRouteStop(String stopId) async {
     final r = await http
         .delete(

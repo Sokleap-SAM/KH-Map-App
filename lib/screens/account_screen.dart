@@ -53,8 +53,6 @@ class _AccountScreenState extends State<AccountScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        print("PROFILE DATA FROM BACKEND: $data");
-
         setState(() {
           userName = data['name'] ?? "No Name Found";
           isLoggedIn = true;
@@ -68,7 +66,6 @@ class _AccountScreenState extends State<AccountScreen> {
         _fallbackToTokenName(token);
       }
     } catch (e) {
-      debugPrint("Error fetching profile: $e");
       // Network error but we have a token — stay logged in using JWT claims.
       _fallbackToTokenName(token);
     } finally {
@@ -102,8 +99,8 @@ class _AccountScreenState extends State<AccountScreen> {
         ? Colors.white70
         : Colors.black54;
     final Color containerColor = settings.isDarkMode
-        ? Colors.white.withOpacity(0.05)
-        : Colors.black.withOpacity(0.05);
+        ? Colors.white.withAlpha(13)
+        : Colors.black.withAlpha(13);
     return Scaffold(
       backgroundColor: settings.isDarkMode
           ? AppColors.primaryColor
@@ -327,13 +324,13 @@ class _AccountScreenState extends State<AccountScreen> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white24),
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withAlpha(13),
       ),
       child: Text(
         text,
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: textColor.withOpacity(0.7),
+          color: textColor.withAlpha(179), // 0.7 * 255
           fontSize: 14,
           height: 1.5,
         ),

@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../utils/constants/colors.dart';
 import '../account_screen.dart';
+import 'admin_dashboard_screen.dart';
+import 'admin_places_screen.dart';
 import 'admin_routes_screen.dart';
-import 'admin_stops_screen.dart';
 
-/// Admin shell: Stops + Routes management, plus Account (kept for logout).
-/// Reuses the existing AccountScreen unchanged, same as the driver shell.
+/// Admin shell: Dashboard home, Places + Routes management, plus Account (kept
+/// for logout). Reuses the existing AccountScreen unchanged, same as the driver
+/// shell.
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
 
@@ -18,7 +20,8 @@ class _AdminShellState extends State<AdminShell> {
   int _index = 0;
 
   static const _screens = <Widget>[
-    AdminStopsScreen(),
+    AdminDashboardScreen(),
+    AdminPlacesScreen(),
     AdminRoutesScreen(),
     AccountScreen(),
   ];
@@ -38,9 +41,14 @@ class _AdminShellState extends State<AdminShell> {
         unselectedFontSize: 12,
         items: const [
           BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard_outlined),
+            activeIcon: Icon(Icons.dashboard),
+            label: 'ផ្ទាំង',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.place_outlined),
             activeIcon: Icon(Icons.place),
-            label: 'ចំណត',
+            label: 'ទីកន្លែង',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.route_outlined),

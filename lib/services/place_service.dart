@@ -10,7 +10,6 @@ class PlaceService {
 
   Future<List<Place>> fetchPlaces() async {
     final uri = Uri.parse('$_baseUrl/places');
-    print('Fetching places from $uri');
     final response = await http.get(uri).timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) throw Exception('Failed to load places');
     final List data = jsonDecode(response.body) as List;
@@ -103,10 +102,9 @@ class PlaceService {
     required String token,
   }) async {
     final uri = Uri.parse('$_baseUrl/places/$placeId/ratings/$ratingId');
-    final response = await http.delete(
-      uri,
-      headers: {'Authorization': 'Bearer $token'},
-    ).timeout(const Duration(seconds: 10));
+    final response = await http
+        .delete(uri, headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 10));
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(
         'Failed to delete rating: ${response.statusCode} ${response.body}',

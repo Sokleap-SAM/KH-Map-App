@@ -20,6 +20,7 @@ IconData getIconForCategory(String? categoryName) {
       return Icons.shopping_bag;
     case 'park':
       return Icons.park;
+    case 'test_bus_stop':
     case 'bus_stop':
       return Icons.directions_bus;
     case 'train_station':
@@ -32,7 +33,7 @@ IconData getIconForCategory(String? categoryName) {
       return Icons.local_pharmacy;
     case 'gym':
       return Icons.fitness_center;
-    case 'vetinary': 
+    case 'vetinary':
       return Icons.local_hospital;
     default:
       return Icons.location_on;
@@ -59,6 +60,7 @@ Color getColorForCategory(String? categoryName) {
       return Colors.purple;
     case 'park':
       return Colors.green;
+    case 'test_bus_stop':
     case 'bus_stop':
       return Colors.blue;
     case 'train_station':

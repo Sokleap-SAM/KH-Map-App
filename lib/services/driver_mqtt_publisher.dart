@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 
 import '../models/driver_mqtt_credentials.dart';
@@ -54,20 +53,11 @@ class DriverMqttPublisher {
   Future<void> _doConnect() async {
     final creds = _creds!;
     final clientId = _clientId(creds.username);
-    debugPrint(
-      'DriverMqttPublisher: Connecting to ${creds.host}:${creds.port} as ${creds.username}',
-    );
 
     final c = createDriverMqttClient(creds.host, creds.port, clientId);
     c.keepAlivePeriod = 30;
     c.autoReconnect = true;
     c.resubscribeOnAutoReconnect = false;
-    c.onConnected = () =>
-        debugPrint('DriverMqttPublisher: Connected ✅');
-    c.onDisconnected = () =>
-        debugPrint('DriverMqttPublisher: Disconnected ❌');
-    c.onAutoReconnect = () =>
-        debugPrint('DriverMqttPublisher: Auto-reconnecting...');
 
     c.connectionMessage = MqttConnectMessage()
         .withClientIdentifier(clientId)
@@ -78,7 +68,6 @@ class DriverMqttPublisher {
     try {
       await c.connect(creds.username, creds.password);
     } catch (e) {
-      debugPrint('DriverMqttPublisher: Connect failed: $e');
       c.disconnect();
       onAuthFailure?.call();
       throw DriverMqttAuthFailure('connect threw: $e');
@@ -88,9 +77,6 @@ class DriverMqttPublisher {
     final returnCode = c.connectionStatus?.returnCode;
     if (state != MqttConnectionState.connected) {
       c.disconnect();
-      debugPrint(
-        'DriverMqttPublisher: CONNACK rejected — state=$state code=$returnCode',
-      );
       onAuthFailure?.call();
       throw DriverMqttAuthFailure('CONNACK $returnCode');
     }
