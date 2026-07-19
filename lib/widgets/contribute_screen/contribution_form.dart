@@ -36,6 +36,7 @@ class _ContributionFormState extends State<ContributionForm> {
   bool _useExistingPlace = true;
   Place? _selectedPlace;
   final TextEditingController _placeNameCtrl = TextEditingController();
+  final TextEditingController _placeNameLatinCtrl = TextEditingController();
   String _categoryName = 'restaurant';
   LatLng? _customLocation;
 
@@ -72,6 +73,7 @@ class _ContributionFormState extends State<ContributionForm> {
     if (initial != null) {
       _useExistingPlace = !initial.isCustomPlace;
       _placeNameCtrl.text = initial.placeName;
+      _placeNameLatinCtrl.text = initial.placeNameLatin;
       _categoryName = initial.categoryName;
       _customLocation = LatLng(initial.latitude, initial.longitude);
       _rating = initial.rating;
@@ -101,6 +103,7 @@ class _ContributionFormState extends State<ContributionForm> {
   @override
   void dispose() {
     _placeNameCtrl.dispose();
+    _placeNameLatinCtrl.dispose();
     _commentCtrl.dispose();
     super.dispose();
   }
@@ -184,6 +187,7 @@ class _ContributionFormState extends State<ContributionForm> {
         : Contribution(
             id: id,
             placeName: _placeNameCtrl.text.trim(),
+            placeNameLatin: _placeNameLatinCtrl.text.trim(),
             categoryName: _categoryName,
             latitude: _customLocation!.latitude,
             longitude: _customLocation!.longitude,
@@ -480,11 +484,22 @@ class _ContributionFormState extends State<ContributionForm> {
       children: [
         _textField(
           controller: _placeNameCtrl,
-          label: 'ឈ្មោះទីកន្លែង',
+          label: 'ឈ្មោះជាភាសាខ្មែរ',
           hint: 'ឧ. កាហ្វេ​ស្រែ​ខ្មែរ',
           validator: (v) {
             if (_useExistingPlace) return null;
             if (v == null || v.trim().isEmpty) return 'សូមបញ្ចូលឈ្មោះ';
+            return null;
+          },
+        ),
+        const SizedBox(height: 12),
+        _textField(
+          controller: _placeNameLatinCtrl,
+          label: 'ឈ្មោះជាអក្សរឡាតាំង',
+          hint: 'e.g. Kaffe Sre Khmer',
+          validator: (v) {
+            if (_useExistingPlace) return null;
+            if (v == null || v.trim().isEmpty) return 'សូមបញ្ចូលឈ្មោះជាអក្សរឡាតាំង';
             return null;
           },
         ),

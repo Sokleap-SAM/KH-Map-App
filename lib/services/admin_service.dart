@@ -180,10 +180,12 @@ class AdminService {
   }
 
   /// POST /places — create a place in a chosen category. multipart/form-data:
-  /// `name`, `category`, `location` (JSON string `[lng, lat]`), plus optional
-  /// `photos` files (uploaded to Cloudinary by the backend).
+  /// `nameInKhmer`, optional `nameInLatin`, `category`, `location` (JSON string
+  /// `[lng, lat]`), plus optional `photos` files (uploaded to Cloudinary by the
+  /// backend).
   Future<Place> createPlaceInCategory({
-    required String name,
+    required String nameInKhmer,
+    required String nameInLatin,
     required double longitude,
     required double latitude,
     required String categoryId,
@@ -192,7 +194,8 @@ class AdminService {
     final req = http.MultipartRequest('POST', Uri.parse('$_baseUrl/places'));
     final token = await _token();
     if (token != null) req.headers['Authorization'] = 'Bearer $token';
-    req.fields['name'] = name;
+    req.fields['nameInKhmer'] = nameInKhmer;
+    req.fields['nameInLatin'] = nameInLatin;
     req.fields['category'] = categoryId;
     req.fields['location'] = jsonEncode([longitude, latitude]);
     for (final path in photoPaths) {
@@ -205,10 +208,12 @@ class AdminService {
   }
 
   /// POST /places/stops — create a bus stop. multipart/form-data body:
-  /// `name`, `location` (JSON string `[lng, lat]`), optional `photos` files.
-  /// The backend auto-assigns the "Bus Stop" category.
+  /// `nameInKhmer`, optional `nameInLatin`, `location` (JSON string
+  /// `[lng, lat]`), optional `photos` files. The backend auto-assigns the
+  /// "Bus Stop" category.
   Future<Place> createPlace({
-    required String name,
+    required String nameInKhmer,
+    required String nameInLatin,
     required double longitude,
     required double latitude,
     List<http.MultipartFile>? photos,
@@ -219,7 +224,8 @@ class AdminService {
     );
     final token = await _token();
     if (token != null) req.headers['Authorization'] = 'Bearer $token';
-    req.fields['name'] = name;
+    req.fields['nameInKhmer'] = nameInKhmer;
+    req.fields['nameInLatin'] = nameInLatin;
     req.fields['location'] = jsonEncode([longitude, latitude]);
     if (photos != null) req.files.addAll(photos);
 
@@ -239,7 +245,8 @@ class AdminService {
   /// to accept a `photos: string[]` of URLs to keep.)
   Future<Place> updatePlace(
     String placeId, {
-    String? name,
+    String? nameInKhmer,
+    String? nameInLatin,
     double? longitude,
     double? latitude,
     String? categoryId,
@@ -252,7 +259,8 @@ class AdminService {
     );
     final token = await _token();
     if (token != null) req.headers['Authorization'] = 'Bearer $token';
-    if (name != null) req.fields['name'] = name;
+    if (nameInKhmer != null) req.fields['nameInKhmer'] = nameInKhmer;
+    if (nameInLatin != null) req.fields['nameInLatin'] = nameInLatin;
     if (categoryId != null) req.fields['category'] = categoryId;
     if (longitude != null && latitude != null) {
       req.fields['location'] = jsonEncode([longitude, latitude]);

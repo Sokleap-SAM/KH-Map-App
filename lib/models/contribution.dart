@@ -6,7 +6,8 @@ import 'place.dart';
 class Contribution {
   final String id;
   final String? placeId; // null when this is a brand-new custom place
-  final String placeName;
+  final String placeName; // Khmer name (backend `nameInKhmer`)
+  final String placeNameLatin; // Latin name (backend `nameInLatin`)
   final String categoryName;
   final double latitude;
   final double longitude;
@@ -20,6 +21,7 @@ class Contribution {
   const Contribution({
     required this.id,
     required this.placeName,
+    required this.placeNameLatin,
     required this.categoryName,
     required this.latitude,
     required this.longitude,
@@ -34,6 +36,7 @@ class Contribution {
 
   Contribution copyWith({
     String? placeName,
+    String? placeNameLatin,
     String? categoryName,
     double? latitude,
     double? longitude,
@@ -47,6 +50,7 @@ class Contribution {
     return Contribution(
       id: id,
       placeName: placeName ?? this.placeName,
+      placeNameLatin: placeNameLatin ?? this.placeNameLatin,
       categoryName: categoryName ?? this.categoryName,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
@@ -71,7 +75,8 @@ class Contribution {
     return Contribution(
       id: id,
       placeId: place.id,
-      placeName: place.name,
+      placeName: place.nameInKhmer,
+      placeNameLatin: place.nameInLatin,
       categoryName: place.category?.name ?? 'Place',
       latitude: place.latitude,
       longitude: place.longitude,
@@ -88,6 +93,7 @@ class Contribution {
         'placeId': placeId,
         'ratingId': ratingId,
         'placeName': placeName,
+        'placeNameLatin': placeNameLatin,
         'categoryName': categoryName,
         'latitude': latitude,
         'longitude': longitude,
@@ -105,6 +111,11 @@ class Contribution {
       placeId: json['placeId'] as String?,
       ratingId: json['ratingId'] as String?,
       placeName: json['placeName'] as String? ?? '',
+      // Legacy persisted contributions predate this field — fall back to the
+      // Khmer name so they still load.
+      placeNameLatin: json['placeNameLatin'] as String? ??
+          json['placeName'] as String? ??
+          '',
       categoryName: json['categoryName'] as String? ?? 'Place',
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,

@@ -170,7 +170,9 @@ class _SearchScreenState extends State<SearchScreen> {
       (p) => p.id == entry.id,
       orElse: () => Place(
         id: entry.id,
-        name: entry.name,
+        // History only stores a single display name; reuse it for both.
+        nameInKhmer: entry.name,
+        nameInLatin: entry.name,
         category: PlaceCategory(id: '', name: entry.categoryName),
         longitude: entry.longitude,
         latitude: entry.latitude,

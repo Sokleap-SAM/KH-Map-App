@@ -26,6 +26,7 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
   final AdminService _service = AdminService();
   final MapController _mapController = MapController();
   final TextEditingController _nameCtrl = TextEditingController();
+  final TextEditingController _nameLatinCtrl = TextEditingController();
   LatLng? _point;
   bool _saving = false;
 
@@ -47,7 +48,8 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
     super.initState();
     final e = widget.existing;
     if (e != null) {
-      _nameCtrl.text = e.name;
+      _nameCtrl.text = e.nameInKhmer;
+      _nameLatinCtrl.text = e.nameInLatin;
       _point = LatLng(e.latitude, e.longitude);
       _categoryId = e.category?.id;
       _keptPhotos = List<String>.from(e.photos);
@@ -84,13 +86,19 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _nameLatinCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
+    final nameLatin = _nameLatinCtrl.text.trim();
     if (name.isEmpty) {
-      _snack('សូមបញ្ចូលឈ្មោះ (Name required)');
+      _snack('សូមបញ្ចូលឈ្មោះជាភាសាខ្មែរ (Khmer name required)');
+      return;
+    }
+    if (nameLatin.isEmpty) {
+      _snack('សូមបញ្ចូលឈ្មោះជាអក្សរឡាតាំង (Latin name required)');
       return;
     }
     if (_categoryId == null) {
@@ -106,7 +114,8 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
       if (widget.isEdit) {
         await _service.updatePlace(
           widget.existing!.id,
-          name: name,
+          nameInKhmer: name,
+          nameInLatin: nameLatin,
           longitude: _point!.longitude,
           latitude: _point!.latitude,
           categoryId: _categoryId,
@@ -115,7 +124,8 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
         );
       } else {
         await _service.createPlaceInCategory(
-          name: name,
+          nameInKhmer: name,
+          nameInLatin: nameLatin,
           longitude: _point!.longitude,
           latitude: _point!.latitude,
           categoryId: _categoryId!,
@@ -294,7 +304,18 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
             child: TextField(
               controller: _nameCtrl,
               decoration: const InputDecoration(
-                labelText: 'ឈ្មោះទីកន្លែង (Place name)',
+                labelText: 'ឈ្មោះជាភាសាខ្មែរ (Name in Khmer)',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: TextField(
+              controller: _nameLatinCtrl,
+              decoration: const InputDecoration(
+                labelText: 'ឈ្មោះជាអក្សរឡាតាំង (Name in Latin)',
                 border: OutlineInputBorder(),
                 isDense: true,
               ),

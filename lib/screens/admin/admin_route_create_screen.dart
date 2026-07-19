@@ -724,7 +724,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
           _placeById(s.stopId) ??
           Place(
             id: s.stopId,
-            name: s.stopName,
+            // A stop carries a single name; reuse it for both localized fields.
+            nameInKhmer: s.stopName,
+            nameInLatin: s.stopName,
             longitude: s.location.longitude,
             latitude: s.location.latitude,
             photos: const [],

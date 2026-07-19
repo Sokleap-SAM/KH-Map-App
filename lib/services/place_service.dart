@@ -32,7 +32,8 @@ class PlaceService {
   /// as multipart files and stored on Cloudinary by the backend. Returns the
   /// created [Place] (with its server id and remote photo URLs).
   Future<Place> createPlace({
-    required String name,
+    required String nameInKhmer,
+    required String nameInLatin,
     String? categoryId,
     required double longitude,
     required double latitude,
@@ -44,7 +45,8 @@ class PlaceService {
     if (token != null && token.isNotEmpty) {
       request.headers['Authorization'] = 'Bearer $token';
     }
-    request.fields['name'] = name;
+    request.fields['nameInKhmer'] = nameInKhmer;
+    request.fields['nameInLatin'] = nameInLatin;
     if (categoryId != null && categoryId.isNotEmpty) {
       request.fields['category'] = categoryId;
     }
