@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
@@ -38,6 +39,11 @@ class _ContributionFormState extends State<ContributionForm> {
   final TextEditingController _placeNameCtrl = TextEditingController();
   String _categoryName = 'restaurant';
   LatLng? _customLocation;
+  final MapController _locationMapController = MapController();
+
+  /// Fallback center for the picker map when no location is known yet
+  /// (central Phnom Penh).
+  static const LatLng _defaultMapCenter = LatLng(11.5564, 104.9282);
 
   double _rating = 0;
   final TextEditingController _commentCtrl = TextEditingController();
@@ -102,6 +108,7 @@ class _ContributionFormState extends State<ContributionForm> {
   void dispose() {
     _placeNameCtrl.dispose();
     _commentCtrl.dispose();
+    _locationMapController.dispose();
     super.dispose();
   }
 
@@ -137,6 +144,22 @@ class _ContributionFormState extends State<ContributionForm> {
       return;
     }
     setState(() => _customLocation = pos);
+    _moveMapTo(pos);
+  }
+
+  /// Sets the pin from a tap/drag on the embedded picker map.
+  void _onLocationPicked(LatLng point) {
+    setState(() => _customLocation = point);
+  }
+
+  /// Recenters the picker map on [target] without changing zoom.
+  void _moveMapTo(LatLng target) {
+    try {
+      _locationMapController.move(target, _locationMapController.camera.zoom);
+    } catch (_) {
+      // Camera not ready yet (map not laid out) — the map will build
+      // centered on the new location anyway.
+    }
   }
 
   void _showError(String msg) {
@@ -492,6 +515,98 @@ class _ContributionFormState extends State<ContributionForm> {
         _categoryDropdown(),
         const SizedBox(height: 12),
         _locationRow(),
+        const SizedBox(height: 10),
+        _locationPickerMap(),
+      ],
+    );
+  }
+
+  /// Interactive mini-map. Tapping anywhere drops/moves the pin so the user
+  /// can choose any location instead of only their current position.
+  Widget _locationPickerMap() {
+    final center = _customLocation ??
+        context.read<MapProvider>().currentPosition ??
+        _defaultMapCenter;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            height: 180,
+            child: Stack(
+              children: [
+                FlutterMap(
+                  mapController: _locationMapController,
+                  options: MapOptions(
+                    initialCenter: center,
+                    initialZoom: 15,
+                    minZoom: 5,
+                    maxZoom: 18,
+                    onTap: (_, point) => _onLocationPicked(point),
+                    onLongPress: (_, point) => _onLocationPicked(point),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.kh_map_app',
+                    ),
+                    if (_customLocation != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _customLocation!,
+                            width: 40,
+                            height: 40,
+                            alignment: Alignment.topCenter,
+                            child: const Icon(
+                              Icons.location_on,
+                              color: AppColors.secondaryColor,
+                              size: 40,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+                if (_customLocation == null)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'ប៉ះលើផែនទីដើម្បីកំណត់ទីតាំង',
+                            style: GoogleFonts.notoSansKhmer(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'ប៉ះ ឬ ចុចឲ្យជាប់លើផែនទីដើម្បីផ្លាស់ប្ដូរទីតាំង',
+          style: GoogleFonts.notoSansKhmer(
+            color: AppColors.secondaryTextColor,
+            fontSize: 11,
+          ),
+        ),
       ],
     );
   }

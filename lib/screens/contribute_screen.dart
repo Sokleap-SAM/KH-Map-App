@@ -4,14 +4,18 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../models/contribution.dart';
+import '../models/place.dart';
 import '../providers/map_provider.dart';
 import '../services/auth_service.dart';
 import '../services/contribution_service.dart';
+import '../utils/auth_guard.dart';
 import '../utils/constants/colors.dart';
+import '../utils/place_request_status.dart';
 import '../widgets/bookmark_screen/favorite_place_card.dart';
 import '../widgets/contribute_screen/contribution_card.dart';
 import '../widgets/contribute_screen/contribution_form.dart';
 import '../widgets/contribute_screen/contribution_sheet.dart';
+import '../widgets/contribute_screen/my_requests_sheet.dart';
 
 /// "My Contributions" — the user's reviews, photos and self-created places,
 /// styled like the saved-places tab (header, banner, category chips, list).
@@ -29,6 +33,12 @@ class _ContributeScreenState extends State<ContributeScreen> {
   List<Contribution> _contributions = [];
   bool _loading = true;
   String? _error;
+
+  // Server-side place requests, keyed by placeId for inline status badges, plus
+  // the "already seen" set that drives the notification bell count.
+  List<Place> _requests = const [];
+  Map<String, String> _statusByPlaceId = const {};
+  Set<String> _seenRequestIds = const {};
 
   String? _categoryFilter;
   String _sort = 'recent'; // recent | rating | name | distance
@@ -71,6 +81,45 @@ class _ContributeScreenState extends State<ContributeScreen> {
         _loading = false;
       });
     }
+    // Sync the server-side request statuses (best-effort, non-blocking for the
+    // contributions list above).
+    _loadRequests();
+  }
+
+  /// Pulls the user's place requests and their statuses, plus the set of
+  /// already-seen resolved requests, to drive the inline badges and the bell.
+  Future<void> _loadRequests() async {
+    final requests = await _service.myPlaceRequests();
+    final seen = await _service.acknowledgedRequestIds();
+    if (!mounted) return;
+    setState(() {
+      _requests = requests;
+      _statusByPlaceId = {for (final p in requests) p.id: p.status};
+      _seenRequestIds = seen;
+    });
+  }
+
+  /// Approved/rejected requests the user hasn't viewed yet — the bell badge.
+  int get _unseenResolvedCount => _requests
+      .where((p) =>
+          isPlaceStatusResolved(p.status) && !_seenRequestIds.contains(p.id))
+      .length;
+
+  Future<void> _openRequests() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => MyRequestsSheet(requests: _requests),
+    );
+    // Viewing the sheet acknowledges every resolved request → clears the badge.
+    final resolved = _requests
+        .where((p) => isPlaceStatusResolved(p.status))
+        .map((p) => p.id)
+        .toList();
+    await _service.acknowledgeRequests(resolved);
+    if (!mounted) return;
+    setState(() => _seenRequestIds = {..._seenRequestIds, ...resolved});
   }
 
   // ─── Derived data ─────────────────────────────────────────────────────────
@@ -139,6 +188,10 @@ class _ContributeScreenState extends State<ContributeScreen> {
   // ─── Actions ──────────────────────────────────────────────────────────────
 
   Future<void> _openForm({Contribution? initial}) async {
+    // Guests can't contribute: their submissions never reach the backend, so
+    // gate the form behind sign-in and send them to the login page first.
+    if (!await ensureLoggedIn(context)) return;
+    if (!mounted) return;
     final saved = await showModalBottomSheet<Contribution>(
       context: context,
       isScrollControlled: true,
@@ -150,12 +203,18 @@ class _ContributeScreenState extends State<ContributeScreen> {
     await _load();
     if (!mounted) return;
     if (saved != null) {
-      // Refresh map places so a newly-created place appears and any updated
-      // average rating is reflected.
+      // Refresh map places so any updated average rating is reflected. A newly
+      // submitted custom place stays hidden until an admin approves it.
       context.read<MapProvider>().loadPlaces();
-      _snack(initial == null
-          ? 'ការចូលរួមត្រូវបានរក្សាទុក'
-          : 'ការចូលរួមត្រូវបានធ្វើបច្ចុប្បន្នភាព');
+      final String message;
+      if (initial != null) {
+        message = 'ការចូលរួមត្រូវបានធ្វើបច្ចុប្បន្នភាព';
+      } else if (saved.isCustomPlace) {
+        message = 'បានផ្ញើសំណើ — រង់ចាំការអនុម័តពីអ្នកគ្រប់គ្រង';
+      } else {
+        message = 'ការចូលរួមត្រូវបានរក្សាទុក';
+      }
+      _snack(message);
     }
   }
 
@@ -344,8 +403,23 @@ class _ContributeScreenState extends State<ContributeScreen> {
               ],
             ),
           ),
+          _notificationBell(),
           _sortMenu(hasLocation),
         ],
+      ),
+    );
+  }
+
+  Widget _notificationBell() {
+    final count = _unseenResolvedCount;
+    return IconButton(
+      tooltip: 'សំណើទីកន្លែងរបស់ខ្ញុំ',
+      onPressed: _openRequests,
+      icon: Badge(
+        isLabelVisible: count > 0,
+        label: Text('$count'),
+        backgroundColor: AppColors.alertBorderColor,
+        child: const Icon(Icons.notifications_outlined, color: Colors.white),
       ),
     );
   }
@@ -694,6 +768,9 @@ class _ContributeScreenState extends State<ContributeScreen> {
             child: ContributionCard(
               contribution: c,
               distanceLabel: dist,
+              requestStatus: c.isCustomPlace && c.placeId != null
+                  ? _statusByPlaceId[c.placeId]
+                  : null,
               onTap: () => _openDetail(c, dist),
               onRemove: () => _removeContribution(c),
               onEdit: () => _openForm(initial: c),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/models/place.dart';
+import 'package:kh_map_app/screens/place_reviews_screen.dart';
 import 'package:kh_map_app/utils/category_icon.dart';
 
 class PlaceDetailSheet extends StatefulWidget {
@@ -42,6 +43,14 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   void dispose() {
     _photoController.dispose();
     super.dispose();
+  }
+
+  void _openReviews() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PlaceReviewsScreen(place: widget.place),
+      ),
+    );
   }
 
   void _toggleFavorite() {
@@ -103,7 +112,13 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
                     ? '${place.averageRating!.toStringAsFixed(1)} '
                           '· ${place.ratingCount ?? 0} ratings'
                     : 'No ratings yet',
-                secondary: 'Rating',
+                secondary: 'Rating · Tap to read reviews',
+                onTap: _openReviews,
+                trailing: const Icon(
+                  Icons.chevron_right,
+                  color: Colors.grey,
+                  size: 22,
+                ),
               ),
               const Divider(color: _dividerColor, height: 1),
               _InfoRow(
@@ -406,17 +421,21 @@ class _InfoRow extends StatelessWidget {
   final Color? iconColor;
   final String primary;
   final String? secondary;
+  final VoidCallback? onTap;
+  final Widget? trailing;
 
   const _InfoRow({
     required this.icon,
     required this.primary,
     this.secondary,
     this.iconColor,
+    this.onTap,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final row = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -441,8 +460,12 @@ class _InfoRow extends StatelessWidget {
               ],
             ),
           ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
         ],
       ),
     );
+
+    if (onTap == null) return row;
+    return InkWell(onTap: onTap, child: row);
   }
 }
