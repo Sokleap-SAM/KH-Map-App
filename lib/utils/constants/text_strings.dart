@@ -380,6 +380,155 @@ class AppTexts {
   String get activeOnDesc => _km ? 'បង្ហាញ & ដំណើរការ' : 'Shown & running';
   String get activeOffDesc => _km ? 'បិទ' : 'Hidden (inactive)';
 
+  // ─── Place requests & reviews ──────────────────────────────────────────
+  // Request status labels.
+  String get statusApproved => _km ? 'បានអនុម័ត' : 'Approved';
+  String get statusRejected => _km ? 'បានបដិសេធ' : 'Rejected';
+  String get statusPending => _km ? 'កំពុងរង់ចាំ' : 'Pending';
+  String placeStatusLabel(String status) {
+    switch (status) {
+      case 'approved':
+        return statusApproved;
+      case 'rejected':
+        return statusRejected;
+      default:
+        return statusPending;
+    }
+  }
+
+  String get approve => _km ? 'អនុម័ត' : 'Approve';
+  String get reject => _km ? 'បដិសេធ' : 'Reject';
+  String get refresh => _km ? 'ផ្ទុកឡើងវិញ' : 'Refresh';
+  String get rejectionReasonLabel =>
+      _km ? 'មូលហេតុនៃការបដិសេធ' : 'Rejection reason';
+  String get notYet => _km ? 'មិនទាន់មាន' : 'Not yet';
+
+  // Relative "N ago" phrase (no prefix); reused by request/review screens.
+  String timeAgo(DateTime date) {
+    final d = DateTime.now().difference(date);
+    if (d.inDays >= 365) {
+      final n = d.inDays ~/ 365;
+      return _km ? '$n ឆ្នាំមុន' : (n == 1 ? '1 year ago' : '$n years ago');
+    }
+    if (d.inDays >= 30) {
+      final n = d.inDays ~/ 30;
+      return _km ? '$n ខែមុន' : (n == 1 ? '1 month ago' : '$n months ago');
+    }
+    if (d.inDays >= 7) {
+      final n = d.inDays ~/ 7;
+      return _km ? '$n សប្ដាហ៍មុន' : (n == 1 ? '1 week ago' : '$n weeks ago');
+    }
+    if (d.inDays >= 1) {
+      return _km
+          ? '${d.inDays} ថ្ងៃមុន'
+          : (d.inDays == 1 ? '1 day ago' : '${d.inDays} days ago');
+    }
+    if (d.inHours >= 1) {
+      return _km
+          ? '${d.inHours} ម៉ោងមុន'
+          : (d.inHours == 1 ? '1 hour ago' : '${d.inHours} hours ago');
+    }
+    if (d.inMinutes >= 1) {
+      return _km
+          ? '${d.inMinutes} នាទីមុន'
+          : (d.inMinutes == 1 ? '1 minute ago' : '${d.inMinutes} minutes ago');
+    }
+    return _km ? 'អម្បាញ់មិញ' : 'Just now';
+  }
+
+  String submittedAgo(DateTime date) =>
+      _km ? 'ស្នើ ${timeAgo(date)}' : 'Submitted ${timeAgo(date)}';
+  String reviewedAgo(DateTime date) =>
+      _km ? 'ត្រួតពិនិត្យ ${timeAgo(date)}' : 'Reviewed ${timeAgo(date)}';
+  String reviewedAgoBy(DateTime date, String name) => _km
+      ? 'ត្រួតពិនិត្យ ${timeAgo(date)} ដោយ $name'
+      : 'Reviewed ${timeAgo(date)} by $name';
+  String timeAgoBy(DateTime date, String name) =>
+      _km ? '${timeAgo(date)} ដោយ $name' : '${timeAgo(date)} by $name';
+
+  // Admin: place requests list.
+  String get placeRequestsTitle => _km ? 'សំណើទីកន្លែង' : 'Place requests';
+  String placeRequestsTitleCount(int n) =>
+      _km ? 'សំណើទីកន្លែង ($n)' : 'Place requests ($n)';
+  String get noNewRequests => _km ? 'គ្មានសំណើថ្មីទេ' : 'No new requests';
+  String approvedShown(String name) => _km
+      ? 'បានអនុម័ត «$name» — បង្ហាញលើផែនទីហើយ'
+      : 'Approved "$name" — now shown on the map';
+  String rejectedName(String name) =>
+      _km ? 'បានបដិសេធ «$name»' : 'Rejected "$name"';
+
+  // Admin: request detail.
+  String get submittedBy => _km ? 'ស្នើដោយ' : 'Submitted by';
+  String get submittedAt => _km ? 'ស្នើនៅ' : 'Submitted';
+  String get reviewedLabel => _km ? 'ត្រួតពិនិត្យ' : 'Reviewed';
+  String get locationOnMap => _km ? 'ទីតាំងលើផែនទី' : 'Location';
+  String get reviewThisRequest =>
+      _km ? 'សម្រេចលើសំណើនេះ' : 'Review this request';
+  String get changeStatus => _km ? 'ផ្លាស់ប្ដូរស្ថានភាព' : 'Change status';
+
+  // Admin: request history.
+  String get reviewHistory => _km ? 'ប្រវត្តិការត្រួតពិនិត្យ' : 'Review history';
+  String get noHistoryYet => _km ? 'គ្មានប្រវត្តិទេ' : 'No history yet';
+  String filterAll(int n) => _km ? 'ទាំងអស់ ($n)' : 'All ($n)';
+  String filterApproved(int n) => _km ? 'បានអនុម័ត ($n)' : 'Approved ($n)';
+  String filterRejected(int n) => _km ? 'បានបដិសេធ ($n)' : 'Rejected ($n)';
+  String submittedByName(String name) =>
+      _km ? 'ស្នើដោយ $name' : 'Submitted by $name';
+  String changedTo(String name, String status) => _km
+      ? 'បានប្ដូរ «$name» ទៅ $status'
+      : 'Changed "$name" to $status';
+
+  // My requests sheet.
+  String get newPlaceRequestStatus =>
+      _km ? 'ស្ថានភាពនៃការស្នើសុំទីកន្លែងថ្មី' : 'Status of your new-place requests';
+  String get noRequestsYet =>
+      _km ? 'អ្នកមិនទាន់បានស្នើសុំទីកន្លែងថ្មីទេ' : "You haven't requested any new places yet";
+  String get notShownOnMap => _km ? 'មិនបង្ហាញលើផែនទី' : 'Not shown on the map';
+
+  // Reject-reason dialog.
+  String get pleaseGiveRejectReason =>
+      _km ? 'សូមបញ្ជាក់មូលហេតុនៃការបដិសេធ' : 'Please give a rejection reason';
+  String rejectTitle(String name) =>
+      _km ? 'បដិសេធ «$name»' : 'Reject "$name"';
+  String get rejectReasonHelp => _km
+      ? 'សូមសរសេររបាយការណ៍ថាហេតុអ្វីបានជាបដិសេធ ដើម្បីឲ្យអ្នកស្នើអាចមើលឃើញ និងកែសម្រួល។'
+      : 'Explain why it was rejected so the submitter can see it and fix/re-submit.';
+  String get rejectReasonHint => _km
+      ? 'ឧ. រូបភាពមិនច្បាស់ / ទីតាំងមិនត្រឹមត្រូវ ...'
+      : 'e.g. blurry photos / wrong location ...';
+
+  // Reviews (place_reviews_screen + write_review_sheet).
+  String get reviews => _km ? 'ការវាយតម្លៃ' : 'Reviews';
+  String get writeReview => _km ? 'សរសេរការវាយតម្លៃ' : 'Write a review';
+  String get submitReview => _km ? 'ផ្ញើការវាយតម្លៃ' : 'Submit review';
+  String get reviewPosted => _km
+      ? 'អរគុណ! ការវាយតម្លៃរបស់អ្នកត្រូវបានផ្សាយ។'
+      : 'Thanks! Your review was posted.';
+  String reviewsCount(int n) =>
+      _km ? '$n ការវាយតម្លៃ' : (n == 1 ? '1 review' : '$n reviews');
+  String get whatPeopleSaying => _km
+      ? 'អ្វីដែលមនុស្សនិយាយអំពីទីកន្លែងនេះ'
+      : 'What people are saying about this place';
+  String get noReviewsYet => _km ? 'មិនទាន់មានការវាយតម្លៃ' : 'No reviews yet';
+  String get beFirstToReview => _km
+      ? 'ក្លាយជាអ្នកដំបូងដែលចែករំលែកបទពិសោធន៍របស់អ្នក។'
+      : 'Be the first to share your experience.';
+  String get couldNotLoadReviews =>
+      _km ? 'មិនអាចទាញយកការវាយតម្លៃបានទេ' : 'Could not load reviews';
+  String get commentLabel => _km ? 'មតិយោបល់' : 'Comment';
+  String get reviewCommentHint => _km
+      ? 'ចែករំលែកព័ត៌មានលម្អិតអំពីបទពិសោធន៍របស់អ្នកនៅទីកន្លែងនេះ…'
+      : 'Share details of your experience at this place…';
+  String get couldNotPickPhotos =>
+      _km ? 'មិនអាចជ្រើសរូបភាពបានទេ' : 'Could not pick photos';
+  String get pickStarRatingFirst =>
+      _km ? 'សូមជ្រើសរើសផ្កាយជាមុនសិន' : 'Please pick a star rating first';
+  String get logInToReview =>
+      _km ? 'សូមចូលគណនីដើម្បីសរសេរការវាយតម្លៃ' : 'Please log in to write a review';
+  String get couldNotSubmitReview => _km
+      ? 'មិនអាចផ្ញើការវាយតម្លៃបានទេ — សូមព្យាយាមម្ដងទៀត'
+      : 'Could not submit review — please try again';
+
   // ─── Auth (login / register / forgot password) ─────────────────────────
   String get passwordsDoNotMatch =>
       _km ? 'លេខសម្ងាត់មិនទាន់ត្រឹមត្រូវ' : 'Passwords do not match';
@@ -546,6 +695,13 @@ class AppTexts {
   String get statNewPlaces => _km ? 'ទីកន្លែងថ្មី' : 'New places';
   String get contributionSaved =>
       _km ? 'ការចូលរួមត្រូវបានរក្សាទុក' : 'Contribution saved';
+  String get placeRequestSubmitted => _km
+      ? 'បានផ្ញើសំណើ — រង់ចាំការអនុម័តពីអ្នកគ្រប់គ្រង'
+      : 'Request sent — waiting for admin approval';
+  String get myPlaceRequests => _km ? 'សំណើទីកន្លែងរបស់ខ្ញុំ' : 'My place requests';
+  String get tapOrLongPressToMove => _km
+      ? 'ប៉ះ ឬ ចុចឲ្យជាប់លើផែនទីដើម្បីផ្លាស់ប្ដូរទីតាំង'
+      : 'Tap or long-press the map to move the location';
   String get contributionUpdated =>
       _km ? 'ការចូលរួមត្រូវបានធ្វើបច្ចុប្បន្នភាព' : 'Contribution updated';
   String contributionRemoved(String name) =>
