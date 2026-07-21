@@ -6,6 +6,7 @@ import '../../models/place.dart';
 import '../../services/admin_service.dart';
 import '../../utils/constants/colors.dart';
 import 'admin_map_size_button.dart';
+import 'admin_place_requests_screen.dart';
 import 'admin_stop_edit_screen.dart';
 
 /// Stops tab — CRUD over /places. An overview map at the top shows every stop;
@@ -28,6 +29,9 @@ class _AdminStopsScreenState extends State<AdminStopsScreen> {
   String _filter = '';
   LatLng? _selected;
 
+  // Count of user-submitted places awaiting review — drives the bell badge.
+  int _pendingCount = 0;
+
   // Resizable map "banner": fraction of body height (60% → 30% → 10%).
   static const List<double> _mapSizes = [0.6, 0.3, 0.1];
   double _mapFraction = 0.3;
@@ -44,6 +48,7 @@ class _AdminStopsScreenState extends State<AdminStopsScreen> {
   void initState() {
     super.initState();
     _load();
+    _loadPendingCount();
   }
 
   Future<void> _load() async {
@@ -64,6 +69,26 @@ class _AdminStopsScreenState extends State<AdminStopsScreen> {
         _loading = false;
       });
     }
+  }
+
+  /// Refreshes the pending-request badge count. Best-effort and silent.
+  Future<void> _loadPendingCount() async {
+    try {
+      final requests = await _service.fetchPendingPlaceRequests();
+      if (!mounted) return;
+      setState(() => _pendingCount = requests.length);
+    } catch (_) {/* leave the previous count */}
+  }
+
+  /// Opens the request review queue, then refreshes the badge and — since an
+  /// approval publishes a new place — the stop list/map too.
+  Future<void> _openRequests() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const AdminPlaceRequestsScreen()),
+    );
+    if (!mounted) return;
+    _loadPendingCount();
+    _load();
   }
 
   Future<StopUsage> _usage(String placeId) =>
@@ -176,8 +201,23 @@ class _AdminStopsScreenState extends State<AdminStopsScreen> {
         title: const Text('គ្រប់គ្រងចំណត (Stops)'),
         actions: [
           IconButton(
+            tooltip: 'សំណើទីកន្លែង',
+            icon: Badge(
+              isLabelVisible: _pendingCount > 0,
+              label: Text('$_pendingCount'),
+              backgroundColor: AppColors.alertBorderColor,
+              child: const Icon(Icons.notifications_outlined),
+            ),
+            onPressed: _openRequests,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loading ? null : _load,
+            onPressed: _loading
+                ? null
+                : () {
+                    _load();
+                    _loadPendingCount();
+                  },
           ),
         ],
       ),
