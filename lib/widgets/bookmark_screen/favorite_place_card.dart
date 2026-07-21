@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/settings_provider.dart';
 import '../../services/favorites_service.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
 
 /// Surface colour shared by the saved-places cards, banner and sheet.
 const Color kFavSurfaceColor = Color(0xFF1A2A4C);
@@ -19,18 +22,6 @@ String formatCategoryLabel(String? name) {
       .where((w) => w.isNotEmpty)
       .map((w) => w[0].toUpperCase() + w.substring(1))
       .join(' ');
-}
-
-/// Human, Khmer-language "saved N days ago" style label.
-String favoriteSavedLabel(DateTime savedAt) {
-  final diff = DateTime.now().difference(savedAt);
-  if (diff.inDays >= 365) return 'បានរក្សាទុក ${diff.inDays ~/ 365} ឆ្នាំមុន';
-  if (diff.inDays >= 30) return 'បានរក្សាទុក ${diff.inDays ~/ 30} ខែមុន';
-  if (diff.inDays >= 7) return 'បានរក្សាទុក ${diff.inDays ~/ 7} សប្ដាហ៍មុន';
-  if (diff.inDays >= 1) return 'បានរក្សាទុក ${diff.inDays} ថ្ងៃមុន';
-  if (diff.inHours >= 1) return 'បានរក្សាទុក ${diff.inHours} ម៉ោងមុន';
-  if (diff.inMinutes >= 1) return 'បានរក្សាទុក ${diff.inMinutes} នាទីមុន';
-  return 'បានរក្សាទុកអម្បាញ់មិញ';
 }
 
 /// A single saved place, styled after a Google Maps "saved list" row:
@@ -53,6 +44,7 @@ class FavoritePlaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     final color = getColorForCategory(favorite.categoryName);
     final icon = getIconForCategory(favorite.categoryName);
 
@@ -73,8 +65,8 @@ class FavoritePlaceCard extends StatelessWidget {
             children: [
               _thumbnail(icon, color),
               const SizedBox(width: 12),
-              Expanded(child: _details(context, icon, color)),
-              _menu(context),
+              Expanded(child: _details(context, t, icon, color)),
+              _menu(context, t),
             ],
           ),
         ),
@@ -109,7 +101,12 @@ class FavoritePlaceCard extends StatelessWidget {
     );
   }
 
-  Widget _details(BuildContext context, IconData icon, Color color) {
+  Widget _details(
+    BuildContext context,
+    AppTexts t,
+    IconData icon,
+    Color color,
+  ) {
     final coords =
         '${favorite.latitude.toStringAsFixed(4)}, '
         '${favorite.longitude.toStringAsFixed(4)}';
@@ -120,7 +117,9 @@ class FavoritePlaceCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          favorite.name,
+          favorite.localizedName(
+            context.watch<SettingsProvider>().languageCode,
+          ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.notoSansKhmer(
@@ -134,7 +133,7 @@ class FavoritePlaceCard extends StatelessWidget {
         const SizedBox(height: 5),
         _metaLine(Icons.place_outlined, locationLine),
         const SizedBox(height: 3),
-        _metaLine(Icons.bookmark, favoriteSavedLabel(favorite.favoritedAt)),
+        _metaLine(Icons.bookmark, t.savedAgo(favorite.favoritedAt)),
       ],
     );
   }
@@ -211,23 +210,23 @@ class FavoritePlaceCard extends StatelessWidget {
     );
   }
 
-  Widget _menu(BuildContext context) {
+  Widget _menu(BuildContext context, AppTexts t) {
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, color: Colors.white54, size: 20),
       color: const Color(0xFF243456),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: EdgeInsets.zero,
-      tooltip: 'ជម្រើស',
+      tooltip: t.options,
       onSelected: (value) {
         if (value == 'copy') onCopy();
         if (value == 'remove') onRemove();
       },
       itemBuilder: (_) => [
-        _menuItem('copy', Icons.copy_rounded, 'ចម្លងទីតាំង', Colors.white),
+        _menuItem('copy', Icons.copy_rounded, t.copyLocation, Colors.white),
         _menuItem(
           'remove',
           Icons.bookmark_remove_outlined,
-          'លុបចេញពីចំណាំ',
+          t.removeFromBookmarks,
           AppColors.alertBorderColor,
         ),
       ],

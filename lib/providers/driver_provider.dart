@@ -57,7 +57,10 @@ class DriverProvider extends ChangeNotifier {
 
   /// Human-readable route title for a trip ("code name"), resolved from the
   /// route cache, falling back to whatever the trip payload carried.
-  String routeTitle(Trip t) {
+  ///
+  /// [fallback] is used when nothing resolves; pass the localized
+  /// `AppTexts.tripFallbackName` from the UI (this provider has no context).
+  String routeTitle(Trip t, {String? fallback}) {
     final r = _routes[t.routeId];
     final code = r?.code ?? (t.routeNumber == '??' ? null : t.routeNumber);
     final name = r?.name ?? t.routeName;
@@ -65,7 +68,7 @@ class DriverProvider extends ChangeNotifier {
       code,
       name,
     ].where((e) => e != null && e.isNotEmpty).join(' ');
-    return label.isEmpty ? 'ដំណើរ' : label;
+    return label.isEmpty ? (fallback ?? 'ដំណើរ') : label;
   }
 
   /// Bus number for a trip. Every trip is on the driver's assigned bus, so we

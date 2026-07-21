@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/settings_provider.dart';
 
 /// Parse a backend route `color` string (`#RRGGBB`, `RRGGBB`, or `#AARRGGBB`)
 /// into a [Color]. Returns null when absent/invalid so callers can fall back.
@@ -77,8 +80,9 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return AlertDialog(
-      title: const Text('ជ្រើសរើសពណ៌ (Pick color)'),
+      title: Text(t.pickColor),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -206,11 +210,11 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('បោះបង់'),
+          child: Text(t.cancel),
         ),
         ElevatedButton(
           onPressed: () => Navigator.of(context).pop(colorToHex(_color)),
-          child: const Text('យល់ព្រម'),
+          child: Text(t.confirmWord),
         ),
       ],
     );

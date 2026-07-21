@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/admin_dashboard.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
 
 /// Admin home: live/simulation mode badge + aggregate counts from
 /// GET /transit/admin/dashboard. Day/Week/Month/Year tabs re-query the
@@ -56,11 +59,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        title: const Text('ផ្ទាំងគ្រប់គ្រង'),
+        title: Text(t.adminDashboardTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -68,11 +72,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         ],
       ),
-      body: _buildBody(),
+      body: _buildBody(t),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AppTexts t) {
     if (_loading && _data == null) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -87,7 +91,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: _load,
-                child: const Text('ព្យាយាមម្ដងទៀត'),
+                child: Text(t.tryAgain),
               ),
             ],
           ),
@@ -131,11 +135,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           else
             const SizedBox(height: 2),
           const SizedBox(height: 12),
-          _sectionHeader('ស្ថានភាពបច្ចុប្បន្ន', null),
+          _sectionHeader(t.currentStatus, null),
           const SizedBox(height: 8),
           _grid(liveCards),
           const SizedBox(height: 20),
-          _sectionHeader('ក្នុងថេរវេលា', _windowLabel(data)),
+          _sectionHeader(t.overPeriod, _windowLabel(data)),
           const SizedBox(height: 8),
           _grid(periodCards),
         ],
@@ -144,6 +148,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _periodTabs() {
+    final lang = context.watch<SettingsProvider>().languageCode;
     return Row(
       children: [
         for (final p in DashboardPeriod.values)
@@ -151,7 +156,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 3),
               child: _PeriodTab(
-                label: p.labelKm,
+                label: p.label(lang),
                 selected: p == _period,
                 onTap: () => _selectPeriod(p),
               ),
@@ -209,6 +214,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _modeBanner(AdminDashboard data) {
+    final t = context.watch<SettingsProvider>().t;
     final sim = data.isSimulation;
     final color = sim ? Colors.orange : Colors.green;
     return Container(
@@ -227,16 +233,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  sim ? 'ក្លែងធ្វើ' : 'ផ្សាយផ្ទាល់',
+                  sim ? t.simulated : t.live,
                   style: TextStyle(
                     color: color.shade800,
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const Text(
-                  'របៀបប្រព័ន្ធ',
-                  style: TextStyle(color: Colors.black54, fontSize: 12),
+                Text(
+                  t.systemMode,
+                  style: const TextStyle(color: Colors.black54, fontSize: 12),
                 ),
               ],
             ),
@@ -331,7 +337,9 @@ class _MetricCard extends StatelessWidget {
           ),
           const Spacer(),
           Text(
-            metric.labelKm,
+            context.watch<SettingsProvider>().languageCode == 'en'
+                ? metric.labelEn
+                : metric.labelKm,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -339,12 +347,6 @@ class _MetricCard extends StatelessWidget {
               fontWeight: FontWeight.w600,
               color: Colors.black87,
             ),
-          ),
-          Text(
-            metric.labelEn,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, color: Colors.black45),
           ),
         ],
       ),

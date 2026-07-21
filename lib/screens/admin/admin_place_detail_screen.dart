@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/place.dart';
+import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
 import 'admin_place_edit_screen.dart';
 
@@ -43,6 +45,9 @@ class _AdminPlaceDetailScreenState extends State<AdminPlaceDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final p = _place;
+    final settings = context.watch<SettingsProvider>();
+    final lang = settings.languageCode;
+    final t = settings.t;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -52,11 +57,11 @@ class _AdminPlaceDetailScreenState extends State<AdminPlaceDetailScreen> {
         appBar: AppBar(
           backgroundColor: AppColors.primaryColor,
           foregroundColor: Colors.white,
-          title: Text(p.name),
+          title: Text(p.localizedName(lang)),
           actions: [
             IconButton(
               icon: const Icon(Icons.edit),
-              tooltip: 'កែ (Edit)',
+              tooltip: t.edit,
               onPressed: _edit,
             ),
           ],
@@ -69,23 +74,24 @@ class _AdminPlaceDetailScreenState extends State<AdminPlaceDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(p.name,
+                  Text(p.localizedName(lang),
                       style: const TextStyle(
                           fontSize: 22, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   _row('ID', p.id),
-                  _row('ប្រភេទ (Category)', p.category?.name ?? '—'),
-                  _row('ទីតាំង (Location)',
-                      '${p.latitude}, ${p.longitude}'),
-                  _row('ចំនួនផ្តល់ពិន្ទុ (Rating count)',
-                      p.ratingCount?.toString() ?? '0'),
+                  _row(t.khmerName, p.nameInKhmer),
+                  _row(t.latinName,
+                      p.nameInLatin.isEmpty ? '—' : p.nameInLatin),
+                  _row(t.category, p.category?.name ?? '—'),
+                  _row(t.locationLabel, '${p.latitude}, ${p.longitude}'),
+                  _row(t.ratingCount, p.ratingCount?.toString() ?? '0'),
                   _row(
-                    'ពិន្ទុមធ្យម (Average rating)',
+                    t.averageRating,
                     p.averageRating != null
                         ? '${p.averageRating!.toStringAsFixed(1)} / 5'
                         : '—',
                   ),
-                  _row('ចំនួនរូបភាព (Photos)', '${p.photos.length}'),
+                  _row(t.photosCountLabel, '${p.photos.length}'),
                 ],
               ),
             ),
@@ -103,8 +109,8 @@ class _AdminPlaceDetailScreenState extends State<AdminPlaceDetailScreen> {
         height: 160,
         color: Colors.black12,
         alignment: Alignment.center,
-        child: const Text('មិនមានរូបភាព (No photos)',
-            style: TextStyle(color: Colors.grey)),
+        child: Text(context.watch<SettingsProvider>().t.noPhotos,
+            style: const TextStyle(color: Colors.grey)),
       );
     }
     return SizedBox(

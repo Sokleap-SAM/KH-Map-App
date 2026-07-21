@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/favorite_route.dart';
+import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
-import 'favorite_place_card.dart'
-    show kFavSurfaceColor, kFavBorderColor, favoriteSavedLabel;
+import '../../utils/constants/text_strings.dart';
+import 'favorite_place_card.dart' show kFavSurfaceColor, kFavBorderColor;
 
 /// A saved transit route row in the bookmark screen, styled to match
 /// [FavoritePlaceCard]: a leading route badge, the origin → destination line,
@@ -23,6 +25,7 @@ class FavoriteRouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Material(
       color: kFavSurfaceColor,
       borderRadius: BorderRadius.circular(16),
@@ -40,8 +43,8 @@ class FavoriteRouteCard extends StatelessWidget {
             children: [
               _badge(),
               const SizedBox(width: 12),
-              Expanded(child: _details()),
-              _menu(context),
+              Expanded(child: _details(t)),
+              _menu(context, t),
             ],
           ),
         ),
@@ -66,7 +69,7 @@ class FavoriteRouteCard extends StatelessWidget {
     );
   }
 
-  Widget _details() {
+  Widget _details(AppTexts t) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -98,7 +101,7 @@ class FavoriteRouteCard extends StatelessWidget {
             const Icon(Icons.bookmark, size: 13, color: Colors.white38),
             const SizedBox(width: 5),
             Text(
-              favoriteSavedLabel(favorite.savedAt),
+              t.savedAgo(favorite.savedAt),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.notoSansKhmer(
@@ -132,13 +135,13 @@ class FavoriteRouteCard extends StatelessWidget {
     );
   }
 
-  Widget _menu(BuildContext context) {
+  Widget _menu(BuildContext context, AppTexts t) {
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, color: Colors.white54, size: 20),
       color: const Color(0xFF243456),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: EdgeInsets.zero,
-      tooltip: 'ជម្រើស',
+      tooltip: t.options,
       onSelected: (value) {
         if (value == 'remove') onRemove();
       },
@@ -154,7 +157,7 @@ class FavoriteRouteCard extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                'លុបចេញពីចំណាំ',
+                t.removeFromBookmarks,
                 style: GoogleFonts.notoSansKhmer(
                   color: AppColors.alertBorderColor,
                   fontSize: 13,

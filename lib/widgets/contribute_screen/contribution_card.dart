@@ -2,23 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/contribution.dart';
+import '../../providers/settings_provider.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
 import '../bookmark_screen/favorite_place_card.dart';
-
-/// Khmer "added N days ago" label.
-String contributionAddedLabel(DateTime createdAt) {
-  final diff = DateTime.now().difference(createdAt);
-  if (diff.inDays >= 365) return 'បានបន្ថែម ${diff.inDays ~/ 365} ឆ្នាំមុន';
-  if (diff.inDays >= 30) return 'បានបន្ថែម ${diff.inDays ~/ 30} ខែមុន';
-  if (diff.inDays >= 7) return 'បានបន្ថែម ${diff.inDays ~/ 7} សប្ដាហ៍មុន';
-  if (diff.inDays >= 1) return 'បានបន្ថែម ${diff.inDays} ថ្ងៃមុន';
-  if (diff.inHours >= 1) return 'បានបន្ថែម ${diff.inHours} ម៉ោងមុន';
-  if (diff.inMinutes >= 1) return 'បានបន្ថែម ${diff.inMinutes} នាទីមុន';
-  return 'បានបន្ថែមអម្បាញ់មិញ';
-}
 
 /// Renders a single photo path (local file or remote URL) into an Image widget.
 Widget contributionPhoto(
@@ -52,6 +43,9 @@ class ContributionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    final lang = settings.languageCode;
+    final t = settings.t;
     final color = getColorForCategory(contribution.categoryName);
     final icon = getIconForCategory(contribution.categoryName);
 
@@ -75,8 +69,8 @@ class ContributionCard extends StatelessWidget {
                 children: [
                   _thumbnail(icon, color),
                   const SizedBox(width: 12),
-                  Expanded(child: _details(icon, color)),
-                  _menu(),
+                  Expanded(child: _details(icon, color, lang, t)),
+                  _menu(t),
                 ],
               ),
               if (contribution.comment.trim().isNotEmpty) ...[
@@ -117,7 +111,7 @@ class ContributionCard extends StatelessWidget {
     );
   }
 
-  Widget _details(IconData icon, Color color) {
+  Widget _details(IconData icon, Color color, String lang, AppTexts t) {
     final coords =
         '${contribution.latitude.toStringAsFixed(4)}, '
         '${contribution.longitude.toStringAsFixed(4)}';
@@ -131,7 +125,7 @@ class ContributionCard extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                contribution.placeName,
+                contribution.localizedPlaceLabel(lang),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.notoSansKhmer(
@@ -143,7 +137,7 @@ class ContributionCard extends StatelessWidget {
             ),
             if (contribution.isCustomPlace) ...[
               const SizedBox(width: 4),
-              _customBadge(),
+              _customBadge(t),
             ],
           ],
         ),
@@ -152,12 +146,12 @@ class ContributionCard extends StatelessWidget {
         const SizedBox(height: 5),
         _metaLine(Icons.place_outlined, locationLine),
         const SizedBox(height: 3),
-        _metaLine(Icons.edit_outlined, contributionAddedLabel(contribution.createdAt)),
+        _metaLine(Icons.edit_outlined, t.addedAgo(contribution.createdAt)),
       ],
     );
   }
 
-  Widget _customBadge() {
+  Widget _customBadge(AppTexts t) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -166,7 +160,7 @@ class ContributionCard extends StatelessWidget {
         border: Border.all(color: AppColors.secondaryColor.withAlpha(120)),
       ),
       child: Text(
-        'ថ្មី',
+        t.newBadge,
         style: GoogleFonts.notoSansKhmer(
           color: AppColors.secondaryColor,
           fontSize: 10,
@@ -308,23 +302,23 @@ class ContributionCard extends StatelessWidget {
     );
   }
 
-  Widget _menu() {
+  Widget _menu(AppTexts t) {
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, color: Colors.white54, size: 20),
       color: const Color(0xFF243456),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: EdgeInsets.zero,
-      tooltip: 'ជម្រើស',
+      tooltip: t.options,
       onSelected: (value) {
         if (value == 'edit') onEdit();
         if (value == 'remove') onRemove();
       },
       itemBuilder: (_) => [
-        _menuItem('edit', Icons.edit_outlined, 'កែសម្រួល', Colors.white),
+        _menuItem('edit', Icons.edit_outlined, t.edit, Colors.white),
         _menuItem(
           'remove',
           Icons.delete_outline_rounded,
-          'លុបការចូលរួម',
+          t.deleteContribution,
           AppColors.alertBorderColor,
         ),
       ],

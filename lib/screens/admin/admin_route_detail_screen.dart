@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/admin_route.dart';
 import '../../models/place.dart';
 import '../../models/route_stop.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
+import '../../utils/constants/text_strings.dart';
 import '../../services/transit_service.dart';
 import '../../utils/constants/colors.dart';
 import 'admin_color_picker.dart';
@@ -38,6 +41,8 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
   final TransitService _transit = TransitService();
   final AdminService _admin = AdminService();
   final MapController _mapController = MapController();
+
+  AppTexts get _t => context.read<SettingsProvider>().t;
 
   List<RouteStop> _stops = const [];
   bool _loading = true;
@@ -81,7 +86,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
         final msg = e is AdminApiException ? e.message : e.toString();
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('បរាជ័យ: $msg')));
+        ).showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
       }
       return null;
     }
@@ -211,9 +216,14 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
   Future<void> _changePlace(RouteStop stop) async {
     final picked = await _pickPlace();
     if (picked == null || !mounted) return;
+    final settings = context.read<SettingsProvider>();
+    final lang = settings.languageCode;
     final ok = await _confirm(
-      title: 'ប្ដូរទីកន្លែង?',
-      message: 'ប្ដូរ "${stop.stopName}" ទៅ "${picked.name}"?',
+      title: settings.t.changePlaceQuestion,
+      message: settings.t.changePlaceMsg(
+        stop.localizedStopName(lang),
+        picked.localizedName(lang),
+      ),
     );
     if (ok != true) return;
     try {
@@ -224,7 +234,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
       if (!mounted) return;
       final msg = e is AdminApiException ? e.message : e.toString();
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('បរាជ័យ: $msg')));
+          .showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
     }
   }
 
@@ -237,7 +247,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
       if (mounted) {
         final msg = e is AdminApiException ? e.message : e.toString();
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('បរាជ័យ: $msg')));
+            .showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
       }
       return null;
     }
@@ -253,7 +263,11 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
             final q = filter.toLowerCase();
             final items = q.isEmpty
                 ? all
-                : all.where((p) => p.name.toLowerCase().contains(q)).toList();
+                : all
+                    .where((p) =>
+                        p.nameInKhmer.toLowerCase().contains(q) ||
+                        p.nameInLatin.toLowerCase().contains(q))
+                    .toList();
             return SizedBox(
               height: MediaQuery.of(ctx).size.height * 0.7,
               child: Column(
@@ -262,10 +276,10 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
                     padding: const EdgeInsets.all(12),
                     child: TextField(
                       autofocus: true,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
-                        hintText: 'ស្វែងរកចំណត (Search stops)',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search),
+                        hintText: _t.searchStops,
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       onChanged: (v) => setSheetState(() => filter = v),
@@ -273,7 +287,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
                   ),
                   Expanded(
                     child: items.isEmpty
-                        ? const Center(child: Text('មិនមានចំណត'))
+                        ? Center(child: Text(_t.noStops))
                         : ListView.separated(
                             itemCount: items.length,
                             separatorBuilder: (_, _) =>
@@ -286,7 +300,13 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
                                   Icons.place,
                                   color: AppColors.primaryColor,
                                 ),
-                                title: Text(p.name),
+                                title: Text(
+                                  p.localizedName(
+                                    context
+                                        .read<SettingsProvider>()
+                                        .languageCode,
+                                  ),
+                                ),
                                 subtitle: Text(
                                   '${p.latitude}, ${p.longitude}',
                                   style: const TextStyle(fontSize: 11),
@@ -312,24 +332,24 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
     if (_selected.isEmpty || _bulkDeleting) return;
     final targets = _stops.where((s) => _selected.contains(s.id)).toList()
       ..sort((a, b) => b.stopOrder.compareTo(a.stopOrder));
+    final t = _t;
     final ok = await _confirm(
-      title: 'លុបចំណត ${targets.length}?',
-      message:
-          'លុប ${targets.length} ចំណតចេញពីផ្លូវ? ផ្លូវនឹងត្រូវគណនាឡើងវិញ '
-          '(segments recompute automatically).',
+      title: t.deleteNStopsTitle(targets.length),
+      message: t.deleteNStopsMsg(targets.length),
     );
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
     setState(() {
       _bulkDeleting = true;
       _bulkDone = 0;
       _bulkTotal = targets.length;
     });
     final failed = <String>[];
+    final lang = context.read<SettingsProvider>().languageCode;
     for (final s in targets) {
       try {
         await _admin.deleteRouteStop(s.id);
       } catch (_) {
-        failed.add(s.stopName);
+        failed.add(s.localizedStopName(lang));
       }
       if (!mounted) return;
       setState(() => _bulkDone++);
@@ -345,9 +365,12 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
       SnackBar(
         content: Text(
           failed.isEmpty
-              ? 'បានលុប ${targets.length} ចំណត (deleted)'
-              : 'បានលុប ${targets.length - failed.length}, បរាជ័យ '
-                    '${failed.length}: ${failed.join(', ')}',
+              ? t.deletedNStops(targets.length)
+              : t.deletedSomeFailed(
+                  targets.length - failed.length,
+                  failed.length,
+                  failed.join(', '),
+                ),
         ),
       ),
     );
@@ -355,9 +378,12 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
   }
 
   Future<void> _deleteStop(RouteStop stop) async {
+    final settings = context.read<SettingsProvider>();
     final ok = await _confirm(
-      title: 'លុបចំណត?',
-      message: 'លុប "${stop.stopName}" ចេញពីផ្លូវ?',
+      title: settings.t.deleteStopTitle,
+      message: settings.t.deleteStopMsg(
+        stop.localizedStopName(settings.languageCode),
+      ),
     );
     if (ok != true) return;
     try {
@@ -368,15 +394,15 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
       if (!mounted) return;
       final msg = e is AdminApiException ? e.message : e.toString();
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('បរាជ័យ: $msg')));
+          .showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
     }
   }
 
   Future<void> _deleteRoute() async {
+    final t = _t;
     final ok = await _confirm(
-      title: 'លុបផ្លូវទាំងមូល?',
-      message: 'លុបផ្លូវ "${_summary.code ?? _summary.name}" '
-          'និងចំណតទាំងអស់? សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។',
+      title: t.deleteWholeRouteTitle,
+      message: t.deleteRouteMsg(_summary.code ?? _summary.name ?? ''),
     );
     if (ok != true) return;
     try {
@@ -387,7 +413,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
       if (!mounted) return;
       final msg = e is AdminApiException ? e.message : e.toString();
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('បរាជ័យ: $msg')));
+          .showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
     }
   }
 
@@ -400,12 +426,12 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('បោះបង់'),
+            child: Text(_t.cancel),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('លុប', style: TextStyle(color: Colors.white)),
+            child: Text(_t.delete, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -414,6 +440,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     final s = _summary;
     final title = [
       if (s.code != null && s.code!.isNotEmpty) s.code,
@@ -440,11 +467,11 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
                   icon: const Icon(Icons.close),
                   onPressed: _bulkDeleting ? null : _exitSelection,
                 ),
-                title: Text('${_selected.length} បានជ្រើសរើស'),
+                title: Text(t.nSelected(_selected.length)),
                 actions: [
                   IconButton(
                     icon: const Icon(Icons.select_all),
-                    tooltip: 'ជ្រើសរើសទាំងអស់',
+                    tooltip: t.selectAll,
                     onPressed: _bulkDeleting
                         ? null
                         : () => setState(() {
@@ -459,7 +486,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete),
-                    tooltip: 'លុបចំណតដែលបានជ្រើសរើស',
+                    tooltip: t.deleteSelectedStops,
                     onPressed: (_selected.isEmpty || _bulkDeleting)
                         ? null
                         : _bulkDelete,
@@ -473,19 +500,19 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
                 actions: [
                   IconButton(
                     icon: const Icon(Icons.checklist),
-                    tooltip: 'ជ្រើសរើសច្រើន (Select stops)',
+                    tooltip: t.selectStops,
                     onPressed: _stops.isEmpty
                         ? null
                         : () => setState(() => _selecting = true),
                   ),
                   IconButton(
                     icon: const Icon(Icons.edit),
-                    tooltip: 'កែផ្លូវ (Edit route)',
+                    tooltip: t.editRoute,
                     onPressed: _editRoute,
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_forever),
-                    tooltip: 'លុបផ្លូវ',
+                    tooltip: t.deleteRoute,
                     onPressed: _deleteRoute,
                   ),
                 ],
@@ -498,7 +525,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
                 foregroundColor: Colors.white,
                 onPressed: _append,
                 icon: const Icon(Icons.add_location_alt),
-                label: const Text('បន្ថែមចំណត'),
+                label: Text(t.addStops),
               ),
         body: _loading && _stops.isEmpty
             ? const Center(child: CircularProgressIndicator())
@@ -637,14 +664,16 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  s.stopName,
+                  s.localizedStopName(
+                    context.read<SettingsProvider>().languageCode,
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
               IconButton(
-                tooltip: 'មើល (View detail)',
+                tooltip: _t.viewDetail,
                 icon: const Icon(
                   Icons.visibility,
                   color: AppColors.primaryColor,
@@ -655,7 +684,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
               // first stop has no incoming segment, so no button there.
               if (_stops.indexWhere((x) => x.id == s.id) > 0)
                 IconButton(
-                  tooltip: 'កែផ្លូវចូល (Edit segment)',
+                  tooltip: _t.editSegment,
                   icon: const Icon(Icons.route, color: AppColors.primaryColor),
                   onPressed: () {
                     final i = _stops.indexWhere((x) => x.id == s.id);
@@ -663,12 +692,12 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
                   },
                 ),
               IconButton(
-                tooltip: 'លុប (Delete)',
+                tooltip: _t.delete,
                 icon: const Icon(Icons.delete, color: Colors.red),
                 onPressed: () => _deleteStop(s),
               ),
               IconButton(
-                tooltip: 'បិទ',
+                tooltip: _t.close,
                 icon: const Icon(Icons.close, size: 18),
                 onPressed: () => setState(() => _mapSelected = null),
               ),
@@ -680,6 +709,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
   }
 
   Widget _buildStopList() {
+    final t = _t;
     if (_error != null && _stops.isEmpty) {
       return Center(
         child: Padding(
@@ -689,7 +719,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
       );
     }
     if (_stops.isEmpty) {
-      return const Center(child: Text('មិនទាន់មានចំណត'));
+      return Center(child: Text(_t.noStopsYet));
     }
     return ListView.separated(
       padding: const EdgeInsets.only(bottom: 88),
@@ -717,7 +747,11 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
               style: const TextStyle(color: Colors.white, fontSize: 12),
             ),
           ),
-          title: Text(stop.stopName),
+          title: Text(
+            stop.localizedStopName(
+              context.read<SettingsProvider>().languageCode,
+            ),
+          ),
           subtitle: Text(
             '${stop.location.latitude}, ${stop.location.longitude}',
             style: const TextStyle(fontSize: 11),
@@ -730,7 +764,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
                       : (_) => _toggleSelected(stop),
                 )
               : PopupMenuButton<String>(
-            tooltip: 'ជម្រើស',
+            tooltip: t.options,
             onSelected: (v) {
               switch (v) {
                 case 'fix':
@@ -744,33 +778,33 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
             itemBuilder: (_) => [
               // First stop has no incoming segment to fix.
               if (i > 0)
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'fix',
                   child: ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.route),
-                    title: Text('កែផ្លូវចូល (Fix road)'),
+                    leading: const Icon(Icons.route),
+                    title: Text(t.fixRoad),
                   ),
                 ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'place',
                 child: ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.swap_horiz),
-                  title: Text('ប្ដូរទីកន្លែង (Change place)'),
+                  leading: const Icon(Icons.swap_horiz),
+                  title: Text(t.changePlace),
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'delete',
                 child: ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.delete, color: Colors.red),
+                  leading: const Icon(Icons.delete, color: Colors.red),
                   title: Text(
-                    'លុប (Delete)',
-                    style: TextStyle(color: Colors.red),
+                    t.delete,
+                    style: const TextStyle(color: Colors.red),
                   ),
                 ),
               ),

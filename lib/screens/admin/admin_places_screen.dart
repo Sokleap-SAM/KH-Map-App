@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/place.dart';
 import '../../models/place_category.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
 import 'admin_map_size_button.dart';
 import 'admin_place_detail_screen.dart';
 import 'admin_place_edit_screen.dart';
@@ -24,6 +27,10 @@ class AdminPlacesScreen extends StatefulWidget {
 class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
   final AdminService _service = AdminService();
   final MapController _mapController = MapController();
+
+  /// Localized strings for the active language. `build` watches
+  /// SettingsProvider, so reading here (listen:false) still rebuilds on change.
+  AppTexts get _t => context.read<SettingsProvider>().t;
 
   List<Place> _places = const [];
   List<PlaceCategory> _categories = const [];
@@ -95,7 +102,9 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
       if (_categoryFilter != null && p.category?.id != _categoryFilter) {
         return false;
       }
-      return q.isEmpty || p.name.toLowerCase().contains(q);
+      return q.isEmpty ||
+          p.nameInKhmer.toLowerCase().contains(q) ||
+          p.nameInLatin.toLowerCase().contains(q);
     }).toList();
   }
 
@@ -129,22 +138,24 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
   }
 
   Future<void> _delete(Place p) async {
+    final settings = context.read<SettingsProvider>();
+    final t = settings.t;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('លុបទីកន្លែង?'),
-        content: Text('លុប "${p.name}"?'),
+        title: Text(t.deletePlaceTitle),
+        content: Text(t.deleteQuoted(p.localizedName(settings.languageCode))),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('បោះបង់'),
+            child: Text(t.cancel),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text(
-              'បញ្ជាក់',
-              style: TextStyle(color: Colors.white),
+            child: Text(
+              t.confirmWord,
+              style: const TextStyle(color: Colors.white),
             ),
           ),
         ],
@@ -162,13 +173,13 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
       } else {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('បរាជ័យ: ${e.message}')));
+        ).showSnackBar(SnackBar(content: Text(t.failedWith(e.message))));
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('បរាជ័យ: $e')));
+      ).showSnackBar(SnackBar(content: Text(t.failedWith('$e'))));
     }
   }
 
@@ -179,17 +190,22 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
       usage = await _service.fetchStopRoutes(p.id);
     } catch (_) {}
     if (!mounted) return;
+    final settings = context.read<SettingsProvider>();
+    final t = settings.t;
     final routes = usage?.routes ?? const [];
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('មិនអាចលុបបានទេ (In use)'),
+        title: Text(t.cannotDeleteInUse),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '"${p.name}" ត្រូវបានប្រើនៅក្នុង ${usage?.count ?? routes.length} ផ្លូវ៖',
+              t.usedInRoutes(
+                p.localizedName(settings.languageCode),
+                usage?.count ?? routes.length,
+              ),
             ),
             const SizedBox(height: 8),
             if (routes.isEmpty)
@@ -205,7 +221,7 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('យល់ព្រម'),
+            child: Text(t.yes),
           ),
         ],
       ),
@@ -214,11 +230,14 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Establishes the rebuild-on-language-change dependency; item builders read
+    // the language with `read`.
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        title: const Text('គ្រប់គ្រងទីកន្លែង'),
+        title: Text(t.managePlaces),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -232,13 +251,13 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
         foregroundColor: Colors.white,
         onPressed: _create,
         icon: const Icon(Icons.add_location_alt),
-        label: const Text('បង្កើតទីកន្លែង'),
+        label: Text(t.newPlace),
       ),
-      body: _buildBody(),
+      body: _buildBody(t),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AppTexts t) {
     if (_loading && _places.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -253,7 +272,7 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: _load,
-                child: const Text('ព្យាយាមម្ដងទៀត'),
+                child: Text(t.tryAgain),
               ),
             ],
           ),
@@ -275,27 +294,27 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
                 ],
               ),
             ),
-            _buildCategoryFilter(),
+            _buildCategoryFilter(t),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
               child: TextField(
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'ស្វែងរកតាមឈ្មោះ',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: t.searchByName,
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
                 onChanged: (v) => setState(() => _filter = v),
               ),
             ),
-            Expanded(child: _buildList()),
+            Expanded(child: _buildList(t)),
           ],
         );
       },
     );
   }
 
-  Widget _buildCategoryFilter() {
+  Widget _buildCategoryFilter(AppTexts t) {
     if (_categories.isEmpty) return const SizedBox.shrink();
     return SizedBox(
       height: 44,
@@ -306,7 +325,7 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 6),
             child: ChoiceChip(
-              label: const Text('ទាំងអស់ (All)'),
+              label: Text(t.all),
               selected: _categoryFilter == null,
               onSelected: (_) => setState(() => _categoryFilter = null),
             ),
@@ -419,7 +438,9 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      p.name,
+                      p.localizedName(
+                        context.read<SettingsProvider>().languageCode,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w600),
@@ -435,7 +456,7 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
                 ),
               ),
               IconButton(
-                tooltip: 'មើល (View)',
+                tooltip: _t.view,
                 icon: const Icon(
                   Icons.visibility,
                   color: AppColors.primaryColor,
@@ -443,17 +464,17 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
                 onPressed: () => _openDetail(p),
               ),
               IconButton(
-                tooltip: 'កែ (Edit)',
+                tooltip: _t.edit,
                 icon: const Icon(Icons.edit, color: AppColors.secondaryColor),
                 onPressed: () => _edit(p),
               ),
               IconButton(
-                tooltip: 'លុប (Delete)',
+                tooltip: _t.delete,
                 icon: const Icon(Icons.delete, color: Colors.red),
                 onPressed: () => _delete(p),
               ),
               IconButton(
-                tooltip: 'បិទ',
+                tooltip: _t.close,
                 icon: const Icon(Icons.close, size: 18),
                 onPressed: () => setState(() => _selected = null),
               ),
@@ -464,10 +485,10 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
     );
   }
 
-  Widget _buildList() {
+  Widget _buildList(AppTexts t) {
     final items = _filtered;
     if (items.isEmpty) {
-      return const Center(child: Text('មិនមានទីកន្លែង'));
+      return Center(child: Text(t.noPlaces));
     }
     return RefreshIndicator(
       onRefresh: _load,
@@ -478,7 +499,9 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
           final p = items[i];
           return ListTile(
             leading: const Icon(Icons.place, color: AppColors.primaryColor),
-            title: Text(p.name),
+            title: Text(
+              p.localizedName(context.read<SettingsProvider>().languageCode),
+            ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -524,13 +547,14 @@ class _UsageLabel extends StatelessWidget {
     return FutureBuilder<StopUsage>(
       future: future,
       builder: (context, snap) {
+        final t = context.watch<SettingsProvider>().t;
         String text;
         if (snap.connectionState != ConnectionState.done) {
-          text = 'ប្រើក្នុង N/A ផ្លូវ';
+          text = t.usageNA;
         } else if (snap.hasError) {
-          text = 'ការប្រើប្រាស់មិនអាចប្រើបាន';
+          text = t.usageUnavailable;
         } else {
-          text = 'ប្រើក្នុង ${snap.data!.count} ផ្លូវ';
+          text = t.usedInNRoutes(snap.data!.count);
         }
         return Text(
           text,

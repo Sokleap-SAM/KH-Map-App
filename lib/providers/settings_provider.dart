@@ -1,12 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/constants/text_strings.dart';
+
 class SettingsProvider extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   Locale _locale = const Locale('km'); // Default to Khmer
 
   ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
+
+  /// Raw language code of the active locale ('km' or 'en').
+  String get languageCode => _locale.languageCode;
+
+  /// Active language as a typed enum.
+  AppLanguage get appLanguage =>
+      _locale.languageCode == 'en' ? AppLanguage.en : AppLanguage.km;
+
+  /// The localized static-text store for the active language. Read strings in
+  /// widgets via `context.watch<SettingsProvider>().t`.
+  AppTexts get t => AppTexts(appLanguage);
 
   SettingsProvider() {
     _loadSettings();

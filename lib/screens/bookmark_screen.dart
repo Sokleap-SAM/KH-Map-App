@@ -7,10 +7,12 @@ import 'package:provider/provider.dart';
 import '../models/favorite_route.dart';
 import '../models/route_search_selection.dart';
 import '../providers/map_provider.dart';
+import '../providers/settings_provider.dart';
 import '../services/auth_service.dart';
 import '../services/favorite_routes_service.dart';
 import '../services/favorites_service.dart';
 import '../utils/constants/colors.dart';
+import '../utils/constants/text_strings.dart';
 import '../widgets/bookmark_screen/favorite_place_card.dart';
 import '../widgets/bookmark_screen/favorite_place_sheet.dart';
 import '../widgets/bookmark_screen/favorite_route_card.dart';
@@ -42,12 +44,12 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
   List<FavoritePlace> _favorites = [];
   bool _loading = true;
-  String? _error;
+  bool _hasError = false;
 
   // Favorite routes.
   List<FavoriteRoute> _routes = [];
   bool _routesLoading = true;
-  String? _routesError;
+  bool _hasRoutesError = false;
 
   // Filter + sort state.
   String? _categoryFilter; // null = show every category
@@ -90,7 +92,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _error = null);
+    setState(() => _hasError = false);
     try {
       final favorites = await _service.load();
       if (!mounted) return;
@@ -101,14 +103,14 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'មិនអាចទាញយកទីកន្លែងដែលបានរក្សាទុកបានទេ';
+        _hasError = true;
         _loading = false;
       });
     }
   }
 
   Future<void> _loadRoutes() async {
-    setState(() => _routesError = null);
+    setState(() => _hasRoutesError = false);
     try {
       final routes = await _routesService.load();
       if (!mounted) return;
@@ -119,7 +121,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _routesError = 'មិនអាចទាញយកផ្លូវដែលបានរក្សាទុកបានទេ';
+        _hasRoutesError = true;
         _routesLoading = false;
       });
     }
@@ -130,12 +132,12 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   double _metersFrom(FavoritePlace f, LatLng user) =>
       _distance.as(LengthUnit.Meter, user, LatLng(f.latitude, f.longitude));
 
-  String? _distanceLabel(FavoritePlace f, LatLng? user) {
+  String? _distanceLabel(FavoritePlace f, LatLng? user, AppTexts t) {
     if (user == null) return null;
     final meters = _metersFrom(f, user);
-    if (meters < 950) return '${meters.round()} ម';
+    if (meters < 950) return t.distanceMeters(meters.round());
     final km = meters / 1000;
-    return '${km.toStringAsFixed(km < 10 ? 1 : 0)} គម';
+    return t.distanceKm(km.toStringAsFixed(km < 10 ? 1 : 0));
   }
 
   List<String> get _categories {
@@ -155,8 +157,12 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
         .toList();
     switch (_sort) {
       case 'name':
+        final lang = context.read<SettingsProvider>().languageCode;
         list.sort(
-          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          (a, b) => a
+              .localizedName(lang)
+              .toLowerCase()
+              .compareTo(b.localizedName(lang).toLowerCase()),
         );
         break;
       case 'rating':
@@ -182,7 +188,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   void _copyCoordinates(FavoritePlace f) {
     final text = '${f.latitude}, ${f.longitude}';
     Clipboard.setData(ClipboardData(text: text));
-    _snack('បានចម្លងទីតាំង៖ $text');
+    _snack(context.read<SettingsProvider>().t.copiedLocation(text));
   }
 
   void _removeFavorite(FavoritePlace f) {
@@ -190,6 +196,8 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     if (index < 0) return;
     setState(() => _favorites.removeAt(index));
 
+    final settings = context.read<SettingsProvider>();
+    final t = settings.t;
     final messenger = ScaffoldMessenger.of(context);
     messenger.clearSnackBars();
     messenger
@@ -198,11 +206,11 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
             content: Text(
-              'បានលុប «${f.name}» ចេញពីចំណាំ',
+              t.removedFromBookmarks(f.localizedName(settings.languageCode)),
               style: GoogleFonts.notoSansKhmer(fontSize: 13),
             ),
             action: SnackBarAction(
-              label: 'មិនធ្វើវិញ',
+              label: t.undo,
               textColor: AppColors.secondaryColor,
               onPressed: () {
                 if (!mounted) return;
@@ -223,34 +231,35 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   }
 
   Future<void> _confirmClearAll() async {
+    final t = context.read<SettingsProvider>().t;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF243456),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'លុបចំណាំទាំងអស់?',
+          t.clearAllBookmarksTitle,
           style: GoogleFonts.notoSansKhmer(
             color: Colors.white,
             fontWeight: FontWeight.w600,
           ),
         ),
         content: Text(
-          'ទីកន្លែងដែលបានរក្សាទុកទាំង ${_favorites.length} នឹងត្រូវបានយកចេញ។',
+          t.clearAllBookmarksBody(_favorites.length),
           style: GoogleFonts.notoSansKhmer(color: Colors.white70, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
-              'បោះបង់',
+              t.cancel,
               style: GoogleFonts.notoSansKhmer(color: Colors.white70),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
-              'លុបទាំងអស់',
+              t.deleteAll,
               style: GoogleFonts.notoSansKhmer(
                 color: AppColors.alertBorderColor,
                 fontWeight: FontWeight.w600,
@@ -264,7 +273,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     await _service.clear();
     if (!mounted) return;
     setState(() => _favorites = []);
-    _snack('បានលុបចំណាំទាំងអស់');
+    _snack(t.allBookmarksCleared);
   }
 
   void _openDetail(FavoritePlace f, String? distanceLabel) async {
@@ -285,6 +294,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     if (index < 0) return;
     setState(() => _routes.removeAt(index));
 
+    final t = context.read<SettingsProvider>().t;
     final messenger = ScaffoldMessenger.of(context);
     messenger.clearSnackBars();
     messenger
@@ -293,11 +303,11 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
             content: Text(
-              'បានលុបផ្លូវចេញពីចំណាំ',
+              t.routeRemovedFromBookmarks,
               style: GoogleFonts.notoSansKhmer(fontSize: 13),
             ),
             action: SnackBarAction(
-              label: 'មិនធ្វើវិញ',
+              label: t.undo,
               textColor: AppColors.secondaryColor,
               onPressed: () {
                 if (!mounted) return;
@@ -331,14 +341,15 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   /// the routing flow (overlay + route info card + drawn polyline, re-planned
   /// from the saved endpoints) then switches to the map tab.
   void _goToRoute(FavoriteRoute r) {
+    final t = context.read<SettingsProvider>().t;
     context.read<MapProvider>().openFavoriteRoute(
       favoriteId: r.id,
       origin: RouteSearchSelection(
-        label: r.origin.name.isEmpty ? 'ដើម' : r.origin.name,
+        label: r.origin.name.isEmpty ? t.startLabel : r.origin.name,
         location: r.origin.coordinates,
       ),
       destination: RouteSearchSelection(
-        label: r.destination.name.isEmpty ? 'គោលដៅ' : r.destination.name,
+        label: r.destination.name.isEmpty ? t.destinationLabel : r.destination.name,
         location: r.destination.coordinates,
       ),
     );
@@ -360,6 +371,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<MapProvider>().currentPosition;
+    final t = context.watch<SettingsProvider>().t;
     final visible = _visibleFavorites(user);
 
     return Scaffold(
@@ -367,13 +379,13 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _header(),
-            _tabToggle(),
+            _header(t),
+            _tabToggle(t),
             const SizedBox(height: 8),
             Expanded(
               child: _tab == _BookmarkTab.places
-                  ? _placesTab(visible, user)
-                  : _routesTab(),
+                  ? _placesTab(visible, user, t)
+                  : _routesTab(t),
             ),
           ],
         ),
@@ -381,32 +393,32 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     );
   }
 
-  Widget _placesTab(List<FavoritePlace> visible, LatLng? user) {
+  Widget _placesTab(List<FavoritePlace> visible, LatLng? user, AppTexts t) {
     return Column(
       children: [
-        _listBanner(),
-        if (_categories.isNotEmpty) _categoryChips(),
+        _listBanner(t),
+        if (_categories.isNotEmpty) _categoryChips(t),
         const SizedBox(height: 4),
-        Expanded(child: _body(visible, user)),
+        Expanded(child: _body(visible, user, t)),
       ],
     );
   }
 
   /// Segmented control switching between saved places and saved routes.
-  Widget _tabToggle() {
+  Widget _tabToggle(AppTexts t) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
       child: Row(
         children: [
           _tabButton(
-            label: 'ទីកន្លែង',
+            label: t.placesTab,
             icon: Icons.place_outlined,
             selected: _tab == _BookmarkTab.places,
             onTap: () => setState(() => _tab = _BookmarkTab.places),
           ),
           const SizedBox(width: 8),
           _tabButton(
-            label: 'ផ្លូវ',
+            label: t.routesTab,
             icon: Icons.directions_bus_outlined,
             selected: _tab == _BookmarkTab.routes,
             onTap: () => setState(() => _tab = _BookmarkTab.routes),
@@ -463,17 +475,17 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     );
   }
 
-  Widget _routesTab() {
+  Widget _routesTab(AppTexts t) {
     if (_routesLoading) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.secondaryColor),
       );
     }
-    if (_routesError != null) {
+    if (_hasRoutesError) {
       return _stateMessage(
         icon: Icons.cloud_off_rounded,
-        title: _routesError!,
-        actionLabel: 'ព្យាយាមម្ដងទៀត',
+        title: t.couldNotLoadSavedRoutes,
+        actionLabel: t.tryAgain,
         onAction: () {
           setState(() => _routesLoading = true);
           _loadRoutes();
@@ -483,9 +495,8 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     if (_routes.isEmpty) {
       return _stateMessage(
         icon: Icons.bookmark_added_outlined,
-        title: 'មិនទាន់មានផ្លូវដែលបានរក្សាទុក',
-        subtitle:
-            'ប៉ះរូបតំណាងចំណាំនៅលើកាតផ្លូវ ពេលស្វែងរកទិសដៅ ដើម្បីរក្សាទុកវានៅទីនេះ។',
+        title: t.noSavedRoutes,
+        subtitle: t.noSavedRoutesHint,
       );
     }
     return RefreshIndicator(
@@ -526,7 +537,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     );
   }
 
-  Widget _header() {
+  Widget _header(AppTexts t) {
     final hasLocation = context.read<MapProvider>().currentPosition != null;
     final isPlaces = _tab == _BookmarkTab.places;
     final count = isPlaces ? _favorites.length : _routes.length;
@@ -541,7 +552,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isPlaces ? 'ទីកន្លែងពេញចិត្ត' : 'ផ្លូវពេញចិត្ត',
+                  isPlaces ? t.favoritePlaces : t.favoriteRoutes,
                   style: GoogleFonts.notoSansKhmer(
                     color: Colors.white,
                     fontSize: 22,
@@ -551,10 +562,10 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 const SizedBox(height: 2),
                 Text(
                   loading
-                      ? 'កំពុងផ្ទុក...'
+                      ? t.loading
                       : isPlaces
-                      ? '$count ទីកន្លែងបានរក្សាទុក'
-                      : '$count ផ្លូវបានរក្សាទុក',
+                      ? t.savedPlacesCount(count)
+                      : t.savedRoutesCount(count),
                   style: GoogleFonts.notoSansKhmer(
                     color: AppColors.secondaryTextColor,
                     fontSize: 12.5,
@@ -563,18 +574,18 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
               ],
             ),
           ),
-          if (isPlaces) _sortMenu(hasLocation),
+          if (isPlaces) _sortMenu(hasLocation, t),
         ],
       ),
     );
   }
 
-  Widget _sortMenu(bool hasLocation) {
+  Widget _sortMenu(bool hasLocation, AppTexts t) {
     return PopupMenuButton<String>(
       icon: const Icon(Icons.tune_rounded, color: Colors.white),
       color: const Color(0xFF243456),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      tooltip: 'តម្រៀប',
+      tooltip: t.sort,
       onSelected: (value) {
         if (value == 'clear') {
           _confirmClearAll();
@@ -583,10 +594,10 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
         }
       },
       itemBuilder: (_) => [
-        _sortItem('recent', 'ថ្មីៗបំផុត'),
-        _sortItem('name', 'តាមឈ្មោះ (ក-អ)'),
-        _sortItem('rating', 'ការវាយតម្លៃខ្ពស់'),
-        if (hasLocation) _sortItem('distance', 'ចម្ងាយជិតបំផុត'),
+        _sortItem('recent', t.sortRecent),
+        _sortItem('name', t.sortName),
+        _sortItem('rating', t.sortRating),
+        if (hasLocation) _sortItem('distance', t.sortDistance),
         const PopupMenuDivider(),
         PopupMenuItem<String>(
           value: 'clear',
@@ -602,7 +613,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
               ),
               const SizedBox(width: 10),
               Text(
-                'លុបទាំងអស់',
+                t.deleteAll,
                 style: GoogleFonts.notoSansKhmer(
                   color: _favorites.isEmpty
                       ? Colors.white24
@@ -643,7 +654,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   }
 
   /// Google-Maps-style "list" header card sitting above the entries.
-  Widget _listBanner() {
+  Widget _listBanner(AppTexts t) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
       padding: const EdgeInsets.all(12),
@@ -681,7 +692,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'បញ្ជីចំណូលចិត្តរបស់ខ្ញុំ',
+                  t.myFavoritesList,
                   style: GoogleFonts.notoSansKhmer(
                     color: Colors.white,
                     fontSize: 15,
@@ -698,7 +709,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      'បញ្ជីឯកជន · ${_favorites.length} ទីកន្លែង',
+                      t.privateListCount(_favorites.length),
                       style: GoogleFonts.notoSansKhmer(
                         color: Colors.white54,
                         fontSize: 12,
@@ -715,7 +726,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     );
   }
 
-  Widget _categoryChips() {
+  Widget _categoryChips(AppTexts t) {
     final categories = _categories;
     return SizedBox(
       height: 38,
@@ -724,7 +735,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
           _chip(
-            label: 'ទាំងអស់',
+            label: t.all,
             selected: _categoryFilter == null,
             onTap: () => setState(() => _categoryFilter = null),
           ),
@@ -777,17 +788,17 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     );
   }
 
-  Widget _body(List<FavoritePlace> visible, LatLng? user) {
+  Widget _body(List<FavoritePlace> visible, LatLng? user, AppTexts t) {
     if (_loading) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.secondaryColor),
       );
     }
-    if (_error != null) {
+    if (_hasError) {
       return _stateMessage(
         icon: Icons.cloud_off_rounded,
-        title: _error!,
-        actionLabel: 'ព្យាយាមម្ដងទៀត',
+        title: t.couldNotLoadSavedPlaces,
+        actionLabel: t.tryAgain,
         onAction: () {
           setState(() => _loading = true);
           _load();
@@ -797,16 +808,15 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     if (_favorites.isEmpty) {
       return _stateMessage(
         icon: Icons.bookmark_added_outlined,
-        title: 'មិនទាន់មានទីកន្លែងដែលបានរក្សាទុក',
-        subtitle:
-            'ប៉ះរូបតំណាងចំណាំនៅលើទីកន្លែងណាមួយក្នុងផែនទី ដើម្បីរក្សាទុកវានៅទីនេះ។',
+        title: t.noSavedPlaces,
+        subtitle: t.noSavedPlacesHint,
       );
     }
     if (visible.isEmpty) {
       return _stateMessage(
         icon: Icons.filter_alt_off_outlined,
-        title: 'គ្មានទីកន្លែងក្នុងប្រភេទនេះ',
-        actionLabel: 'បង្ហាញទាំងអស់',
+        title: t.noPlacesInCategory,
+        actionLabel: t.showAll,
         onAction: () => setState(() => _categoryFilter = null),
       );
     }
@@ -822,7 +832,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (_, i) {
           final fav = visible[i];
-          final distanceLabel = _distanceLabel(fav, user);
+          final distanceLabel = _distanceLabel(fav, user, t);
           return Dismissible(
             key: ValueKey('fav_${fav.placeId}'),
             direction: DismissDirection.endToStart,

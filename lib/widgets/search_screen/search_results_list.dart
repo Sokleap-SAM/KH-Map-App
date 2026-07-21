@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/place.dart';
+import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
 
 class SearchResultsList extends StatelessWidget {
@@ -19,11 +21,12 @@ class SearchResultsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (results.isEmpty) {
+      final t = context.watch<SettingsProvider>().t;
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         child: Center(
           child: Text(
-            'រកមិនឃើញលទ្ធផលសម្រាប់ "$query"',
+            t.noResultsFor(query),
             textAlign: TextAlign.center,
             style: GoogleFonts.notoSansKhmer(
               color: Colors.white70,
@@ -130,7 +133,12 @@ class _ResultRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _HighlightedText(text: place.name, query: query),
+                  _HighlightedText(
+                    text: place.localizedName(
+                      context.watch<SettingsProvider>().languageCode,
+                    ),
+                    query: query,
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     '$categoryLabel  ·  $coords',

@@ -3,9 +3,70 @@ import 'package:provider/provider.dart';
 
 import '../../models/route_plan.dart';
 import '../../providers/map_provider.dart';
+import '../../providers/settings_provider.dart';
+import '../../utils/constants/text_strings.dart';
 
 // Snap stops: collapsed (header only) · mid (summary) · fully expanded.
 const _kSnapSizes = [0.2, 0.5, 0.88];
+
+/// Friendly, localized message for a failed route-plan fetch. The raw
+/// exception is intentionally never shown to the user.
+String _routePlanErrorMessage(AppTexts t, RoutePlanError e) {
+  switch (e) {
+    case RoutePlanError.timeout:
+      return t.routePlanTimeout;
+    case RoutePlanError.offline:
+      return t.routePlanOffline;
+    case RoutePlanError.generic:
+      return t.routePlanGeneric;
+  }
+}
+
+/// Error state for the route info card: an icon, a friendly message and a
+/// "Try again" button that re-runs the plan.
+class _RoutePlanErrorView extends StatelessWidget {
+  const _RoutePlanErrorView({
+    required this.message,
+    required this.retryLabel,
+    required this.onRetry,
+  });
+
+  final String message;
+  final String retryLabel;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.wifi_tethering_error_rounded,
+            color: Colors.white38,
+            size: 40,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: Text(retryLabel),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF1565C0),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class RouteInfoCard extends StatefulWidget {
   const RouteInfoCard({
@@ -105,6 +166,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
       snap: true,
       snapSizes: _kSnapSizes,
       builder: (context, scrollController) {
+        final t = context.watch<SettingsProvider>().t;
         return Consumer<MapProvider>(
           builder: (context, provider, _) {
             final routePlan = provider.routePlan;
@@ -178,10 +240,10 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                           size: 20,
                         ),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'ឡានក្រុង',
-                            style: TextStyle(
+                            t.busShort,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -216,8 +278,8 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                                     size: 20,
                                   ),
                             tooltip: isSaved
-                                ? 'ដកចេញ​ថ្លូវធ្វើដំណើរពីចំណាំ' // "Remove from favorites" in Khmer
-                                : 'រក្សាទុក​ថ្លូវធ្វើដំណើរពីជាចំណាំ', // "Save route to favorites"
+                                ? t.removeRouteFromFavorites
+                                : t.saveRouteToFavorites,
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                           ),
@@ -244,14 +306,14 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                     child: Row(
                       children: [
                         _PlanTypeChip(
-                          label: 'ដើរ',
+                          label: t.walkShort,
                           icon: Icons.directions_walk,
                           selected: planType == 'walk',
                           onTap: () => provider.setPlanType('walk'),
                         ),
                         const SizedBox(width: 8),
                         _PlanTypeChip(
-                          label: 'ឡានក្រុង',
+                          label: t.busShort,
                           icon: Icons.directions_bus,
                           selected: planType == 'transit',
                           onTap: () => provider.setPlanType('transit'),
@@ -264,12 +326,12 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
 
                   // ── Loading / error / no-route states ───────────────────
                   if (isLoading)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          SizedBox(
+                          const SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
@@ -277,10 +339,10 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                               color: Colors.white54,
                             ),
                           ),
-                          SizedBox(width: 12),
+                          const SizedBox(width: 12),
                           Text(
-                            'ស្វែងរកផ្លូវ…',
-                            style: TextStyle(
+                            t.findingRoute,
+                            style: const TextStyle(
                               color: Colors.white54,
                               fontSize: 14,
                             ),
@@ -289,22 +351,16 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       ),
                     )
                   else if (error != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                      child: Text(
-                        error,
-                        style: const TextStyle(
-                          color: Colors.redAccent,
-                          fontSize: 14,
-                        ),
-                      ),
+                    _RoutePlanErrorView(
+                      message: _routePlanErrorMessage(t, error),
+                      retryLabel: t.tryAgain,
+                      onRetry: provider.retryRoutePlan,
                     )
                   else if (routePlan != null && !routePlan.found)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                       child: Text(
-                        routePlan.message ??
-                            'គ្មានផ្លូវ — សូមព្យាយាមទម្តងទៀតនៅពេលក្រោយ',
+                        routePlan.message ?? t.noRouteTryLater,
                         style: const TextStyle(
                           color: Colors.white54,
                           fontSize: 14,
@@ -462,6 +518,7 @@ class RouteOptionDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -475,7 +532,7 @@ class RouteOptionDetails extends StatelessWidget {
             children: [
               _SummaryChip(
                 icon: Icons.schedule,
-                label: '~${option.totalEstimatedMinutes} នាទី',
+                label: t.minutesApprox(option.totalEstimatedMinutes),
               ),
               _SummaryChip(
                 icon: Icons.straighten,
@@ -483,14 +540,15 @@ class RouteOptionDetails extends StatelessWidget {
               ),
               _SummaryChip(
                 icon: Icons.directions_walk,
-                label: 'ដើរ ${_formatDistance(option.totalWalkMeters)}',
+                label: t.walkDistance(
+                  _formatDistance(option.totalWalkMeters),
+                ),
               ),
               _SummaryChip(
                 icon: Icons.swap_horiz,
                 label: option.transferCount == 0
-                    ? 'គ្មានការផ្ទេរ'
-                    : '${option.transferCount} ការផ្ទេរ'
-                          '${option.transferCount > 1 ? 's' : ''}',
+                    ? t.noTransfers
+                    : t.transfersCount(option.transferCount),
               ),
             ],
           ),
@@ -625,11 +683,14 @@ class _WalkSegmentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    final lang = settings.languageCode;
+    final t = settings.t;
     final dist = seg.distanceMeters;
     final mins = seg.estimatedMinutes;
     final label = [
       if (dist != null) _formatDistance(dist),
-      if (mins != null) '~$mins នាទី',
+      if (mins != null) t.minutesApprox(mins),
     ].join(' · ');
 
     final isTransfer = seg.isTransfer;
@@ -662,14 +723,14 @@ class _WalkSegmentTile extends StatelessWidget {
             const SizedBox(width: 6),
           ],
           Text(
-            'ដើរ${label.isNotEmpty ? ' $label' : ''}',
+            t.walkSegment(label),
             style: const TextStyle(color: Colors.white, fontSize: 14),
           ),
         ],
       ),
       subtitle: seg.from != null && seg.to != null
           ? Text(
-              '${seg.from!.name} → ${seg.to!.name}',
+              '${seg.from!.localizedName(lang)} → ${seg.to!.localizedName(lang)}',
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             )
           : null,
@@ -688,6 +749,9 @@ class _BusSegmentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    final lang = settings.languageCode;
+    final t = settings.t;
     final routeCode = seg.route?.code;
     final routeName = seg.route?.name ?? routeCode ?? 'Bus';
     final wait = seg.waitMinutes;
@@ -728,14 +792,17 @@ class _BusSegmentTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'មើល',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    t.view,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  Icon(Icons.chevron_right, size: 16),
+                  const Icon(Icons.chevron_right, size: 16),
                 ],
               ),
             )
@@ -796,25 +863,23 @@ class _BusSegmentTile extends StatelessWidget {
         children: [
           if (seg.boardAt != null)
             Text(
-              'ឡើងនៅចំណត ${seg.boardAt!.name}',
+              t.boardAtStop(seg.boardAt!.localizedName(lang)),
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
           if (seg.alightAt != null)
             Text(
-              'ចុះនៅចំណត ${seg.alightAt!.name}',
+              t.alightAtStop(seg.alightAt!.localizedName(lang)),
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
           if (wait != null)
             Text(
-              live
-                  ? 'រយៈពេលរងចាំ ~$wait នាទី 🟢'
-                  : 'ចាំ​ ~$wait នាទី (ការប៉ាន់ស្មាន)',
+              live ? t.waitLive(wait) : t.waitEstimated(wait),
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
           if (seg.rideMinutes != null || seg.distanceMeters != null)
             Text(
               [
-                if (seg.rideMinutes != null) 'ជិះ ~${seg.rideMinutes} នាទី',
+                if (seg.rideMinutes != null) t.rideMinutes(seg.rideMinutes!),
                 if (seg.distanceMeters != null)
                   _formatDistance(seg.distanceMeters!),
               ].join(' · '),
@@ -822,7 +887,7 @@ class _BusSegmentTile extends StatelessWidget {
             ),
           if (seg.totalLegMinutes != null)
             Text(
-              'រយៈពេលសរុប ~${seg.totalLegMinutes} នាទី',
+              t.totalLegMinutes(seg.totalLegMinutes!),
               style: const TextStyle(color: Colors.white38, fontSize: 11),
             ),
         ],

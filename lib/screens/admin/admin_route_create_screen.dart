@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/place.dart';
 import '../../models/route_stop.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
+import '../../utils/constants/text_strings.dart';
 import '../../utils/constants/colors.dart';
 import 'admin_color_picker.dart';
 import 'admin_map_size_button.dart';
@@ -84,6 +87,8 @@ class _SegSpec {
 }
 
 class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
+  AppTexts get _t => context.read<SettingsProvider>().t;
+
   final MapController _mapController = MapController();
   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _codeCtrl = TextEditingController();
@@ -173,9 +178,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   void _doneMetadata() {
     if (_nameCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('សូមបញ្ចូលឈ្មោះផ្លូវ (Route name required)'),
-        ),
+        SnackBar(content: Text(_t.routeNameRequired)),
       );
       return;
     }
@@ -187,7 +190,11 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   List<Place> get _filteredPlaces {
     if (_filter.isEmpty) return _places;
     final q = _filter.toLowerCase();
-    return _places.where((p) => p.name.toLowerCase().contains(q)).toList();
+    return _places
+        .where((p) =>
+            p.nameInKhmer.toLowerCase().contains(q) ||
+            p.nameInLatin.toLowerCase().contains(q))
+        .toList();
   }
 
   void _addToSequence(Place p) {
@@ -209,21 +216,20 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   void _doneSequence() {
     if (_sequence.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('សូមជ្រើសរើសចំណតយ៉ាងតិច១ (Pick at least one stop)'),
-        ),
+        SnackBar(content: Text(_t.pickAtLeastOneStop)),
       );
       return;
     }
+    final lang = context.read<SettingsProvider>().languageCode;
     final specs = <_SegSpec>[];
     if (widget.isAppend && widget.existingStops.isNotEmpty) {
       final last = widget.existingStops.last;
       specs.add(
         _SegSpec(
           prev: last.location,
-          prevName: last.stopName,
+          prevName: last.localizedStopName(lang),
           curr: _ll(_sequence[0].place),
-          currName: _sequence[0].place.name,
+          currName: _sequence[0].place.localizedName(lang),
           toIndex: 0,
         ),
       );
@@ -232,9 +238,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
       specs.add(
         _SegSpec(
           prev: _ll(_sequence[i - 1].place),
-          prevName: _sequence[i - 1].place.name,
+          prevName: _sequence[i - 1].place.localizedName(lang),
           curr: _ll(_sequence[i].place),
-          currName: _sequence[i].place.name,
+          currName: _sequence[i].place.localizedName(lang),
           toIndex: i,
         ),
       );
@@ -361,9 +367,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            widget.isAppend
-                ? 'បានបន្ថែមចំណត (Stops appended)'
-                : 'បានបង្កើតផ្លូវ (Route created)',
+            widget.isAppend ? _t.stopsAppended : _t.routeCreated,
           ),
         ),
       );
@@ -374,27 +378,26 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
       final msg = e is AdminApiException ? e.message : e.toString();
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('បរាជ័យ: $msg')));
+      ).showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
     }
   }
 
   Future<void> _cancel() async {
+    final t = _t;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('បោះបង់?'),
-        content: const Text(
-          'ការងារនឹងបាត់បង់ (Your work will be lost). Cancel?',
-        ),
+        title: Text(t.cancelQuestion),
+        content: Text(t.workWillBeLost),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('ទេ'),
+            child: Text(t.no),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('បាទ/ចាស', style: TextStyle(color: Colors.white)),
+            child: Text(t.yes, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -430,6 +433,8 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild-on-language-change dependency; helpers below use `read`.
+    context.watch<SettingsProvider>();
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -441,15 +446,15 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
           foregroundColor: Colors.white,
           title: Text(
             widget.isAppend
-                ? 'បន្ថែមចំណត · ${widget.appendRouteLabel ?? ''}'
-                : 'បង្កើតផ្លូវថ្មី',
+                ? _t.appendStopsLabel(widget.appendRouteLabel ?? '')
+                : _t.newRouteTitle,
           ),
           actions: [
             TextButton(
               onPressed: _cancel,
-              child: const Text(
-                'បោះបង់',
-                style: TextStyle(color: Colors.white),
+              child: Text(
+                _t.cancel,
+                style: const TextStyle(color: Colors.white),
               ),
             ),
           ],
@@ -474,36 +479,35 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
 
   // Step 1 UI
   Widget _buildMetadataStep() {
+    final t = _t;
     return Column(
       children: [
-        const _StepBanner(text: 'ដំណាក់កាល ១/៤ · ព័ត៌មានផ្លូវ (Route info)'),
+        _StepBanner(text: t.stepRouteInfo),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
               TextField(
                 controller: _nameCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'ឈ្មោះផ្លូវ (Name)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: t.routeNameField,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: _codeCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'កូដ (Code, optional)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: t.codeOptional,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 8),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('រង្វង់ / Loop (circular)'),
+                title: Text(t.loopCircular),
                 subtitle: Text(
-                  _isLine
-                      ? 'ចំណតចេញ = ចំណតចុង (departure === terminal)'
-                      : 'បន្ទាត់មានទិសដៅ (directional line)',
+                  _isLine ? t.departureEqualsTerminal : t.directionalLine,
                 ),
                 value: _isLine,
                 onChanged: (v) => setState(() => _isLine = v),
@@ -514,9 +518,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'ទិសដៅ (Direction)',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                      Text(
+                        t.direction,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -525,7 +529,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                             child: _directionOption(
                               value: 'outbound',
                               icon: Icons.arrow_forward,
-                              label: 'ចេញ',
+                              label: t.outbound,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -533,16 +537,17 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                             child: _directionOption(
                               value: 'inbound',
                               icon: Icons.arrow_back,
-                              label: 'ចូល',
+                              label: t.inbound,
                             ),
                           ),
                         ],
                       ),
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
                         child: Text(
-                          'ទិសដៅផ្គូចេញ និងចូលផ្គូផ្គងនៅក្រោមលេខកូដដូចគ្នា',
-                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                          t.directionPairingNote,
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey),
                         ),
                       ),
                     ],
@@ -550,7 +555,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                 ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('ពណ៌ផ្លូវ (Route color)'),
+                title: Text(t.routeColor),
                 subtitle: Text(_color),
                 trailing: Container(
                   width: 36,
@@ -572,7 +577,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
             ],
           ),
         ),
-        _bottomButton('បន្ត (Next: pick stops)', _doneMetadata),
+        _bottomButton(t.nextPickStops, _doneMetadata),
       ],
     );
   }
@@ -630,9 +635,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
     }
     return Column(
       children: [
-        _StepBanner(
-          text: 'ដំណាក់កាល ២/៤ · ជ្រើសរើសលំដាប់ចំណត (${_sequence.length})',
-        ),
+        _StepBanner(text: _t.stepPickStops(_sequence.length)),
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -657,10 +660,10 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                     padding: const EdgeInsets.all(8),
                     child: TextField(
                       controller: _filterCtrl,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
-                        hintText: 'ស្វែងរកចំណត (Filter places)',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search),
+                        hintText: _t.filterPlaces,
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       onChanged: (v) => setState(() => _filter = v),
@@ -672,7 +675,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
             },
           ),
         ),
-        _bottomButton('បន្ត (Next: connect)', _doneSequence),
+        _bottomButton(_t.nextConnect, _doneSequence),
       ],
     );
   }
@@ -724,9 +727,8 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
           _placeById(s.stopId) ??
           Place(
             id: s.stopId,
-            // A stop carries a single name; reuse it for both localized fields.
             nameInKhmer: s.stopName,
-            nameInLatin: s.stopName,
+            nameInLatin: s.stopNameLatin ?? s.stopName,
             longitude: s.location.longitude,
             latitude: s.location.latitude,
             photos: const [],
@@ -824,9 +826,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
 
   Widget _buildSequenceStrip() {
     if (_sequence.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(12),
-        child: Text('មិនទាន់ជ្រើសរើស (No stops picked — tap a place to add)'),
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(_t.noStopsPicked),
       );
     }
     return SizedBox(
@@ -849,7 +851,11 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                 style: const TextStyle(color: Colors.white, fontSize: 12),
               ),
             ),
-            title: Text(item.place.name),
+            title: Text(
+              item.place.localizedName(
+                context.read<SettingsProvider>().languageCode,
+              ),
+            ),
             trailing: IconButton(
               icon: const Icon(Icons.close, size: 18, color: Colors.red),
               onPressed: () => _removeFromSequence(i),
@@ -863,7 +869,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   Widget _buildPlacePicker() {
     final items = _filteredPlaces;
     if (items.isEmpty) {
-      return const Center(child: Text('មិនមានចំណត'));
+      return Center(child: Text(_t.noStops));
     }
     return ListView.separated(
       itemCount: items.length,
@@ -873,7 +879,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
         return ListTile(
           dense: true,
           leading: const Icon(Icons.place, color: AppColors.primaryColor),
-          title: Text(p.name),
+          title: Text(
+            p.localizedName(context.read<SettingsProvider>().languageCode),
+          ),
           subtitle: Text(
             '${p.latitude}, ${p.longitude}',
             style: const TextStyle(fontSize: 11),
@@ -888,12 +896,16 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   // Step 3 UI
   Widget _buildConnectStep() {
     final spec = _specs[_connectingIndex];
+    final t = _t;
     return Column(
       children: [
         _StepBanner(
-          text:
-              'ដំណាក់កាល ៣/៤ · Segment ${_connectingIndex + 1} / ${_specs.length}\n'
-              '${spec.prevName} → ${spec.currName}',
+          text: t.segmentStepBanner(
+            _connectingIndex + 1,
+            _specs.length,
+            spec.prevName,
+            spec.currName,
+          ),
         ),
         Expanded(
           child: Stack(
@@ -901,15 +913,12 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
               _buildConnectMap(),
               _MapHint(
                 _suggesting
-                    ? 'កំពុងគណនាផ្លូវ… (Fetching suggestion…)'
+                    ? t.fetchingSuggestion
                     : _points.isNotEmpty
-                    ? '✏️ គូរដោយដៃ — បន្ទាត់តាមចំណុចរបស់អ្នក (Manual: line '
-                          'follows your taps exactly) · ${_points.length} points'
+                    ? t.manualDrawHint(_points.length)
                     : _preview.isEmpty
-                    ? 'ផ្លូវមិនទាន់មាន — ចុច Suggest ឬចុចផែនទីដើម្បីគូរ (no '
-                          'suggestion; tap map to draw)'
-                    : 'ផ្លូវខុស? ចុចលើផែនទីដើម្បីគូរដោយដៃ (Wrong road? Tap the '
-                          'map to draw the line yourself)',
+                    ? t.noSuggestionDrawHint
+                    : t.wrongRoadDrawHint,
               ),
             ],
           ),
@@ -1147,13 +1156,13 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   Widget _buildReviewStep() {
     return Column(
       children: [
-        const _StepBanner(text: 'ដំណាក់កាល ៤/៤ · ពិនិត្យ & រក្សាទុក (Review)'),
+        _StepBanner(text: _t.stepReviewSave),
         Expanded(child: _buildReviewMap()),
         _buildReviewSummary(),
         _bottomButton(
           widget.isAppend
-              ? 'រក្សាទុកចំណត (${_sequence.length})'
-              : 'បង្កើតផ្លូវ (${_sequence.length} stops)',
+              ? _t.saveStops(_sequence.length)
+              : _t.createRouteWithStops(_sequence.length),
           _submitting ? null : _submit,
           busy: _submitting,
         ),

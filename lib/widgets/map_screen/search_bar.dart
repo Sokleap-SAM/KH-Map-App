@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../models/place.dart';
+import '../../providers/settings_provider.dart';
 import '../../screens/search_screen.dart';
 import '../../utils/constants/colors.dart';
 
@@ -98,6 +100,7 @@ class _MapSearchBarState extends State<MapSearchBar> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Container(
       color: AppColors.primaryColor,
       padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 4),
@@ -125,7 +128,7 @@ class _MapSearchBarState extends State<MapSearchBar> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'ស្វែងរកទីកន្លែង . . .',
+                      t.searchPlacesHint,
                       style: GoogleFonts.notoSansKhmer(
                         color: Colors.white70,
                         fontSize: 14,
@@ -150,7 +153,7 @@ class _MapSearchBarState extends State<MapSearchBar> {
                         for (final category in kMapCategories)
                           _CategoryButton(
                             icon: category.icon,
-                            label: category.label,
+                            label: t.mapCategoryLabel(category.key),
                             color: category.color,
                             selected: widget.activeCategory == category.key,
                             onTap: () =>

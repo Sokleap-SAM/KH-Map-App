@@ -103,7 +103,7 @@ class ContributionService {
         final token = await _accessToken();
         final categoryId = await _resolveCategoryId(c.categoryName);
         final place = await _placeService.createPlace(
-          nameInKhmer: c.placeName,
+          nameInKhmer: c.placeNameKhmer,
           nameInLatin: c.placeNameLatin,
           categoryId: categoryId,
           longitude: c.longitude,

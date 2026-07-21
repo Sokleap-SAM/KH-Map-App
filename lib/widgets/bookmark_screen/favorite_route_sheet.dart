@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/favorite_route.dart';
 import '../../models/route_plan.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/transit_service.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
 import '../map/route_info_card.dart' show RouteOptionDetails;
 
 /// Results returned from [FavoriteRouteSheet] via [Navigator.pop].
@@ -30,7 +33,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
 
   RoutePlanResult? _plan;
   bool _loading = true;
-  String? _error;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -41,7 +44,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
   Future<void> _load() async {
     setState(() {
       _loading = true;
-      _error = null;
+      _hasError = false;
     });
     try {
       final fav = widget.favorite;
@@ -59,7 +62,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'មិនអាចទាញយកផ្លូវបានទេ';
+        _hasError = true;
         _loading = false;
       });
     }
@@ -67,6 +70,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return DraggableScrollableSheet(
       initialChildSize: 0.66,
       minChildSize: 0.4,
@@ -83,10 +87,10 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
             padding: EdgeInsets.zero,
             children: [
               _dragHandle(),
-              _header(),
-              _goButton(),
+              _header(t),
+              _goButton(t),
               const Divider(color: Color(0xFF2A2A2A), height: 1),
-              _content(),
+              _content(t),
               const SizedBox(height: 28),
             ],
           ),
@@ -109,7 +113,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
     );
   }
 
-  Widget _header() {
+  Widget _header(AppTexts t) {
     final fav = widget.favorite;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 8, 10),
@@ -157,7 +161,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
             ),
           ),
           IconButton(
-            tooltip: 'លុបចេញ',
+            tooltip: t.remove,
             onPressed: () => Navigator.of(context).pop(kFavRouteSheetRemove),
             icon: const Icon(
               Icons.bookmark_remove_outlined,
@@ -165,7 +169,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
             ),
           ),
           IconButton(
-            tooltip: 'បិទ',
+            tooltip: t.close,
             onPressed: () => Navigator.of(context).pop(),
             icon: const Icon(Icons.close, color: Colors.white70),
           ),
@@ -174,7 +178,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
     );
   }
 
-  Widget _goButton() {
+  Widget _goButton(AppTexts t) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: SizedBox(
@@ -191,7 +195,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
           ),
           icon: const Icon(Icons.navigation_rounded, size: 18),
           label: Text(
-            'ចង្អុលផ្លូវ',
+            t.showDirections,
             style: GoogleFonts.notoSansKhmer(
               fontWeight: FontWeight.w700,
               fontSize: 14,
@@ -202,7 +206,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
     );
   }
 
-  Widget _content() {
+  Widget _content(AppTexts t) {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 40),
@@ -211,11 +215,11 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
         ),
       );
     }
-    if (_error != null) {
+    if (_hasError) {
       return _message(
         icon: Icons.cloud_off_rounded,
-        title: _error!,
-        actionLabel: 'ព្យាយាមម្ដងទៀត',
+        title: t.couldNotLoadRoute,
+        actionLabel: t.tryAgain,
         onAction: _load,
       );
     }
@@ -223,7 +227,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
     if (plan == null || !plan.found || plan.options.isEmpty) {
       return _message(
         icon: Icons.wrong_location_outlined,
-        title: plan?.message ?? 'រកមិនឃើញផ្លូវសម្រាប់ទីតាំងនេះទេ',
+        title: plan?.message ?? t.noRouteForLocation,
       );
     }
     // Preview the fastest option; the full set of alternatives is available

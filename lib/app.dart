@@ -11,6 +11,7 @@ import 'package:kh_map_app/utils/jwt.dart';
 import 'package:provider/provider.dart';
 import 'providers/driver_provider.dart';
 import 'providers/map_provider.dart';
+import 'providers/settings_provider.dart';
 import 'providers/transit_provider.dart';
 import 'services/location_service.dart';
 import 'utils/theme/theme.dart';
@@ -92,6 +93,7 @@ class _RiderShellState extends State<_RiderShell> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     final screens = <Widget>[
       const MapScreen(),
       BookmarkScreen(onNavigateToMap: _goToMapTab),
@@ -109,26 +111,26 @@ class _RiderShellState extends State<_RiderShell> {
         unselectedItemColor: AppColors.secondaryTextColor,
         selectedFontSize: 12,
         unselectedFontSize: 12,
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.location_on_outlined),
-            activeIcon: Icon(Icons.location_on),
-            label: 'ផែនទី',
+            icon: const Icon(Icons.location_on_outlined),
+            activeIcon: const Icon(Icons.location_on),
+            label: t.navMap,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.bookmark_border),
-            activeIcon: Icon(Icons.bookmark),
-            label: 'ចំណាំ',
+            icon: const Icon(Icons.bookmark_border),
+            activeIcon: const Icon(Icons.bookmark),
+            label: t.navBookmarks,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.add_circle_outline),
-            activeIcon: Icon(Icons.add_circle),
-            label: 'ចូលរួម',
+            icon: const Icon(Icons.add_circle_outline),
+            activeIcon: const Icon(Icons.add_circle),
+            label: t.navContribute,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'គណនី',
+            icon: const Icon(Icons.person_outline),
+            activeIcon: const Icon(Icons.person),
+            label: t.navAccount,
           ),
         ],
       ),

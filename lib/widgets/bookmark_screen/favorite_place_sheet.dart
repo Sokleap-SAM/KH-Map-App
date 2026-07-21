@@ -3,10 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/settings_provider.dart';
 import '../../services/favorites_service.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
 import 'favorite_place_card.dart';
 
 /// Result returned from [FavoritePlaceSheet] via [Navigator.pop].
@@ -29,6 +32,7 @@ class FavoritePlaceSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     final color = getColorForCategory(favorite.categoryName);
     final icon = getIconForCategory(favorite.categoryName);
 
@@ -50,16 +54,16 @@ class FavoritePlaceSheet extends StatelessWidget {
               _dragHandle(),
               _miniMap(color, icon),
               const SizedBox(height: 16),
-              _titleBlock(context, color, icon),
+              _titleBlock(context, t, color, icon),
               const SizedBox(height: 16),
-              _actionRow(context),
+              _actionRow(context, t),
               const SizedBox(height: 8),
               const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
               _InfoRow(
                 icon: icon,
                 iconColor: color,
                 primary: formatCategoryLabel(favorite.categoryName),
-                label: 'ប្រភេទ',
+                label: t.category,
               ),
               const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
               _InfoRow(
@@ -67,9 +71,9 @@ class FavoritePlaceSheet extends StatelessWidget {
                 iconColor: const Color(0xFFFFB400),
                 primary: favorite.averageRating != null
                     ? '${favorite.averageRating!.toStringAsFixed(1)}'
-                          '  ·  ${favorite.ratingCount ?? 0} ការវាយតម្លៃ'
-                    : 'មិនទាន់មានការវាយតម្លៃ',
-                label: 'ការវាយតម្លៃ',
+                          '  ·  ${t.ratingsCount(favorite.ratingCount ?? 0)}'
+                    : t.noRatingsYet,
+                label: t.rating,
               ),
               const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
               _InfoRow(
@@ -78,14 +82,14 @@ class FavoritePlaceSheet extends StatelessWidget {
                     '${favorite.latitude.toStringAsFixed(6)}, '
                     '${favorite.longitude.toStringAsFixed(6)}',
                 label: distanceLabel == null
-                    ? 'កូអរដោនេ'
-                    : 'កូអរដោនេ  ·  $distanceLabel ពីអ្នក',
+                    ? t.coordinates
+                    : t.coordinatesFromYou(distanceLabel!),
               ),
               const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
               _InfoRow(
                 icon: Icons.bookmark_outline,
-                primary: favoriteSavedLabel(favorite.favoritedAt),
-                label: 'ស្ថានភាពចំណាំ',
+                primary: t.savedAgo(favorite.favoritedAt),
+                label: t.bookmarkStatus,
               ),
               const SizedBox(height: 28),
             ],
@@ -186,7 +190,12 @@ class FavoritePlaceSheet extends StatelessWidget {
     );
   }
 
-  Widget _titleBlock(BuildContext context, Color color, IconData icon) {
+  Widget _titleBlock(
+    BuildContext context,
+    AppTexts t,
+    Color color,
+    IconData icon,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -197,7 +206,9 @@ class FavoritePlaceSheet extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  favorite.name,
+                  favorite.localizedName(
+                    context.watch<SettingsProvider>().languageCode,
+                  ),
                   style: GoogleFonts.notoSansKhmer(
                     color: Colors.white,
                     fontSize: 21,
@@ -246,7 +257,7 @@ class FavoritePlaceSheet extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'បិទ',
+            tooltip: t.close,
             onPressed: () => Navigator.of(context).pop(),
             icon: const Icon(Icons.close, color: Colors.white70),
           ),
@@ -255,22 +266,22 @@ class FavoritePlaceSheet extends StatelessWidget {
     );
   }
 
-  Widget _actionRow(BuildContext context) {
+  Widget _actionRow(BuildContext context, AppTexts t) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           _SheetButton(
             icon: Icons.copy_rounded,
-            label: 'ចម្លងទីតាំង',
+            label: t.copyLocation,
             background: AppColors.secondaryColor,
             foreground: AppColors.primaryColor,
-            onTap: () => _copyCoordinates(context),
+            onTap: () => _copyCoordinates(context, t),
           ),
           const SizedBox(width: 10),
           _SheetButton(
             icon: Icons.bookmark_remove_outlined,
-            label: 'លុបចេញ',
+            label: t.remove,
             background: kFavSurfaceColor,
             foreground: AppColors.alertBorderColor,
             onTap: () => Navigator.of(context).pop(kFavSheetRemove),
@@ -280,7 +291,7 @@ class FavoritePlaceSheet extends StatelessWidget {
     );
   }
 
-  void _copyCoordinates(BuildContext context) {
+  void _copyCoordinates(BuildContext context, AppTexts t) {
     final text = '${favorite.latitude}, ${favorite.longitude}';
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -288,7 +299,7 @@ class FavoritePlaceSheet extends StatelessWidget {
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
         content: Text(
-          'បានចម្លងទីតាំង៖ $text',
+          t.copiedLocation(text),
           style: GoogleFonts.notoSansKhmer(fontSize: 13),
         ),
       ),

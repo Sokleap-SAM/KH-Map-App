@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/admin_route.dart';
 import '../../models/route_stop.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../services/transit_service.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
 import 'admin_color_picker.dart';
 import 'admin_map_size_button.dart';
 import 'admin_route_create_screen.dart';
@@ -27,6 +30,8 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
   final AdminService _service = AdminService();
   final TransitService _transit = TransitService();
   final MapController _mapController = MapController();
+
+  AppTexts get _t => context.read<SettingsProvider>().t;
 
   List<AdminRoute> _routes = const [];
   // routeId → road-snapped polyline points (rider-facing geometry).
@@ -152,14 +157,14 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('ស្ថានភាព → $next')));
+      ).showSnackBar(SnackBar(content: Text(_t.statusArrow(next))));
       _load();
     } catch (e) {
       if (!mounted) return;
       final msg = e is AdminApiException ? e.message : e.toString();
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('បរាជ័យ: $msg')));
+      ).showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
     }
   }
 
@@ -196,11 +201,12 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        title: const Text('គ្រប់គ្រងផ្លូវ'),
+        title: Text(t.manageRoutes),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -214,13 +220,13 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
         foregroundColor: Colors.white,
         onPressed: _openCreate,
         icon: const Icon(Icons.add_location_alt),
-        label: const Text('បង្កើតផ្លូវ'),
+        label: Text(t.newRoute),
       ),
-      body: _buildBody(),
+      body: _buildBody(t),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AppTexts t) {
     if (_loading && _routes.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -235,7 +241,7 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: _load,
-                child: const Text('ព្យាយាមម្ដងទៀត'),
+                child: Text(t.tryAgain),
               ),
             ],
           ),
@@ -259,16 +265,16 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
             Padding(
               padding: const EdgeInsets.all(8),
               child: TextField(
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'ស្វែងរកតាមឈ្មោះ/លេខ (Filter by name/code)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: t.searchByNameCode,
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
                 onChanged: (v) => setState(() => _filter = v),
               ),
             ),
-            Expanded(child: _buildList()),
+            Expanded(child: _buildList(t)),
           ],
         );
       },
@@ -359,10 +365,10 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
     );
   }
 
-  Widget _buildList() {
+  Widget _buildList(AppTexts t) {
     final items = _filtered;
     if (items.isEmpty) {
-      return const Center(child: Text('មិនទាន់មានផ្លូវ'));
+      return Center(child: Text(t.noRoutesYet));
     }
     return RefreshIndicator(
       onRefresh: _load,
@@ -374,7 +380,7 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
           final r = items[i];
           final title = [
             if (r.code != null && r.code!.isNotEmpty) r.code,
-            r.name ?? 'គ្មានឈ្មោះ',
+            r.name ?? t.noName,
           ].join('  ');
           // GET /transit/routes carries no stop count; derive it from the
           // stops we fetched for the polyline (null while still loading).
@@ -388,15 +394,15 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
             ),
             title: Text(title),
             subtitle: Text(
-              '${r.typeLabel} · '
-              '${count != null ? '$count ចំណត' : '… ចំណត'}',
+              '${t.adminRouteType(r.isLine, r.direction)} · '
+              '${count != null ? t.stopsCount(count) : t.stopsCountUnknown}',
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
                   icon: const Icon(Icons.center_focus_strong, size: 20),
-                  tooltip: 'បង្ហាញលើផែនទី',
+                  tooltip: t.showOnMap,
                   onPressed: () => _focusRoute(r),
                 ),
                 InkWell(

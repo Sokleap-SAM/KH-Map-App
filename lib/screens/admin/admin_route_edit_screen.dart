@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/admin_route.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/constants/colors.dart';
 import 'admin_color_picker.dart';
@@ -45,10 +47,11 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
   }
 
   Future<void> _save() async {
+    final t = context.read<SettingsProvider>().t;
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('សូមបញ្ចូលឈ្មោះផ្លូវ (Route name required)')),
+        SnackBar(content: Text(t.routeNameRequired)),
       );
       return;
     }
@@ -67,7 +70,7 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('បានរក្សាទុក (Saved)')),
+        SnackBar(content: Text(t.routeSaved)),
       );
       Navigator.of(context).pop(
         AdminRoute(
@@ -86,7 +89,7 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
       setState(() => _saving = false);
       final msg = e is AdminApiException ? e.message : e.toString();
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('បរាជ័យ: $msg')));
+          .showSnackBar(SnackBar(content: Text(t.failedWith(msg))));
     }
   }
 
@@ -127,53 +130,54 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        title: const Text('កែផ្លូវ (Edit route)'),
+        title: Text(t.editRouteTitle),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           TextField(
             controller: _nameCtrl,
-            decoration: const InputDecoration(
-              labelText: 'ឈ្មោះផ្លូវ (Name)',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: t.routeNameField,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _codeCtrl,
-            decoration: const InputDecoration(
-              labelText: 'កូដ (Code, optional)',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: t.codeOptional,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 8),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('សកម្ម (Active)'),
+            title: Text(t.activeLabel),
             subtitle: Text(_status == 'active'
-                ? 'បង្ហាញ & ដំណើរការ (active)'
-                : 'បិទ (inactive)'),
+                ? t.activeOnDesc
+                : t.activeOffDesc),
             value: _status == 'active',
             onChanged: (v) => setState(() => _status = v ? 'active' : 'inactive'),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('រង្វង់ / Loop (circular)'),
+            title: Text(t.loopCircular),
             subtitle: Text(_isLine
-                ? 'ចំណតចេញ = ចំណតចុង (departure === terminal)'
-                : 'បន្ទាត់មានទិសដៅ (directional line)'),
+                ? t.departureEqualsTerminal
+                : t.directionalLine),
             value: _isLine,
             onChanged: (v) => setState(() => _isLine = v),
           ),
           if (!_isLine) ...[
             const SizedBox(height: 8),
-            const Text('ទិសដៅ (Direction)',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(t.direction,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -181,7 +185,7 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
                   child: _directionOption(
                     value: 'outbound',
                     icon: Icons.arrow_forward,
-                    label: 'Outbound',
+                    label: t.outbound,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -189,7 +193,7 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
                   child: _directionOption(
                     value: 'inbound',
                     icon: Icons.arrow_back,
-                    label: 'Inbound',
+                    label: t.inbound,
                   ),
                 ),
               ],
@@ -197,7 +201,7 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
           ],
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('ពណ៌ផ្លូវ (Route color)'),
+            title: Text(t.routeColor),
             subtitle: Text(_color),
             trailing: Container(
               width: 36,
@@ -233,9 +237,9 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white),
                   )
-                : const Text('រក្សាទុក (Save)',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                : Text(t.save,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16)),
           ),
         ),
       ),

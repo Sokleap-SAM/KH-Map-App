@@ -8,7 +8,14 @@ import '../models/place.dart';
 
 class FavoritePlace {
   final String placeId;
+
+  /// Khmer place name (place `nameInKhmer`).
   final String name;
+
+  /// Latin place name (place `nameInLatin`); null on entries saved before the
+  /// field existed.
+  final String? nameLatin;
+
   final String categoryName;
   final double latitude;
   final double longitude;
@@ -20,6 +27,7 @@ class FavoritePlace {
   const FavoritePlace({
     required this.placeId,
     required this.name,
+    this.nameLatin,
     required this.categoryName,
     required this.latitude,
     required this.longitude,
@@ -29,9 +37,14 @@ class FavoritePlace {
     this.ratingCount,
   });
 
+  /// Place name for the active language ('en' → Latin, else Khmer).
+  String localizedName(String languageCode) =>
+      localizedPlaceName(name, nameLatin, languageCode);
+
   factory FavoritePlace.fromPlace(Place p) => FavoritePlace(
     placeId: p.id,
-    name: p.name,
+    name: p.nameInKhmer,
+    nameLatin: p.nameInLatin,
     categoryName: p.category?.name ?? 'Place',
     latitude: p.latitude,
     longitude: p.longitude,
@@ -44,6 +57,7 @@ class FavoritePlace {
   Map<String, dynamic> toJson() => {
     'placeId': placeId,
     'name': name,
+    'nameLatin': nameLatin,
     'categoryName': categoryName,
     'latitude': latitude,
     'longitude': longitude,
@@ -59,7 +73,8 @@ class FavoritePlace {
         (json['favoritedAt'] ?? json['createdAt']) as String? ?? '';
     return FavoritePlace(
       placeId: rawId,
-      name: json['name'] as String? ?? '',
+      name: (json['name'] ?? json['nameInKhmer']) as String? ?? '',
+      nameLatin: (json['nameLatin'] ?? json['nameInLatin']) as String?,
       categoryName: (json['categoryName'] as String?) ?? 'Place',
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
@@ -172,7 +187,8 @@ class FavoritesService {
     try {
       final body = jsonEncode({
         'placeId': place.id,
-        'name': place.name,
+        'name': place.nameInKhmer,
+        'nameLatin': place.nameInLatin,
         'categoryName': place.category?.name ?? 'Place',
         'latitude': place.latitude,
         'longitude': place.longitude,

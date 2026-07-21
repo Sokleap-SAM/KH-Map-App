@@ -19,6 +19,24 @@ extension DashboardPeriodX on DashboardPeriod {
         return 'ឆ្នាំ';
     }
   }
+
+  /// Short English label for the tab.
+  String get labelEn {
+    switch (this) {
+      case DashboardPeriod.day:
+        return 'Day';
+      case DashboardPeriod.week:
+        return 'Week';
+      case DashboardPeriod.month:
+        return 'Month';
+      case DashboardPeriod.year:
+        return 'Year';
+    }
+  }
+
+  /// Label for the active [languageCode] ('en' → English, else Khmer).
+  String label(String languageCode) =>
+      languageCode == 'en' ? labelEn : labelKm;
 }
 
 /// Live fleet state — not bound to the selected window.

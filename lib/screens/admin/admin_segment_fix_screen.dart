@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/route_stop.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/constants/colors.dart';
 
@@ -108,9 +110,11 @@ class _AdminSegmentFixScreenState extends State<AdminSegmentFixScreen> {
       if (!mounted) return;
       setState(() => _saving = false);
       final msg = e is AdminApiException ? e.message : e.toString();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('បរាជ័យ: $msg')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.read<SettingsProvider>().t.failedWith(msg)),
+        ),
+      );
     }
   }
 
@@ -122,11 +126,14 @@ class _AdminSegmentFixScreenState extends State<AdminSegmentFixScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    final lang = settings.languageCode;
+    final t = settings.t;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        title: Text('កែផ្លូវ · ${widget.stop.stopName}'),
+        title: Text(t.fixRouteFor(widget.stop.localizedStopName(lang))),
       ),
       body: Column(
         children: [
@@ -135,7 +142,7 @@ class _AdminSegmentFixScreenState extends State<AdminSegmentFixScreen> {
             color: AppColors.primaryColor.withValues(alpha: 0.08),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Text(
-              '${widget.prevStop.stopName} → ${widget.stop.stopName}',
+              '${widget.prevStop.localizedStopName(lang)} → ${widget.stop.localizedStopName(lang)}',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -154,13 +161,12 @@ class _AdminSegmentFixScreenState extends State<AdminSegmentFixScreen> {
   }
 
   Widget _hint() {
+    final t = context.read<SettingsProvider>().t;
     final text = _suggesting
-        ? 'កំពុងគណនាផ្លូវ… (Fetching suggestion…)'
+        ? t.fetchingSuggestion
         : _points.isNotEmpty
-        ? '✏️ គូរដោយដៃ (Manual: line follows your taps exactly) · '
-              '${_points.length} points'
-        : 'ផ្លូវខុស? ចុចលើផែនទីដើម្បីគូរដោយដៃ (Wrong road? Tap the map to '
-              'draw the line yourself)';
+        ? t.manualDrawHint(_points.length)
+        : t.wrongRoadDrawHint;
     return Positioned(
       top: 8,
       left: 8,
@@ -294,6 +300,7 @@ class _AdminSegmentFixScreenState extends State<AdminSegmentFixScreen> {
   }
 
   Widget _buildBar() {
+    final t = context.watch<SettingsProvider>().t;
     final busy = _suggesting || _saving;
     return SafeArea(
       child: Padding(
@@ -361,9 +368,7 @@ class _AdminSegmentFixScreenState extends State<AdminSegmentFixScreen> {
                       )
                     : const Icon(Icons.check),
                 label: Text(
-                  _points.isNotEmpty
-                      ? 'រក្សាទុកបន្ទាត់ដែលគូរ (Save drawn line)'
-                      : 'រក្សាទុកផ្លូវណែនាំ (Save suggested path)',
+                  _points.isNotEmpty ? t.saveDrawnLine : t.saveSuggestedPath,
                 ),
               ),
             ),

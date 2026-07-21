@@ -7,8 +7,11 @@ import 'package:latlong2/latlong.dart';
 
 import '../../models/place.dart';
 import '../../models/place_category.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
+import 'package:provider/provider.dart';
 
 /// Create or edit a place. Pick a category, tap the map to set/move the
 /// marker, type a name, save. Pops `true` on success.
@@ -27,6 +30,8 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
   final MapController _mapController = MapController();
   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _nameLatinCtrl = TextEditingController();
+
+  AppTexts get _t => context.read<SettingsProvider>().t;
   LatLng? _point;
   bool _saving = false;
 
@@ -91,22 +96,23 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
   }
 
   Future<void> _save() async {
+    final t = _t;
     final name = _nameCtrl.text.trim();
     final nameLatin = _nameLatinCtrl.text.trim();
     if (name.isEmpty) {
-      _snack('សូមបញ្ចូលឈ្មោះជាភាសាខ្មែរ (Khmer name required)');
+      _snack(t.khmerNameRequired);
       return;
     }
     if (nameLatin.isEmpty) {
-      _snack('សូមបញ្ចូលឈ្មោះជាអក្សរឡាតាំង (Latin name required)');
+      _snack(t.latinNameRequired);
       return;
     }
     if (_categoryId == null) {
-      _snack('សូមជ្រើសរើសប្រភេទ (Category required)');
+      _snack(t.categoryRequired);
       return;
     }
     if (_point == null) {
-      _snack('ចុចលើផែនទីដើម្បីកំណត់ទីតាំង (Tap the map)');
+      _snack(t.tapMapToSetLocation);
       return;
     }
     setState(() => _saving = true);
@@ -138,7 +144,7 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
       if (!mounted) return;
       setState(() => _saving = false);
       final msg = e is AdminApiException ? e.message : e.toString();
-      _snack('បរាជ័យ: $msg');
+      _snack(t.failedWith(msg));
     }
   }
 
@@ -148,7 +154,7 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
       if (picked.isEmpty || !mounted) return;
       setState(() => _photoPaths.addAll(picked.map((x) => x.path)));
     } catch (e) {
-      if (mounted) _snack('រូបភាពបរាជ័យ: $e');
+      if (mounted) _snack(_t.photoFailed('$e'));
     }
   }
 
@@ -164,13 +170,13 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
         children: [
           Row(
             children: [
-              const Text('រូបភាព (Photos)',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(_t.photos,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
               const Spacer(),
               TextButton.icon(
                 onPressed: _pickPhotos,
                 icon: const Icon(Icons.add_a_photo, size: 18),
-                label: const Text('បន្ថែម'),
+                label: Text(_t.add),
               ),
             ],
           ),
@@ -192,10 +198,11 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
                     onRemove: () => setState(() => _photoPaths.removeAt(i)),
                   ),
                 if (hasNone)
-                  const Align(
+                  Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('មិនមានរូបភាព (No photos)',
-                        style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    child: Text(_t.noPhotos,
+                        style: const TextStyle(
+                            color: Colors.grey, fontSize: 12)),
                   ),
               ],
             ),
@@ -289,13 +296,12 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        title: Text(
-          widget.isEdit ? 'កែទីកន្លែង (Edit place)' : 'បង្កើតទីកន្លែង (New place)',
-        ),
+        title: Text(widget.isEdit ? t.editPlaceTitle : t.newPlaceTitle),
       ),
       body: Column(
         children: [
@@ -303,9 +309,9 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: TextField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'ឈ្មោះជាភាសាខ្មែរ (Name in Khmer)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: t.nameInKhmerLabel,
+                border: const OutlineInputBorder(),
                 isDense: true,
               ),
             ),
@@ -314,9 +320,9 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: TextField(
               controller: _nameLatinCtrl,
-              decoration: const InputDecoration(
-                labelText: 'ឈ្មោះជាអក្សរឡាតាំង (Name in Latin)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: t.nameInLatinLabel,
+                border: const OutlineInputBorder(),
                 isDense: true,
               ),
             ),
@@ -325,8 +331,8 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: DropdownButtonFormField<String>(
               initialValue: _categoryId,
-              decoration: const InputDecoration(
-                labelText: 'ប្រភេទ (Category)',
+              decoration: InputDecoration(
+                labelText: t.category,
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
@@ -392,7 +398,7 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
                       padding: const EdgeInsets.all(8),
                       child: Text(
                         _point == null
-                            ? 'ចុចលើផែនទីដើម្បីដាក់ទីតាំង (Tap to place)'
+                            ? t.tapToPlace
                             : '${_point!.latitude}, ${_point!.longitude}',
                         style: const TextStyle(color: Colors.white),
                         textAlign: TextAlign.center,
@@ -423,7 +429,7 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
                         strokeWidth: 2, color: Colors.white),
                   )
                 : Text(
-                    widget.isEdit ? 'រក្សាទុក (Save)' : 'បង្កើត (Create)',
+                    widget.isEdit ? t.save : t.create,
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 16),
                   ),

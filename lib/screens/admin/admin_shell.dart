@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
 import '../account_screen.dart';
 import 'admin_dashboard_screen.dart';
@@ -28,6 +30,7 @@ class _AdminShellState extends State<AdminShell> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: BottomNavigationBar(
@@ -39,26 +42,26 @@ class _AdminShellState extends State<AdminShell> {
         unselectedItemColor: AppColors.secondaryTextColor,
         selectedFontSize: 12,
         unselectedFontSize: 12,
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: 'ផ្ទាំង',
+            icon: const Icon(Icons.dashboard_outlined),
+            activeIcon: const Icon(Icons.dashboard),
+            label: t.adminDashboardTab,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.place_outlined),
-            activeIcon: Icon(Icons.place),
-            label: 'ទីកន្លែង',
+            icon: const Icon(Icons.place_outlined),
+            activeIcon: const Icon(Icons.place),
+            label: t.placesTab,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.route_outlined),
-            activeIcon: Icon(Icons.route),
-            label: 'ផ្លូវ',
+            icon: const Icon(Icons.route_outlined),
+            activeIcon: const Icon(Icons.route),
+            label: t.routesTab,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'គណនី',
+            icon: const Icon(Icons.person_outline),
+            activeIcon: const Icon(Icons.person),
+            label: t.navAccount,
           ),
         ],
       ),

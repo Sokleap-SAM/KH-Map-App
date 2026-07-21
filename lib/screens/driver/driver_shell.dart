@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
 import '../account_screen.dart';
 import 'driver_home_screen.dart';
@@ -25,6 +27,7 @@ class _DriverShellState extends State<DriverShell> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: BottomNavigationBar(
@@ -36,21 +39,21 @@ class _DriverShellState extends State<DriverShell> {
         unselectedItemColor: AppColors.secondaryTextColor,
         selectedFontSize: 12,
         unselectedFontSize: 12,
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'ទំព័រដើម',
+            icon: const Icon(Icons.home_outlined),
+            activeIcon: const Icon(Icons.home),
+            label: t.home,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.directions_bus_outlined),
-            activeIcon: Icon(Icons.directions_bus),
-            label: 'ដំណើរ',
+            icon: const Icon(Icons.directions_bus_outlined),
+            activeIcon: const Icon(Icons.directions_bus),
+            label: t.tripsTitle,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'គណនី',
+            icon: const Icon(Icons.person_outline),
+            activeIcon: const Icon(Icons.person),
+            label: t.navAccount,
           ),
         ],
       ),

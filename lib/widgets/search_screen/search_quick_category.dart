@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/settings_provider.dart';
 
 class SearchQuickCategoryRow extends StatelessWidget {
   const SearchQuickCategoryRow({super.key, required this.onCategorySelected});
@@ -8,30 +11,31 @@ class SearchQuickCategoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
         _QuickCategory(
           icon: Icons.home_outlined,
-          label: 'លំនៅឋាន',
+          label: t.quickHome,
           query: 'hotel',
           onTap: onCategorySelected,
         ),
         _QuickCategory(
           icon: Icons.work_outline,
-          label: 'កន្លែងធ្វើការ',
+          label: t.quickWork,
           query: 'office',
           onTap: onCategorySelected,
         ),
         _QuickCategory(
           icon: Icons.account_balance_outlined,
-          label: 'សាលារៀន',
+          label: t.quickSchool,
           query: 'education',
           onTap: onCategorySelected,
         ),
         _QuickCategory(
           icon: Icons.more_horiz,
-          label: 'ផ្សេងៗ',
+          label: t.quickOther,
           query: 'restaurant',
           onTap: onCategorySelected,
         ),

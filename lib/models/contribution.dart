@@ -6,7 +6,7 @@ import 'place.dart';
 class Contribution {
   final String id;
   final String? placeId; // null when this is a brand-new custom place
-  final String placeName; // Khmer name (backend `nameInKhmer`)
+  final String placeNameKhmer; // Khmer name (backend `nameInKhmer`)
   final String placeNameLatin; // Latin name (backend `nameInLatin`)
   final String categoryName;
   final double latitude;
@@ -20,7 +20,7 @@ class Contribution {
 
   const Contribution({
     required this.id,
-    required this.placeName,
+    required this.placeNameKhmer,
     required this.placeNameLatin,
     required this.categoryName,
     required this.latitude,
@@ -34,8 +34,12 @@ class Contribution {
     this.ratingId,
   });
 
+  /// Place name for the active language ('en' → Latin, else Khmer).
+  String localizedPlaceLabel(String languageCode) =>
+      localizedPlaceName(placeNameKhmer, placeNameLatin, languageCode);
+
   Contribution copyWith({
-    String? placeName,
+    String? placeNameKhmer,
     String? placeNameLatin,
     String? categoryName,
     double? latitude,
@@ -49,7 +53,7 @@ class Contribution {
   }) {
     return Contribution(
       id: id,
-      placeName: placeName ?? this.placeName,
+      placeNameKhmer: placeNameKhmer ?? this.placeNameKhmer,
       placeNameLatin: placeNameLatin ?? this.placeNameLatin,
       categoryName: categoryName ?? this.categoryName,
       latitude: latitude ?? this.latitude,
@@ -75,7 +79,7 @@ class Contribution {
     return Contribution(
       id: id,
       placeId: place.id,
-      placeName: place.nameInKhmer,
+      placeNameKhmer: place.nameInKhmer,
       placeNameLatin: place.nameInLatin,
       categoryName: place.category?.name ?? 'Place',
       latitude: place.latitude,
@@ -89,44 +93,47 @@ class Contribution {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'placeId': placeId,
-        'ratingId': ratingId,
-        'placeName': placeName,
-        'placeNameLatin': placeNameLatin,
-        'categoryName': categoryName,
-        'latitude': latitude,
-        'longitude': longitude,
-        'rating': rating,
-        'comment': comment,
-        'photos': photos,
-        'isCustomPlace': isCustomPlace,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'placeId': placeId,
+    'ratingId': ratingId,
+    'placeNameKhmer': placeNameKhmer,
+    'placeNameLatin': placeNameLatin,
+    'categoryName': categoryName,
+    'latitude': latitude,
+    'longitude': longitude,
+    'rating': rating,
+    'comment': comment,
+    'photos': photos,
+    'isCustomPlace': isCustomPlace,
+    'createdAt': createdAt.toIso8601String(),
+  };
 
   factory Contribution.fromJson(Map<String, dynamic> json) {
     return Contribution(
-      id: json['id']?.toString() ??
+      id:
+          json['id']?.toString() ??
           DateTime.now().microsecondsSinceEpoch.toString(),
       placeId: json['placeId'] as String?,
       ratingId: json['ratingId'] as String?,
-      placeName: json['placeName'] as String? ?? '',
-      // Legacy persisted contributions predate this field — fall back to the
-      // Khmer name so they still load.
-      placeNameLatin: json['placeNameLatin'] as String? ??
+      // Legacy persisted contributions stored a single `placeName` (typically
+      // Khmer) — map it to the Khmer field so old entries keep their label.
+      placeNameKhmer:
+          json['placeNameKhmer'] as String? ??
           json['placeName'] as String? ??
           '',
+      placeNameLatin: json['placeNameLatin'] as String? ?? '',
       categoryName: json['categoryName'] as String? ?? 'Place',
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       rating: (json['rating'] as num?)?.toDouble() ?? 0,
       comment: json['comment'] as String? ?? '',
-      photos: (json['photos'] as List?)?.whereType<String>().toList() ??
+      photos:
+          (json['photos'] as List?)?.whereType<String>().toList() ??
           const <String>[],
       isCustomPlace: json['isCustomPlace'] as bool? ?? false,
       createdAt:
           DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
-              DateTime.now(),
+          DateTime.now(),
     );
   }
 }

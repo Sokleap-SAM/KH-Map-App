@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/services/auth_service.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
+import 'package:provider/provider.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -19,34 +21,38 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _isLoading = false;
 
   void _handleSendCode() async {
+    final t = context.read<SettingsProvider>().t;
     setState(() => _isLoading = true);
     bool success = await _authService.sendForgotPasswordOtp(
       emailController.text,
     );
+    if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (success) {
       setState(() => _isCodeSent = true);
-      _showMessage("លេខកូដត្រូវបានផ្ញើ!");
+      _showMessage(t.codeSent);
     } else {
-      _showMessage("រកមិនឃើញអ៊ីមែលនេះទេ");
+      _showMessage(t.emailNotFound);
     }
   }
 
   void _handleResetPassword() async {
+    final t = context.read<SettingsProvider>().t;
     setState(() => _isLoading = true);
     bool success = await _authService.resetPassword(
       emailController.text,
       otpController.text,
       passwordController.text,
     );
+    if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (success) {
-      _showMessage("ប្តូរលេខសម្ងាត់ជោគជ័យ!");
+      _showMessage(t.passwordChanged);
       Navigator.pop(context); // Go back to Login
     } else {
-      _showMessage("លេខកូដមិនត្រឹមត្រូវ");
+      _showMessage(t.invalidCode);
     }
   }
 
@@ -56,6 +62,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       backgroundColor: AppColors.primaryColor,
       appBar: AppBar(
@@ -68,9 +75,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "ភ្លេចលេខសម្ងាត់",
-              style: TextStyle(
+            Text(
+              t.forgotPasswordTitle,
+              style: const TextStyle(
                 color: Color(0xFFE8B67D),
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -78,9 +85,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              _isCodeSent
-                  ? "សូមបញ្ចូលលេខកូដ ៦ ខ្ទង់ដែលបានផ្ញើទៅកាន់អ៊ីមែលរបស់អ្នក"
-                  : "សូមបញ្ចូលអ៊ីមែលរបស់អ្នកដើម្បីទទួលបានលេខកូដ",
+              _isCodeSent ? t.enterCodeSubtitle : t.enterEmailSubtitle,
               style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 40),
@@ -88,7 +93,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             // STEP 1: Enter Email
             _buildTextField(
               controller: emailController,
-              label: "អ៊ីមែល",
+              label: t.emailField,
               icon: Icons.email_outlined,
               enabled: !_isCodeSent, // Lock email after code is sent
             ),
@@ -98,14 +103,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               const SizedBox(height: 20),
               _buildTextField(
                 controller: otpController,
-                label: "លេខកូដ ៦ ខ្ទង់",
+                label: t.codeField,
                 icon: Icons.numbers,
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 20),
               _buildTextField(
                 controller: passwordController,
-                label: "លេខសម្ងាត់ថ្មី",
+                label: t.newPasswordField,
                 icon: Icons.lock_outline,
                 isPassword: true,
               ),
@@ -131,7 +136,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 child: _isLoading
                     ? const CircularProgressIndicator(color: Colors.black)
                     : Text(
-                        _isCodeSent ? "ប្តូរលេខសម្ងាត់" : "ផ្ញើលេខកូដ",
+                        _isCodeSent ? t.changePassword : t.sendCode,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
               ),

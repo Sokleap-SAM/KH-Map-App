@@ -109,6 +109,9 @@ class TransitService {
     required double destLat,
     required double destLng,
     String type = 'transit',
+    // Transit planning (walk + bus legs + transfers) is much heavier than a
+    // single walk query, so callers give the first fetch a longer budget.
+    Duration timeout = const Duration(seconds: 10),
   }) async {
     final uri = Uri.parse('$_baseUrl/transit/plan').replace(
       queryParameters: {
@@ -119,7 +122,7 @@ class TransitService {
         'type': type,
       },
     );
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await http.get(uri).timeout(timeout);
     if (response.statusCode != 200) {
       throw Exception('Failed to fetch route plan (${response.statusCode})');
     }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
+import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import 'package:kh_map_app/screens/forgot_password_screen.dart';
 
@@ -18,9 +20,10 @@ class _LoginScreenState extends State<LoginScreen> {
   bool isLoginMode = true;
 
   void _handleSubmit() async {
+    final t = context.read<SettingsProvider>().t;
     if (!isLoginMode) {
       if (passwordController.text != confirmPasswordController.text) {
-        _showError("លេខសម្ងាត់មិនទាន់ត្រឹមត្រូវ (Passwords do not match)");
+        _showError(t.passwordsDoNotMatch);
         return;
       }
     }
@@ -34,24 +37,26 @@ class _LoginScreenState extends State<LoginScreen> {
         );
 
         if (success) {
+          if (!mounted) return;
           Navigator.pop(context, true);
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(const SnackBar(content: Text("ចូលបានជោគជ័យ")));
+          ).showSnackBar(SnackBar(content: Text(t.loginSuccess)));
         } else {
           final response = await _authService.register(
             nameController.text,
             emailController.text,
             passwordController.text,
           );
+          if (!mounted) return;
 
           if (response.statusCode == 201) {
             setState(() => isLoginMode = true);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("បង្កើតគណនីជោគជ័យ! សូមចូលគណនី")),
+              SnackBar(content: Text(t.registerSuccess)),
             );
           } else {
-            _showError("ការចុះឈ្មោះបរាជ័យ (ប្រហែលជាមានអ៊ីមែលនេះរួចហើយ)");
+            _showError(t.registerFailedEmailExists);
           }
         }
       } else {
@@ -65,18 +70,21 @@ class _LoginScreenState extends State<LoginScreen> {
             emailController.text,
             passwordController.text,
           );
+          if (!mounted) return;
 
           if (loginSuccess) {
             _finishAuth();
           }
         } else {
-          _showError("ការចុះឈ្មោះបរាជ័យ");
+          if (!mounted) return;
+          _showError(t.registerFailed);
         }
       }
     } catch (e) {
-      _showError("មិនអាចភ្ជាប់ទៅកាន់ Server បានទេ");
+      if (!mounted) return;
+      _showError(t.cannotReachServer);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -85,9 +93,9 @@ class _LoginScreenState extends State<LoginScreen> {
       context,
       true,
     ); // Returns 'true' to AccountScreen to fetch profile
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("ជោគជ័យ!")));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.read<SettingsProvider>().t.success)),
+    );
   }
 
   void _showError(String msg) {
@@ -101,6 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       backgroundColor: AppColors.primaryColor,
       appBar: AppBar(
@@ -117,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              isLoginMode ? "ចូលគណនី" : "បង្កើតគណនី",
+              isLoginMode ? t.login : t.createAccount,
               style: const TextStyle(
                 color: Color(0xFFE8B67D),
                 fontSize: 32,
@@ -126,9 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              isLoginMode
-                  ? "សូមបញ្ចូលអ៊ីមែល និងលេខសម្ងាត់"
-                  : "សូមបំពេញព័ត៌មានខាងក្រោម",
+              isLoginMode ? t.loginSubtitle : t.registerSubtitle,
               style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 40),
@@ -137,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
             if (!isLoginMode) ...[
               _buildTextField(
                 controller: nameController,
-                label: "ឈ្មោះ",
+                label: t.nameField,
                 icon: Icons.person_outline,
               ),
               const SizedBox(height: 20),
@@ -146,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
             // 2. Email Field
             _buildTextField(
               controller: emailController,
-              label: "អ៊ីមែល",
+              label: t.emailField,
               icon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
             ),
@@ -155,7 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
             // 3. Password Field
             _buildTextField(
               controller: passwordController,
-              label: "លេខសម្ងាត់",
+              label: t.passwordField,
               icon: Icons.lock_outline,
               isPassword: true,
             ),
@@ -163,7 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               _buildTextField(
                 controller: confirmPasswordController,
-                label: "ផ្ទៀងផ្ទាត់លេខសម្ងាត់", // Confirm Password in Khmer
+                label: t.confirmPasswordField,
                 icon: Icons.lock_reset_outlined,
                 isPassword: true,
               ),
@@ -180,9 +187,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     );
                   },
-                  child: const Text(
-                    "ភ្លេចលេខសម្ងាត់? (Forgot Password?)",
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  child: Text(
+                    t.forgotPasswordLink,
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
                   ),
                 ),
               ),
@@ -204,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 child: Text(
-                  isLoginMode ? "ចូល" : "ចុះឈ្មោះ",
+                  isLoginMode ? t.signIn : t.signUp,
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -224,9 +231,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   });
                 },
                 child: Text(
-                  isLoginMode
-                      ? "មិនទាន់មានគណនី? ចុះឈ្មោះនៅទីនេះ"
-                      : "មានគណនីរួចហើយ? ចូលនៅទីនេះ",
+                  isLoginMode ? t.noAccountSignUp : t.haveAccountSignIn,
                   style: const TextStyle(color: Color(0xFFE8B67D)),
                 ),
               ),
