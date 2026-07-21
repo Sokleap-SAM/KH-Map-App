@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/models/place.dart';
 import 'package:kh_map_app/models/place_rating.dart';
+import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/services/place_service.dart';
 import 'package:kh_map_app/utils/auth_guard.dart';
 import 'package:kh_map_app/widgets/map_screen/write_review_sheet.dart';
+import 'package:provider/provider.dart';
 
 /// Full list of reviews for a place: every rating, comment and the photos each
 /// reviewer attached. Pushed from the "Rating" row of the place detail sheet.
@@ -47,9 +49,9 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
     );
     if (submitted == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           behavior: SnackBarBehavior.floating,
-          content: Text('Thanks! Your review was posted.'),
+          content: Text(context.read<SettingsProvider>().t.reviewPosted),
         ),
       );
       _reload();
@@ -58,6 +60,8 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    final t = settings.t;
     return Scaffold(
       backgroundColor: _bgColor,
       appBar: AppBar(
@@ -67,16 +71,16 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Reviews',
-              style: TextStyle(
+            Text(
+              t.reviews,
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: Colors.white,
               ),
             ),
             Text(
-              widget.place.name,
+              widget.place.localizedName(settings.languageCode),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -89,7 +93,7 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
         backgroundColor: const Color(0xFF3B82F6),
         foregroundColor: Colors.white,
         icon: const Icon(Icons.rate_review_outlined),
-        label: const Text('Write a review'),
+        label: Text(t.writeReview),
       ),
       body: FutureBuilder<List<PlaceRating>>(
         future: _future,
@@ -164,7 +168,7 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  count == 1 ? '1 review' : '$count reviews',
+                  context.watch<SettingsProvider>().t.reviewsCount(count),
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -172,9 +176,9 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'What people are saying about this place',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey),
+                Text(
+                  context.watch<SettingsProvider>().t.whatPeopleSaying,
+                  style: const TextStyle(fontSize: 12.5, color: Colors.grey),
                 ),
               ],
             ),
@@ -185,24 +189,25 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
   }
 
   Widget _emptyState() {
+    final t = context.watch<SettingsProvider>().t;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.rate_review_outlined, size: 56, color: Colors.white24),
           const SizedBox(height: 14),
-          const Text(
-            'No reviews yet',
-            style: TextStyle(
+          Text(
+            t.noReviewsYet,
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Be the first to share your experience.',
-            style: TextStyle(fontSize: 13, color: Colors.grey),
+          Text(
+            t.beFirstToReview,
+            style: const TextStyle(fontSize: 13, color: Colors.grey),
           ),
         ],
       ),
@@ -210,15 +215,16 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
   }
 
   Widget _errorState() {
+    final t = context.watch<SettingsProvider>().t;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.cloud_off_rounded, size: 56, color: Colors.white24),
           const SizedBox(height: 14),
-          const Text(
-            'Could not load reviews',
-            style: TextStyle(
+          Text(
+            t.couldNotLoadReviews,
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Colors.white,
@@ -232,7 +238,7 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
               foregroundColor: Colors.white,
               side: const BorderSide(color: Colors.white30),
             ),
-            label: const Text('Retry'),
+            label: Text(t.tryAgain),
           ),
         ],
       ),
@@ -275,7 +281,12 @@ class _ReviewTile extends StatelessWidget {
                         _StarRow(rating: review.score, size: 14),
                         const SizedBox(width: 8),
                         Text(
-                          _relativeDate(review.createdAt),
+                          review.createdAt == null
+                              ? ''
+                              : context
+                                  .watch<SettingsProvider>()
+                                  .t
+                                  .timeAgo(review.createdAt!),
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.grey,
@@ -306,35 +317,6 @@ class _ReviewTile extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static String _relativeDate(DateTime? date) {
-    if (date == null) return '';
-    final diff = DateTime.now().difference(date);
-    if (diff.inDays >= 365) {
-      final y = diff.inDays ~/ 365;
-      return y == 1 ? '1 year ago' : '$y years ago';
-    }
-    if (diff.inDays >= 30) {
-      final m = diff.inDays ~/ 30;
-      return m == 1 ? '1 month ago' : '$m months ago';
-    }
-    if (diff.inDays >= 7) {
-      final w = diff.inDays ~/ 7;
-      return w == 1 ? '1 week ago' : '$w weeks ago';
-    }
-    if (diff.inDays >= 1) {
-      return diff.inDays == 1 ? '1 day ago' : '${diff.inDays} days ago';
-    }
-    if (diff.inHours >= 1) {
-      return diff.inHours == 1 ? '1 hour ago' : '${diff.inHours} hours ago';
-    }
-    if (diff.inMinutes >= 1) {
-      return diff.inMinutes == 1
-          ? '1 minute ago'
-          : '${diff.inMinutes} minutes ago';
-    }
-    return 'Just now';
   }
 }
 

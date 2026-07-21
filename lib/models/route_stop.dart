@@ -1,10 +1,18 @@
 import 'package:latlong2/latlong.dart';
 
+import 'place.dart';
+
 class RouteStop {
   final String id;
   final String routeId;
   final String stopId;
+
+  /// Khmer stop name (place `nameInKhmer`).
   final String stopName;
+
+  /// Latin stop name (place `nameInLatin`); null on legacy records.
+  final String? stopNameLatin;
+
   final LatLng location;
   final int stopOrder;
   final double? distanceFromPrevious;
@@ -18,12 +26,17 @@ class RouteStop {
     required this.routeId,
     required this.stopId,
     required this.stopName,
+    this.stopNameLatin,
     required this.location,
     required this.stopOrder,
     this.distanceFromPrevious,
     this.estimatedTimeFromPrevious,
     this.segmentPath,
   });
+
+  /// Stop name for the active language ('en' → Latin, else Khmer).
+  String localizedStopName(String languageCode) =>
+      localizedPlaceName(stopName, stopNameLatin, languageCode);
 
   factory RouteStop.fromJson(Map<String, dynamic> json) {
     final stop = json['stop'] as Map<String, dynamic>;
@@ -43,7 +56,13 @@ class RouteStop {
       id: json['_id'] as String,
       routeId: json['route'] as String,
       stopId: stop['_id'] as String,
-      stopName: stop['name'] as String,
+      // The place entity renamed `name` → `nameInKhmer`; fall back to the
+      // legacy key (and to '') so a stop never crashes route parsing or shows
+      // a blank label.
+      stopName:
+          (stop['nameInKhmer'] ?? stop['name'] ?? stop['nameInLatin'] ?? '')
+              as String,
+      stopNameLatin: stop['nameInLatin'] as String?,
       location: LatLng(
         (coords[1] as num).toDouble(),
         (coords[0] as num).toDouble(),

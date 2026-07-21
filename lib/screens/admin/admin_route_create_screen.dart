@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/place.dart';
 import '../../models/route_stop.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
+import '../../utils/constants/text_strings.dart';
 import '../../utils/constants/colors.dart';
+import 'admin_color_picker.dart';
 import 'admin_map_size_button.dart';
 
 /// Multi-step route builder that composes a route from EXISTING places.
@@ -13,10 +17,15 @@ import 'admin_map_size_button.dart';
 /// Step 1 — metadata (name / code / isLine).            [create only]
 /// Step 2 — pick an ordered sequence of stops from existing places. The same
 ///          place may be picked again (loops); reorder via drag-and-drop.
-/// Step 3 — connect each consecutive pair with a manually-drawn polyline
-///          (tap vertices; "Suggest" seeds a draft; "Clear"/"Done").
-/// Step 4 — review + submit ONE POST /transit/admin/route-stops/bulk with each
-///          stop as `{ placeId, segmentFromPrevious? }`.
+/// Step 3 — per consecutive pair: a Valhalla suggestion (suggest-path) is
+///          previewed first. If the suggested road is wrong, the admin taps
+///          the map to hand-draw the line: taps become exact vertices joined
+///          by straight lines, anchored to the suggestion's first/last road
+///          coordinates. What is drawn is exactly what gets stored — the
+///          drawer must trace the road carefully.
+/// Step 4 — review + submit ONE POST /transit/admin/route-stops/bulk. Untouched
+///          segments send only `{ placeId }` (backend computes the road);
+///          hand-drawn ones add `segmentFromPrevious` stored verbatim.
 ///
 /// Nothing hits the backend until the Step 4 submit. Returns the affected
 /// route id on success, or null if cancelled.
@@ -50,8 +59,18 @@ class _SeqItem {
   const _SeqItem(this.key, this.place);
 }
 
-/// One segment to draw: from [prev] to [curr]. [toIndex] is the sequence index
-/// the segment arrives at (used to attach segmentFromPrevious on submit).
+/// A finished segment draft. [manual] == false → [path] is the Valhalla
+/// suggestion and nothing is submitted (the backend recomputes the same
+/// road). [manual] == true → the admin hand-drew the line; [path] is
+/// submitted verbatim as `segmentFromPrevious` and stored exactly as drawn.
+class _SegmentDraft {
+  final List<LatLng> path;
+  final bool manual;
+  const _SegmentDraft({required this.path, required this.manual});
+}
+
+/// One segment to preview: from [prev] to [curr]. [toIndex] is the sequence
+/// index the segment arrives at (used to attach vias on submit).
 class _SegSpec {
   final LatLng prev;
   final String prevName;
@@ -68,11 +87,16 @@ class _SegSpec {
 }
 
 class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
+  AppTexts get _t => context.read<SettingsProvider>().t;
+
   final MapController _mapController = MapController();
   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _codeCtrl = TextEditingController();
   final TextEditingController _filterCtrl = TextEditingController();
-  bool _isLine = true;
+  bool _isLine = false; // false = directional line, true = loop
+  String _direction = 'outbound'; // 'outbound' | 'inbound' (lines only)
+  String _color = '#2196F3'; // route color (create mode)
+  Color get _routeColor => routeColorFromHex(_color) ?? Colors.blueAccent;
 
   int _step = 1;
 
@@ -86,21 +110,31 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   int _seqKeyCounter = 0;
   String _filter = '';
 
-  // Resizable picker map (60% → 30% → 10% of body height).
-  static const List<double> _mapSizes = [0.6, 0.3, 0.1];
+  // Resizable picker map (50% → 30% → 10% of body height).
+  static const List<double> _mapSizes = [0.5, 0.3, 0.1];
   double _mapFraction = 0.3;
   void _cycleMapSize() {
     final i = _mapSizes.indexOf(_mapFraction);
     setState(() => _mapFraction = _mapSizes[(i + 1) % _mapSizes.length]);
   }
 
-  // Step 3 — connect.
+  // Step 3 — Valhalla suggestion + optional manual draw. Map taps are exact
+  // polyline vertices connected by straight lines, anchored to the
+  // suggestion's road endpoints.
   List<_SegSpec> _specs = const [];
-  final List<List<LatLng>> _segments = [];
+  final List<_SegmentDraft> _segments = [];
   int _connectingIndex = 0;
-  List<LatLng> _working = [];
+  List<LatLng> _points = [];
+  List<LatLng> _preview = [];
   bool _suggesting = false;
-  bool _penMode = false; // when true, map taps add vertices
+
+  /// The hand-drawn line: Valhalla's first coord → tapped points → Valhalla's
+  /// last coord. Falls back to the raw points when the suggestion is missing.
+  List<LatLng> get _manualPath => [
+    if (_preview.isNotEmpty) _preview.first,
+    ..._points,
+    if (_preview.length >= 2) _preview.last,
+  ];
 
   bool _submitting = false;
 
@@ -144,9 +178,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   void _doneMetadata() {
     if (_nameCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('សូមបញ្ចូលឈ្មោះផ្លូវ (Route name required)'),
-        ),
+        SnackBar(content: Text(_t.routeNameRequired)),
       );
       return;
     }
@@ -158,7 +190,11 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   List<Place> get _filteredPlaces {
     if (_filter.isEmpty) return _places;
     final q = _filter.toLowerCase();
-    return _places.where((p) => p.name.toLowerCase().contains(q)).toList();
+    return _places
+        .where((p) =>
+            p.nameInKhmer.toLowerCase().contains(q) ||
+            p.nameInLatin.toLowerCase().contains(q))
+        .toList();
   }
 
   void _addToSequence(Place p) {
@@ -180,21 +216,20 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   void _doneSequence() {
     if (_sequence.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('សូមជ្រើសរើសចំណតយ៉ាងតិច១ (Pick at least one stop)'),
-        ),
+        SnackBar(content: Text(_t.pickAtLeastOneStop)),
       );
       return;
     }
+    final lang = context.read<SettingsProvider>().languageCode;
     final specs = <_SegSpec>[];
     if (widget.isAppend && widget.existingStops.isNotEmpty) {
       final last = widget.existingStops.last;
       specs.add(
         _SegSpec(
           prev: last.location,
-          prevName: last.stopName,
+          prevName: last.localizedStopName(lang),
           curr: _ll(_sequence[0].place),
-          currName: _sequence[0].place.name,
+          currName: _sequence[0].place.localizedName(lang),
           toIndex: 0,
         ),
       );
@@ -203,9 +238,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
       specs.add(
         _SegSpec(
           prev: _ll(_sequence[i - 1].place),
-          prevName: _sequence[i - 1].place.name,
+          prevName: _sequence[i - 1].place.localizedName(lang),
           curr: _ll(_sequence[i].place),
-          currName: _sequence[i].place.name,
+          currName: _sequence[i].place.localizedName(lang),
           toIndex: i,
         ),
       );
@@ -219,26 +254,35 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
       } else {
         _step = 3;
         _connectingIndex = 0;
-        _working = [specs.first.prev];
-        _penMode = false;
+        _points = [];
+        _preview = [];
       }
     });
+    if (specs.isNotEmpty) _suggestSegment();
   }
 
-  // ─────────────────────────── Step 3: connect ───────────────────────────────
+  // ─────────────────────── Step 3: suggest + manual draw ─────────────────────
 
+  /// Map tap = a vertex of the hand-drawn line. Vertices connect with
+  /// straight lines, anchored to the suggestion's road endpoints — what is
+  /// drawn is exactly what gets stored, so trace the road carefully.
   void _onTapConnect(LatLng point) {
-    if (!_penMode) return; // only draw when the pen is active
-    setState(() => _working = [..._working, point]);
+    setState(() => _points = [..._points, point]);
   }
 
-  /// Discard the suggested/drawn line back to just the start anchor so the
-  /// admin can redraw from scratch.
-  void _removeSuggestion() {
-    final spec = _specs[_connectingIndex];
-    setState(() => _working = [spec.prev]);
+  /// Drop the last drawn vertex.
+  void _undoPoint() {
+    if (_points.isEmpty) return;
+    setState(() => _points = _points.sublist(0, _points.length - 1));
   }
 
+  /// Discard the drawing — back to the Valhalla suggestion alone.
+  void _clearPoints() {
+    setState(() => _points = []);
+  }
+
+  /// Fetch the Valhalla road suggestion between the two stops. Its first and
+  /// last coordinates also anchor the hand-drawn line to the road.
   Future<void> _suggestSegment() async {
     final spec = _specs[_connectingIndex];
     setState(() => _suggesting = true);
@@ -248,11 +292,10 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
         to: spec.curr,
       );
       if (!mounted) return;
-      setState(
-        () => _working = path.isNotEmpty ? path : [spec.prev, spec.curr],
-      );
+      setState(() => _preview = path);
     } catch (e) {
       if (!mounted) return;
+      setState(() => _preview = []);
       final msg = e is AdminApiException ? e.message : e.toString();
       ScaffoldMessenger.of(
         context,
@@ -262,30 +305,27 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
     }
   }
 
+  /// Accept the segment: hand-drawn line when vertices exist, otherwise the
+  /// Valhalla suggestion. Stop coordinates are never stitched in — stops are
+  /// markers only.
   void _doneSegment() {
-    final spec = _specs[_connectingIndex];
-    final pts = List<LatLng>.from(_working);
-    if (pts.isEmpty) {
-      pts.add(spec.prev);
-    } else {
-      pts[0] = spec.prev;
-    }
-    if (pts.last != spec.curr) pts.add(spec.curr);
-    if (pts.length < 2) {
-      pts
-        ..clear()
-        ..addAll([spec.prev, spec.curr]);
-    }
+    final manual = _points.isNotEmpty;
     setState(() {
-      _segments.add(pts);
+      _segments.add(
+        _SegmentDraft(
+          path: manual ? _manualPath : List<LatLng>.from(_preview),
+          manual: manual,
+        ),
+      );
       if (_connectingIndex + 1 < _specs.length) {
         _connectingIndex++;
-        _working = [_specs[_connectingIndex].prev];
-        _penMode = false;
+        _points = [];
+        _preview = [];
       } else {
         _step = 4;
       }
     });
+    if (_step == 3) _suggestSegment();
   }
 
   // ─────────────────────────── Step 4: submit ────────────────────────────────
@@ -293,14 +333,18 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   Future<void> _submit() async {
     setState(() => _submitting = true);
     try {
+      // Untouched segments send only the placeId — the backend computes the
+      // road geometry. Hand-drawn segments go verbatim as
+      // `segmentFromPrevious` and are stored exactly as drawn.
       final payload = <BulkStopRef>[];
       for (int i = 0; i < _sequence.length; i++) {
         List<List<double>>? seg;
         final specIdx = _specs.indexWhere((s) => s.toIndex == i);
         if (specIdx != -1 && specIdx < _segments.length) {
-          seg = _segments[specIdx]
-              .map((p) => [p.longitude, p.latitude])
-              .toList();
+          final draft = _segments[specIdx];
+          if (draft.manual && draft.path.length >= 2) {
+            seg = draft.path.map((p) => [p.longitude, p.latitude]).toList();
+          }
         }
         payload.add(
           BulkStopRef(placeId: _sequence[i].place.id, segmentFromPrevious: seg),
@@ -315,14 +359,15 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
             ? null
             : (_codeCtrl.text.trim().isEmpty ? null : _codeCtrl.text.trim()),
         isLine: widget.isAppend ? null : _isLine,
+        color: widget.isAppend ? null : _color,
+        // Loops have no direction; only directional lines send one.
+        direction: (widget.isAppend || _isLine) ? null : _direction,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            widget.isAppend
-                ? 'បានបន្ថែមចំណត (Stops appended)'
-                : 'បានបង្កើតផ្លូវ (Route created)',
+            widget.isAppend ? _t.stopsAppended : _t.routeCreated,
           ),
         ),
       );
@@ -333,27 +378,26 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
       final msg = e is AdminApiException ? e.message : e.toString();
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('បរាជ័យ: $msg')));
+      ).showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
     }
   }
 
   Future<void> _cancel() async {
+    final t = _t;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('បោះបង់?'),
-        content: const Text(
-          'ការងារនឹងបាត់បង់ (Your work will be lost). Cancel?',
-        ),
+        title: Text(t.cancelQuestion),
+        content: Text(t.workWillBeLost),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('ទេ'),
+            child: Text(t.no),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('បាទ/ចាស', style: TextStyle(color: Colors.white)),
+            child: Text(t.yes, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -363,14 +407,18 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
 
   // ──────────────────────────── Map geometry ─────────────────────────────────
 
+  /// Existing route geometry: the stored segments only. Stop coordinates are
+  /// markers, never part of the line (segments are stitched server-side).
+  /// Legacy routes without any segment geometry fall back to stop-to-stop.
   List<LatLng> _existingPolyline() {
     final out = <LatLng>[];
     for (final s in widget.existingStops) {
       if (s.segmentPath != null && s.segmentPath!.isNotEmpty) {
         out.addAll(s.segmentPath!);
-      } else {
-        out.add(s.location);
       }
+    }
+    if (out.isEmpty && widget.existingStops.length >= 2) {
+      return [for (final s in widget.existingStops) s.location];
     }
     return out;
   }
@@ -385,6 +433,8 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild-on-language-change dependency; helpers below use `read`.
+    context.watch<SettingsProvider>();
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -396,15 +446,15 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
           foregroundColor: Colors.white,
           title: Text(
             widget.isAppend
-                ? 'បន្ថែមចំណត · ${widget.appendRouteLabel ?? ''}'
-                : 'បង្កើតផ្លូវថ្មី',
+                ? _t.appendStopsLabel(widget.appendRouteLabel ?? '')
+                : _t.newRouteTitle,
           ),
           actions: [
             TextButton(
               onPressed: _cancel,
-              child: const Text(
-                'បោះបង់',
-                style: TextStyle(color: Colors.white),
+              child: Text(
+                _t.cancel,
+                style: const TextStyle(color: Colors.white),
               ),
             ),
           ],
@@ -429,43 +479,144 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
 
   // Step 1 UI
   Widget _buildMetadataStep() {
+    final t = _t;
     return Column(
       children: [
-        const _StepBanner(text: 'ដំណាក់កាល ១/៤ · ព័ត៌មានផ្លូវ (Route info)'),
+        _StepBanner(text: t.stepRouteInfo),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
               TextField(
                 controller: _nameCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'ឈ្មោះផ្លូវ (Name)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: t.routeNameField,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: _codeCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'កូដ (Code, optional)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: t.codeOptional,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 8),
               SwitchListTile(
-                title: Text(
-                  _isLine
-                      ? 'ប្រភេទ: បន្ទាត់ (Line — A→B)'
-                      : 'ប្រភេទ: រង្វង់ (Circular loop)',
+                contentPadding: EdgeInsets.zero,
+                title: Text(t.loopCircular),
+                subtitle: Text(
+                  _isLine ? t.departureEqualsTerminal : t.directionalLine,
                 ),
                 value: _isLine,
                 onChanged: (v) => setState(() => _isLine = v),
               ),
+              if (!_isLine)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        t.direction,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _directionOption(
+                              value: 'outbound',
+                              icon: Icons.arrow_forward,
+                              label: t.outbound,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _directionOption(
+                              value: 'inbound',
+                              icon: Icons.arrow_back,
+                              label: t.inbound,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          t.directionPairingNote,
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(t.routeColor),
+                subtitle: Text(_color),
+                trailing: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: routeColorFromHex(_color) ?? Colors.blue,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.black26),
+                  ),
+                ),
+                onTap: () async {
+                  final picked = await showRouteColorPicker(
+                    context,
+                    initialHex: _color,
+                  );
+                  if (picked != null) setState(() => _color = picked);
+                },
+              ),
             ],
           ),
         ),
-        _bottomButton('បន្ត (Next: pick stops)', _doneMetadata),
+        _bottomButton(t.nextPickStops, _doneMetadata),
       ],
+    );
+  }
+
+  Widget _directionOption({
+    required String value,
+    required IconData icon,
+    required String label,
+  }) {
+    final selected = _direction == value;
+    final fg = selected ? Colors.white : AppColors.primaryColor;
+    return Material(
+      color: selected ? AppColors.secondaryColor : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => setState(() => _direction = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? AppColors.secondaryColor : Colors.grey.shade400,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 20, color: fg),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(color: fg, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -484,9 +635,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
     }
     return Column(
       children: [
-        _StepBanner(
-          text: 'ដំណាក់កាល ២/៤ · ជ្រើសរើសលំដាប់ចំណត (${_sequence.length})',
-        ),
+        _StepBanner(text: _t.stepPickStops(_sequence.length)),
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -511,10 +660,10 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                     padding: const EdgeInsets.all(8),
                     child: TextField(
                       controller: _filterCtrl,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
-                        hintText: 'ស្វែងរកចំណត (Filter places)',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search),
+                        hintText: _t.filterPlaces,
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       onChanged: (v) => setState(() => _filter = v),
@@ -526,7 +675,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
             },
           ),
         ),
-        _bottomButton('បន្ត (Next: connect)', _doneSequence),
+        _bottomButton(_t.nextConnect, _doneSequence),
       ],
     );
   }
@@ -555,26 +704,53 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
     );
   }
 
+  Place? _placeById(String id) {
+    for (final p in _places) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
   List<Marker> _pickerMarkers() {
     final markers = <Marker>[];
     final existingIds = widget.existingStops.map((s) => s.stopId).toSet();
 
     // Existing route stops (append): start/end accented, middle grey dots, so
-    // the admin sees what's already on the route and where it ends.
+    // the admin sees what's already on the route and where it ends. Tappable
+    // too — e.g. append the route's first stop again to close a loop. When
+    // the place isn't in the picker catalogue (other stop category), build it
+    // from the route-stop itself so the tap still works.
     final lastIdx = widget.existingStops.length - 1;
     for (int i = 0; i < widget.existingStops.length; i++) {
       final s = widget.existingStops[i];
+      final place =
+          _placeById(s.stopId) ??
+          Place(
+            id: s.stopId,
+            nameInKhmer: s.stopName,
+            nameInLatin: s.stopNameLatin ?? s.stopName,
+            longitude: s.location.longitude,
+            latitude: s.location.latitude,
+            photos: const [],
+          );
+      void onTap() => _addToSequence(place);
       if (i == 0 || i == lastIdx) {
-        markers.add(_pin(s.location, i == 0 ? Colors.green : Colors.red,
-            i == 0 ? Icons.play_arrow : Icons.flag));
+        markers.add(
+          _pin(
+            s.location,
+            i == 0 ? Colors.green : Colors.red,
+            i == 0 ? Icons.play_arrow : Icons.flag,
+            onTap: onTap,
+          ),
+        );
       } else {
-        markers.add(_smallDot(s.location, Colors.grey));
+        markers.add(_smallDot(s.location, Colors.grey, onTap: onTap));
       }
     }
 
     // Available (unselected) places — dark tappable add-pins. Picked stops are
     // drawn below as gold numbered pins, and existing-route stops above, so a
-    // selected stop reads purely as gold (re-add from the list for a loop).
+    // selected stop reads purely as gold.
     final pickedIds = _sequence.map((it) => it.place.id).toSet();
     for (final p in _places) {
       if (existingIds.contains(p.id) || pickedIds.contains(p.id)) continue;
@@ -585,49 +761,74 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
           height: 24,
           child: GestureDetector(
             onTap: () => _addToSequence(p),
-            child: const Icon(Icons.add_location,
-                size: 22, color: AppColors.primaryColor),
+            child: const Icon(
+              Icons.add_location,
+              size: 22,
+              color: AppColors.primaryColor,
+            ),
           ),
         ),
       );
     }
 
     // Stops already picked into the sequence — numbered gold pins on top.
+    // Tapping a gold pin re-adds that place, so a circular route can pick the
+    // same stop as first and last straight from the map.
     for (int i = 0; i < _sequence.length; i++) {
-      markers.add(_numberPin(_ll(_sequence[i].place), _orderOffset + i + 1));
+      final place = _sequence[i].place;
+      markers.add(
+        _numberPin(
+          _ll(place),
+          _orderOffset + i + 1,
+          onTap: () => _addToSequence(place),
+        ),
+      );
     }
     return markers;
   }
 
-  Marker _smallDot(LatLng p, Color color) => Marker(
-        point: p,
-        width: 18,
-        height: 18,
-        child: Icon(Icons.circle, size: 11, color: color),
-      );
+  Marker _smallDot(LatLng p, Color color, {VoidCallback? onTap}) => Marker(
+    point: p,
+    width: 18,
+    height: 18,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Icon(Icons.circle, size: 11, color: color),
+    ),
+  );
 
-  Marker _numberPin(LatLng p, int n) => Marker(
-        point: p,
-        width: 28,
-        height: 28,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.secondaryColor,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
-          ),
-          alignment: Alignment.center,
-          child: Text('$n',
-              style: const TextStyle(
-                  color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+  Marker _numberPin(LatLng p, int n, {VoidCallback? onTap}) => Marker(
+    point: p,
+    width: 28,
+    height: 28,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.secondaryColor,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2),
         ),
-      );
+        alignment: Alignment.center,
+        child: Text(
+          '$n',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    ),
+  );
 
   Widget _buildSequenceStrip() {
     if (_sequence.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(12),
-        child: Text('មិនទាន់ជ្រើសរើស (No stops picked — tap a place to add)'),
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(_t.noStopsPicked),
       );
     }
     return SizedBox(
@@ -650,7 +851,11 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                 style: const TextStyle(color: Colors.white, fontSize: 12),
               ),
             ),
-            title: Text(item.place.name),
+            title: Text(
+              item.place.localizedName(
+                context.read<SettingsProvider>().languageCode,
+              ),
+            ),
             trailing: IconButton(
               icon: const Icon(Icons.close, size: 18, color: Colors.red),
               onPressed: () => _removeFromSequence(i),
@@ -664,7 +869,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   Widget _buildPlacePicker() {
     final items = _filteredPlaces;
     if (items.isEmpty) {
-      return const Center(child: Text('មិនមានចំណត'));
+      return Center(child: Text(_t.noStops));
     }
     return ListView.separated(
       itemCount: items.length,
@@ -674,9 +879,11 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
         return ListTile(
           dense: true,
           leading: const Icon(Icons.place, color: AppColors.primaryColor),
-          title: Text(p.name),
+          title: Text(
+            p.localizedName(context.read<SettingsProvider>().languageCode),
+          ),
           subtitle: Text(
-            '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}',
+            '${p.latitude}, ${p.longitude}',
             style: const TextStyle(fontSize: 11),
           ),
           trailing: const Icon(Icons.add_circle_outline),
@@ -689,21 +896,29 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   // Step 3 UI
   Widget _buildConnectStep() {
     final spec = _specs[_connectingIndex];
+    final t = _t;
     return Column(
       children: [
         _StepBanner(
-          text:
-              'ដំណាក់កាល ៣/៤ · Segment ${_connectingIndex + 1} / ${_specs.length}\n'
-              '${spec.prevName} → ${spec.currName}',
+          text: t.segmentStepBanner(
+            _connectingIndex + 1,
+            _specs.length,
+            spec.prevName,
+            spec.currName,
+          ),
         ),
         Expanded(
           child: Stack(
             children: [
               _buildConnectMap(),
               _MapHint(
-                _penMode
-                    ? '✏️ គូរពី ▶ ទៅ 🚩 (Draw ▶ → 🚩) · ${_working.length} vertices'
-                    : 'អូស/ពង្រីកបាន · ចុច "Pen" ដើម្បីគូរ (Tap Pen to draw)',
+                _suggesting
+                    ? t.fetchingSuggestion
+                    : _points.isNotEmpty
+                    ? t.manualDrawHint(_points.length)
+                    : _preview.isEmpty
+                    ? t.noSuggestionDrawHint
+                    : t.wrongRoadDrawHint,
               ),
             ],
           ),
@@ -740,35 +955,69 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
         PolylineLayer(
           polylines: [
             for (final seg in _segments)
-              Polyline(points: seg, color: Colors.blueAccent, strokeWidth: 5),
+              if (seg.path.length >= 2)
+                Polyline(points: seg.path, color: _routeColor, strokeWidth: 5),
           ],
         ),
-        if (_working.length >= 2)
+        // Valhalla suggestion: the active line when nothing is drawn, a faint
+        // reference underlay once the admin starts drawing over it.
+        if (_preview.length >= 2)
           PolylineLayer(
             polylines: [
               Polyline(
-                points: _working,
+                points: _preview,
+                color: _points.isEmpty
+                    ? AppColors.secondaryColor
+                    : AppColors.secondaryColor.withValues(alpha: 0.3),
+                strokeWidth: 4,
+              ),
+            ],
+          ),
+        // Hand-drawn line: suggestion's road endpoints + tapped vertices,
+        // connected with straight lines — stored exactly as drawn.
+        if (_points.isNotEmpty && _manualPath.length >= 2)
+          PolylineLayer(
+            polylines: [
+              Polyline(
+                points: _manualPath,
                 color: AppColors.secondaryColor,
                 strokeWidth: 4,
               ),
             ],
           ),
-        // Live "closing" guide: from the last drawn vertex to the END stop so
-        // the admin always sees the segment finishing at the correct stop.
-        // (On Done the endpoints are snapped to prev/curr exactly.)
-        if (_working.isNotEmpty && _working.last != highlight.curr)
+        // The line starts/ends on the ROAD beside each stop, never at the
+        // stop marker — link them with short dashed connectors.
+        if ((_points.isEmpty ? _preview : _manualPath).length >= 2)
           PolylineLayer(
-            polylines: [
-              Polyline(
-                points: [_working.last, highlight.curr],
-                color: Colors.red.withValues(alpha: 0.4),
-                strokeWidth: 2,
-              ),
-            ],
+            polylines: _stopConnectors(
+              _points.isEmpty ? _preview : _manualPath,
+              highlight.prev,
+              highlight.curr,
+            ),
           ),
         MarkerLayer(markers: _connectMarkers(highlight)),
       ],
     );
+  }
+
+  /// Short dashed lines linking each stop marker (sidewalk) to the nearest
+  /// end of the road-snapped path — purely visual, never submitted.
+  List<Polyline> _stopConnectors(List<LatLng> path, LatLng prev, LatLng curr) {
+    final dash = StrokePattern.dashed(segments: const [8, 6]);
+    return [
+      Polyline(
+        points: [prev, path.first],
+        color: Colors.blueGrey,
+        strokeWidth: 2,
+        pattern: dash,
+      ),
+      Polyline(
+        points: [path.last, curr],
+        color: Colors.blueGrey,
+        strokeWidth: 2,
+        pattern: dash,
+      ),
+    ];
   }
 
   List<Marker> _connectMarkers(_SegSpec highlight) {
@@ -776,6 +1025,32 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
     // Two active endpoints.
     markers.add(_pin(highlight.prev, Colors.green, Icons.play_arrow));
     markers.add(_pin(highlight.curr, Colors.red, Icons.flag));
+    // Drawn vertices — numbered, removable via Undo/Clear.
+    for (int i = 0; i < _points.length; i++) {
+      markers.add(
+        Marker(
+          point: _points[i],
+          width: 22,
+          height: 22,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.deepPurple,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '${i + 1}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     // Other sequence stops dimmed.
     for (int i = 0; i < _sequence.length; i++) {
       final p = _ll(_sequence[i].place);
@@ -796,19 +1071,23 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
     return markers;
   }
 
-  Marker _pin(LatLng p, Color color, IconData icon) {
+  Marker _pin(LatLng p, Color color, IconData icon, {VoidCallback? onTap}) {
     return Marker(
       point: p,
       width: 34,
       height: 34,
-      child: Container(
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, color: Colors.white, size: 18),
         ),
-        alignment: Alignment.center,
-        child: Icon(icon, color: Colors.white, size: 18),
       ),
     );
   }
@@ -824,16 +1103,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _suggesting
-                        ? null
-                        : () => setState(() => _penMode = !_penMode),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: _penMode
-                          ? AppColors.secondaryColor.withValues(alpha: 0.18)
-                          : null,
-                    ),
-                    icon: Icon(_penMode ? Icons.edit : Icons.edit_outlined),
-                    label: Text(_penMode ? 'Drawing' : 'Pen'),
+                    onPressed: _points.isEmpty ? null : _undoPoint,
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Undo'),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -853,9 +1125,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _suggesting ? null : _removeSuggestion,
+                    onPressed: _points.isEmpty ? null : _clearPoints,
                     icon: const Icon(Icons.delete_outline),
-                    label: const Text('Remove'),
+                    label: const Text('Clear'),
                   ),
                 ),
               ],
@@ -884,13 +1156,13 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   Widget _buildReviewStep() {
     return Column(
       children: [
-        const _StepBanner(text: 'ដំណាក់កាល ៤/៤ · ពិនិត្យ & រក្សាទុក (Review)'),
+        _StepBanner(text: _t.stepReviewSave),
         Expanded(child: _buildReviewMap()),
         _buildReviewSummary(),
         _bottomButton(
           widget.isAppend
-              ? 'រក្សាទុកចំណត (${_sequence.length})'
-              : 'បង្កើតផ្លូវ (${_sequence.length} stops)',
+              ? _t.saveStops(_sequence.length)
+              : _t.createRouteWithStops(_sequence.length),
           _submitting ? null : _submit,
           busy: _submitting,
         ),
@@ -919,8 +1191,22 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
           ),
         PolylineLayer(
           polylines: [
-            for (final seg in _segments)
-              Polyline(points: seg, color: Colors.blueAccent, strokeWidth: 5),
+            for (int i = 0; i < _segments.length; i++)
+              if (_segments[i].path.length >= 2)
+                Polyline(
+                  points: _segments[i].path,
+                  color: _routeColor,
+                  strokeWidth: 5,
+                )
+              // No geometry (Valhalla down, nothing drawn): schematic dashed
+              // line — the backend computes the real road path on save.
+              else if (i < _specs.length)
+                Polyline(
+                  points: [_specs[i].prev, _specs[i].curr],
+                  color: _routeColor.withValues(alpha: 0.5),
+                  strokeWidth: 3,
+                  pattern: StrokePattern.dashed(segments: const [10, 8]),
+                ),
           ],
         ),
         MarkerLayer(

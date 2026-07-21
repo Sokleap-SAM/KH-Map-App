@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/place.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
 import '../../utils/place_request_status.dart';
 import '../../widgets/admin/reject_reason_dialog.dart';
 import '../../widgets/bookmark_screen/favorite_place_card.dart';
@@ -50,7 +53,9 @@ class _AdminPlaceRequestDetailScreenState
   Future<void> _reject() async {
     final reason = await showRejectReasonDialog(
       context,
-      placeName: widget.place.name,
+      placeName: widget.place.localizedName(
+        context.read<SettingsProvider>().languageCode,
+      ),
     );
     if (reason == null || !mounted) return;
     await _act(approve: false, reason: reason);
@@ -76,15 +81,20 @@ class _AdminPlaceRequestDetailScreenState
       if (!mounted) return;
       setState(() => _busy = false);
       final msg = e is AdminApiException ? e.message : e.toString();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('បរាជ័យ: $msg')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.read<SettingsProvider>().t.failedWith(msg)),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final p = widget.place;
+    final settings = context.watch<SettingsProvider>();
+    final t = settings.t;
+    final lang = settings.languageCode;
     final color = getColorForCategory(p.category?.name);
     final icon = getIconForCategory(p.category?.name);
 
@@ -92,7 +102,7 @@ class _AdminPlaceRequestDetailScreenState
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        title: Text(p.name, overflow: TextOverflow.ellipsis),
+        title: Text(p.localizedName(lang), overflow: TextOverflow.ellipsis),
       ),
       body: ListView(
         padding: EdgeInsets.zero,
@@ -107,7 +117,7 @@ class _AdminPlaceRequestDetailScreenState
                   children: [
                     Expanded(
                       child: Text(
-                        p.name,
+                        p.localizedName(lang),
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w700,
@@ -137,62 +147,62 @@ class _AdminPlaceRequestDetailScreenState
           const Divider(height: 1),
           _infoTile(
             icon: Icons.category_outlined,
-            label: 'ប្រភេទ (Category)',
+            label: t.category,
             value: formatCategoryLabel(p.category?.name),
           ),
           _infoTile(
             icon: Icons.location_on_outlined,
-            label: 'កូអរដោនេ (Coordinates)',
+            label: t.coordinates,
             value:
                 '${p.latitude.toStringAsFixed(6)}, '
                 '${p.longitude.toStringAsFixed(6)}',
           ),
           _infoTile(
             icon: Icons.star_outline,
-            label: 'ការវាយតម្លៃ (Rating)',
+            label: t.rating,
             value: p.averageRating != null
                 ? '${p.averageRating!.toStringAsFixed(1)} '
-                      '· ${p.ratingCount ?? 0} ratings'
-                : 'មិនទាន់មាន',
+                      '· ${t.ratingsCount(p.ratingCount ?? 0)}'
+                : t.notYet,
           ),
           if (p.createdByName != null)
             _infoTile(
               icon: Icons.person_outline,
-              label: 'ស្នើដោយ (Submitted by)',
+              label: t.submittedBy,
               value: p.createdByName!,
             ),
           if (p.createdAt != null)
             _infoTile(
               icon: Icons.schedule,
-              label: 'ស្នើនៅ (Submitted)',
-              value: _submittedLabel(p.createdAt!),
+              label: t.submittedAt,
+              value: t.submittedAgo(p.createdAt!),
             ),
           if (p.reviewedAt != null)
             _infoTile(
               icon: Icons.rule,
-              label: 'ត្រួតពិនិត្យ (Reviewed)',
+              label: t.reviewedLabel,
               value: p.reviewedByName != null
-                  ? '${_ago(p.reviewedAt!)} ដោយ ${p.reviewedByName}'
-                  : _ago(p.reviewedAt!),
+                  ? t.timeAgoBy(p.reviewedAt!, p.reviewedByName!)
+                  : t.timeAgo(p.reviewedAt!),
             ),
           _infoTile(
             icon: Icons.photo_library_outlined,
-            label: 'រូបភាព (Photos)',
+            label: t.photos,
             value: '${p.photos.length}',
           ),
           if (p.isRejected && p.rejectionReason != null) ...[
             const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _rejectionReason(p.rejectionReason!),
+              child: _rejectionReason(t, p.rejectionReason!),
             ),
           ],
           const Divider(height: 1),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
-              'ទីតាំងលើផែនទី (Location)',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              t.locationOnMap,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
           ),
           Padding(
@@ -203,7 +213,7 @@ class _AdminPlaceRequestDetailScreenState
             ),
           ),
           const SizedBox(height: 20),
-          _actionBar(),
+          _actionBar(t),
           const SizedBox(height: 24),
         ],
       ),
@@ -296,7 +306,7 @@ class _AdminPlaceRequestDetailScreenState
     );
   }
 
-  Widget _rejectionReason(String reason) {
+  Widget _rejectionReason(AppTexts t, String reason) {
     final color = AppColors.alertBorderColor;
     return Container(
       width: double.infinity,
@@ -316,7 +326,7 @@ class _AdminPlaceRequestDetailScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'មូលហេតុនៃការបដិសេធ',
+                  t.rejectionReasonLabel,
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -369,7 +379,7 @@ class _AdminPlaceRequestDetailScreenState
   /// Action bar for both the pending queue (approve / reject) and the history
   /// (change an already-reviewed status). The button matching the current
   /// status is disabled and marked as the active one so it reads as "current".
-  Widget _actionBar() {
+  Widget _actionBar(AppTexts t) {
     final p = widget.place;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -377,17 +387,15 @@ class _AdminPlaceRequestDetailScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            p.isPending
-                ? 'សម្រេចលើសំណើនេះ (Review)'
-                : 'ផ្លាស់ប្ដូរស្ថានភាព (Change status)',
+            p.isPending ? t.reviewThisRequest : t.changeStatus,
             style: const TextStyle(fontSize: 13, color: Colors.black54),
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _rejectButton(p)),
+              Expanded(child: _rejectButton(t, p)),
               const SizedBox(width: 12),
-              Expanded(child: _approveButton(p)),
+              Expanded(child: _approveButton(t, p)),
             ],
           ),
         ],
@@ -395,7 +403,7 @@ class _AdminPlaceRequestDetailScreenState
     );
   }
 
-  Widget _rejectButton(Place p) {
+  Widget _rejectButton(AppTexts t, Place p) {
     final isCurrent = p.isRejected;
     final busy = _busy && !_actingApprove;
     return OutlinedButton.icon(
@@ -407,7 +415,7 @@ class _AdminPlaceRequestDetailScreenState
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : Icon(isCurrent ? Icons.cancel : Icons.close, size: 18),
-      label: Text(isCurrent ? 'បានបដិសេធ' : 'បដិសេធ'),
+      label: Text(isCurrent ? t.statusRejected : t.reject),
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14),
         foregroundColor: AppColors.alertBorderColor,
@@ -416,7 +424,7 @@ class _AdminPlaceRequestDetailScreenState
     );
   }
 
-  Widget _approveButton(Place p) {
+  Widget _approveButton(AppTexts t, Place p) {
     final isCurrent = p.isApproved;
     final busy = _busy && _actingApprove;
     return FilledButton.icon(
@@ -431,27 +439,11 @@ class _AdminPlaceRequestDetailScreenState
               ),
             )
           : Icon(isCurrent ? Icons.check_circle : Icons.check, size: 18),
-      label: Text(isCurrent ? 'បានអនុម័ត' : 'អនុម័ត'),
+      label: Text(isCurrent ? t.statusApproved : t.approve),
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14),
         backgroundColor: const Color(0xFF4CAF7D),
       ),
     );
-  }
-
-  String _ago(DateTime t) {
-    final diff = DateTime.now().difference(t);
-    if (diff.inDays >= 1) return '${diff.inDays} ថ្ងៃមុន';
-    if (diff.inHours >= 1) return '${diff.inHours} ម៉ោងមុន';
-    if (diff.inMinutes >= 1) return '${diff.inMinutes} នាទីមុន';
-    return 'អម្បាញ់មិញ';
-  }
-
-  String _submittedLabel(DateTime createdAt) {
-    final diff = DateTime.now().difference(createdAt);
-    if (diff.inDays >= 1) return 'ស្នើ ${diff.inDays} ថ្ងៃមុន';
-    if (diff.inHours >= 1) return 'ស្នើ ${diff.inHours} ម៉ោងមុន';
-    if (diff.inMinutes >= 1) return 'ស្នើ ${diff.inMinutes} នាទីមុន';
-    return 'ស្នើអម្បាញ់មិញ';
   }
 }

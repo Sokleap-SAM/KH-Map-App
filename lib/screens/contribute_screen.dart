@@ -6,10 +6,12 @@ import 'package:provider/provider.dart';
 import '../models/contribution.dart';
 import '../models/place.dart';
 import '../providers/map_provider.dart';
+import '../providers/settings_provider.dart';
 import '../services/auth_service.dart';
 import '../services/contribution_service.dart';
 import '../utils/auth_guard.dart';
 import '../utils/constants/colors.dart';
+import '../utils/constants/text_strings.dart';
 import '../utils/place_request_status.dart';
 import '../widgets/bookmark_screen/favorite_place_card.dart';
 import '../widgets/contribute_screen/contribution_card.dart';
@@ -32,7 +34,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
 
   List<Contribution> _contributions = [];
   bool _loading = true;
-  String? _error;
+  bool _hasError = false;
 
   // Server-side place requests, keyed by placeId for inline status badges, plus
   // the "already seen" set that drives the notification bell count.
@@ -66,7 +68,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _error = null);
+    setState(() => _hasError = false);
     try {
       final list = await _service.load();
       if (!mounted) return;
@@ -77,7 +79,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'មិនអាចទាញយកការចូលរួមបានទេ';
+        _hasError = true;
         _loading = false;
       });
     }
@@ -127,12 +129,12 @@ class _ContributeScreenState extends State<ContributeScreen> {
   double _metersFrom(Contribution c, LatLng user) =>
       _distance.as(LengthUnit.Meter, user, LatLng(c.latitude, c.longitude));
 
-  String? _distanceLabel(Contribution c, LatLng? user) {
+  String? _distanceLabel(Contribution c, LatLng? user, AppTexts t) {
     if (user == null) return null;
     final meters = _metersFrom(c, user);
-    if (meters < 950) return '${meters.round()} ម';
+    if (meters < 950) return t.distanceMeters(meters.round());
     final km = meters / 1000;
-    return '${km.toStringAsFixed(km < 10 ? 1 : 0)} គម';
+    return t.distanceKm(km.toStringAsFixed(km < 10 ? 1 : 0));
   }
 
   List<String> get _categories {
@@ -154,9 +156,10 @@ class _ContributeScreenState extends State<ContributeScreen> {
         list.sort((a, b) => b.rating.compareTo(a.rating));
         break;
       case 'name':
+        final lang = context.read<SettingsProvider>().languageCode;
         list.sort(
-          (a, b) => a.placeName.toLowerCase().compareTo(
-                b.placeName.toLowerCase(),
+          (a, b) => a.localizedPlaceLabel(lang).toLowerCase().compareTo(
+                b.localizedPlaceLabel(lang).toLowerCase(),
               ),
         );
         break;
@@ -206,13 +209,14 @@ class _ContributeScreenState extends State<ContributeScreen> {
       // Refresh map places so any updated average rating is reflected. A newly
       // submitted custom place stays hidden until an admin approves it.
       context.read<MapProvider>().loadPlaces();
+      final t = context.read<SettingsProvider>().t;
       final String message;
       if (initial != null) {
-        message = 'ការចូលរួមត្រូវបានធ្វើបច្ចុប្បន្នភាព';
+        message = t.contributionUpdated;
       } else if (saved.isCustomPlace) {
-        message = 'បានផ្ញើសំណើ — រង់ចាំការអនុម័តពីអ្នកគ្រប់គ្រង';
+        message = t.placeRequestSubmitted;
       } else {
-        message = 'ការចូលរួមត្រូវបានរក្សាទុក';
+        message = t.contributionSaved;
       }
       _snack(message);
     }
@@ -240,6 +244,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
     if (index < 0) return;
     setState(() => _contributions.removeAt(index));
 
+    final settings = context.read<SettingsProvider>();
     final messenger = ScaffoldMessenger.of(context);
     messenger.clearSnackBars();
     messenger
@@ -248,11 +253,13 @@ class _ContributeScreenState extends State<ContributeScreen> {
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
             content: Text(
-              'បានលុបការចូលរួម «${c.placeName}»',
+              settings.t.contributionRemoved(
+                c.localizedPlaceLabel(settings.languageCode),
+              ),
               style: GoogleFonts.notoSansKhmer(fontSize: 13),
             ),
             action: SnackBarAction(
-              label: 'មិនធ្វើវិញ',
+              label: settings.t.undo,
               textColor: AppColors.secondaryColor,
               onPressed: () {
                 if (!mounted) return;
@@ -276,20 +283,21 @@ class _ContributeScreenState extends State<ContributeScreen> {
   }
 
   Future<void> _confirmClearAll() async {
+    final t = context.read<SettingsProvider>().t;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF243456),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'លុបការចូលរួមទាំងអស់?',
+          t.clearAllContributionsTitle,
           style: GoogleFonts.notoSansKhmer(
             color: Colors.white,
             fontWeight: FontWeight.w600,
           ),
         ),
         content: Text(
-          'ការចូលរួមទាំង ${_contributions.length} នឹងត្រូវបានយកចេញ។',
+          t.clearAllContributionsBody(_contributions.length),
           style: GoogleFonts.notoSansKhmer(
             color: Colors.white70,
             fontSize: 13,
@@ -299,14 +307,14 @@ class _ContributeScreenState extends State<ContributeScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
-              'បោះបង់',
+              t.cancel,
               style: GoogleFonts.notoSansKhmer(color: Colors.white70),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
-              'លុបទាំងអស់',
+              t.deleteAll,
               style: GoogleFonts.notoSansKhmer(
                 color: AppColors.alertBorderColor,
                 fontWeight: FontWeight.w600,
@@ -320,7 +328,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
     await _service.clear();
     if (!mounted) return;
     setState(() => _contributions = []);
-    _snack('បានលុបការចូលរួមទាំងអស់');
+    _snack(t.allContributionsCleared);
   }
 
   void _snack(String message) {
@@ -341,6 +349,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<MapProvider>().currentPosition;
+    final t = context.watch<SettingsProvider>().t;
     final visible = _visible(user);
 
     return Scaffold(
@@ -352,7 +361,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
         onPressed: () => _openForm(),
         icon: const Icon(Icons.add_rounded),
         label: Text(
-          'ចូលរួម',
+          t.navContribute,
           style: GoogleFonts.notoSansKhmer(
             fontWeight: FontWeight.w600,
             fontSize: 13,
@@ -362,18 +371,18 @@ class _ContributeScreenState extends State<ContributeScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _header(),
-            _listBanner(),
-            if (_categories.isNotEmpty) _categoryChips(),
+            _header(t),
+            _listBanner(t),
+            if (_categories.isNotEmpty) _categoryChips(t),
             const SizedBox(height: 4),
-            Expanded(child: _body(visible, user)),
+            Expanded(child: _body(visible, user, t)),
           ],
         ),
       ),
     );
   }
 
-  Widget _header() {
+  Widget _header(AppTexts t) {
     final hasLocation = context.read<MapProvider>().currentPosition != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 8, 6),
@@ -384,7 +393,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ការចូលរួមរបស់ខ្ញុំ',
+                  t.myContributions,
                   style: GoogleFonts.notoSansKhmer(
                     color: Colors.white,
                     fontSize: 22,
@@ -394,8 +403,8 @@ class _ContributeScreenState extends State<ContributeScreen> {
                 const SizedBox(height: 2),
                 Text(
                   _loading
-                      ? 'កំពុងផ្ទុក...'
-                      : '${_contributions.length} ការចូលរួម',
+                      ? t.loading
+                      : t.contributionsCount(_contributions.length),
                   style: GoogleFonts.notoSansKhmer(
                     color: AppColors.secondaryTextColor,
                     fontSize: 12.5,
@@ -404,17 +413,17 @@ class _ContributeScreenState extends State<ContributeScreen> {
               ],
             ),
           ),
-          _notificationBell(),
-          _sortMenu(hasLocation),
+          _notificationBell(t),
+          _sortMenu(hasLocation, t),
         ],
       ),
     );
   }
 
-  Widget _notificationBell() {
+  Widget _notificationBell(AppTexts t) {
     final count = _unseenResolvedCount;
     return IconButton(
-      tooltip: 'សំណើទីកន្លែងរបស់ខ្ញុំ',
+      tooltip: t.myPlaceRequests,
       onPressed: _openRequests,
       icon: Badge(
         isLabelVisible: count > 0,
@@ -425,12 +434,12 @@ class _ContributeScreenState extends State<ContributeScreen> {
     );
   }
 
-  Widget _sortMenu(bool hasLocation) {
+  Widget _sortMenu(bool hasLocation, AppTexts t) {
     return PopupMenuButton<String>(
       icon: const Icon(Icons.tune_rounded, color: Colors.white),
       color: const Color(0xFF243456),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      tooltip: 'តម្រៀប',
+      tooltip: t.sort,
       onSelected: (value) {
         if (value == 'clear') {
           _confirmClearAll();
@@ -439,10 +448,10 @@ class _ContributeScreenState extends State<ContributeScreen> {
         }
       },
       itemBuilder: (_) => [
-        _sortItem('recent', 'ថ្មីៗបំផុត'),
-        _sortItem('rating', 'ការវាយតម្លៃខ្ពស់'),
-        _sortItem('name', 'តាមឈ្មោះ (ក-អ)'),
-        if (hasLocation) _sortItem('distance', 'ចម្ងាយជិតបំផុត'),
+        _sortItem('recent', t.sortRecent),
+        _sortItem('rating', t.sortRating),
+        _sortItem('name', t.sortName),
+        if (hasLocation) _sortItem('distance', t.sortDistance),
         const PopupMenuDivider(),
         PopupMenuItem<String>(
           value: 'clear',
@@ -458,7 +467,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
               ),
               const SizedBox(width: 10),
               Text(
-                'លុបទាំងអស់',
+                t.deleteAll,
                 style: GoogleFonts.notoSansKhmer(
                   color: _contributions.isEmpty
                       ? Colors.white24
@@ -498,7 +507,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
     );
   }
 
-  Widget _listBanner() {
+  Widget _listBanner(AppTexts t) {
     final avg = _averageRating;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
@@ -540,7 +549,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'អ្នកចូលរួមរបស់សហគមន៍',
+                      t.communityContributor,
                       style: GoogleFonts.notoSansKhmer(
                         color: Colors.white,
                         fontSize: 15,
@@ -557,7 +566,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'ការវាយតម្លៃ · មតិ · រូបភាព · ទីកន្លែងថ្មី',
+                          t.contributionTypesLine,
                           style: GoogleFonts.notoSansKhmer(
                             color: Colors.white54,
                             fontSize: 12,
@@ -576,21 +585,21 @@ class _ContributeScreenState extends State<ContributeScreen> {
               _stat(
                 icon: Icons.star_rounded,
                 color: const Color(0xFFFFB400),
-                label: 'មធ្យម',
+                label: t.statAverage,
                 value: avg == null ? '—' : avg.toStringAsFixed(1),
               ),
               const SizedBox(width: 12),
               _stat(
                 icon: Icons.photo_camera_outlined,
                 color: AppColors.secondaryColor,
-                label: 'រូបភាព',
+                label: t.photos,
                 value: '$_totalPhotos',
               ),
               const SizedBox(width: 12),
               _stat(
                 icon: Icons.add_location_alt_outlined,
                 color: AppColors.buttonCategoryBlueColor,
-                label: 'ទីកន្លែងថ្មី',
+                label: t.statNewPlaces,
                 value: '$_newPlaces',
               ),
             ],
@@ -640,7 +649,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
     );
   }
 
-  Widget _categoryChips() {
+  Widget _categoryChips(AppTexts t) {
     final categories = _categories;
     return SizedBox(
       height: 38,
@@ -649,7 +658,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
           _chip(
-            label: 'ទាំងអស់',
+            label: t.all,
             selected: _categoryFilter == null,
             onTap: () => setState(() => _categoryFilter = null),
           ),
@@ -702,17 +711,17 @@ class _ContributeScreenState extends State<ContributeScreen> {
     );
   }
 
-  Widget _body(List<Contribution> visible, LatLng? user) {
+  Widget _body(List<Contribution> visible, LatLng? user, AppTexts t) {
     if (_loading) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.secondaryColor),
       );
     }
-    if (_error != null) {
+    if (_hasError) {
       return _stateMessage(
         icon: Icons.cloud_off_rounded,
-        title: _error!,
-        actionLabel: 'ព្យាយាមម្ដងទៀត',
+        title: t.couldNotLoadContributions,
+        actionLabel: t.tryAgain,
         onAction: () {
           setState(() => _loading = true);
           _load();
@@ -722,18 +731,17 @@ class _ContributeScreenState extends State<ContributeScreen> {
     if (_contributions.isEmpty) {
       return _stateMessage(
         icon: Icons.rate_review_outlined,
-        title: 'មិនទាន់មានការចូលរួម',
-        subtitle:
-            'ផ្ដល់ការវាយតម្លៃ មតិយោបល់ ឬរូបភាពអំពីទីកន្លែងមួយ ដើម្បីជួយសហគមន៍។',
-        actionLabel: 'ចូលរួមឥឡូវ',
+        title: t.noContributionsYet,
+        subtitle: t.noContributionsHint,
+        actionLabel: t.contributeNow,
         onAction: () => _openForm(),
       );
     }
     if (visible.isEmpty) {
       return _stateMessage(
         icon: Icons.filter_alt_off_outlined,
-        title: 'គ្មានការចូលរួមក្នុងប្រភេទនេះ',
-        actionLabel: 'បង្ហាញទាំងអស់',
+        title: t.noContributionsInCategory,
+        actionLabel: t.showAll,
         onAction: () => setState(() => _categoryFilter = null),
       );
     }
@@ -749,7 +757,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (_, i) {
           final c = visible[i];
-          final dist = _distanceLabel(c, user);
+          final dist = _distanceLabel(c, user, t);
           return Dismissible(
             key: ValueKey('contrib_${c.id}'),
             direction: DismissDirection.endToStart,

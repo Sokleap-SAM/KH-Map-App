@@ -8,7 +8,14 @@ import '../models/place.dart';
 
 class SearchHistoryEntry {
   final String id;
+
+  /// Khmer place name (place `nameInKhmer`).
   final String name;
+
+  /// Latin place name (place `nameInLatin`); null on entries saved before the
+  /// field existed.
+  final String? nameLatin;
+
   final String categoryName;
   final double latitude;
   final double longitude;
@@ -17,15 +24,21 @@ class SearchHistoryEntry {
   const SearchHistoryEntry({
     required this.id,
     required this.name,
+    this.nameLatin,
     required this.categoryName,
     required this.latitude,
     required this.longitude,
     required this.timestamp,
   });
 
+  /// Place name for the active language ('en' → Latin, else Khmer).
+  String localizedName(String languageCode) =>
+      localizedPlaceName(name, nameLatin, languageCode);
+
   factory SearchHistoryEntry.fromPlace(Place p) => SearchHistoryEntry(
         id: p.id,
-        name: p.name,
+        name: p.nameInKhmer,
+        nameLatin: p.nameInLatin,
         categoryName: p.category?.name ?? 'Place',
         latitude: p.latitude,
         longitude: p.longitude,
@@ -35,6 +48,7 @@ class SearchHistoryEntry {
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
+        'nameLatin': nameLatin,
         'categoryName': categoryName,
         'latitude': latitude,
         'longitude': longitude,
@@ -47,7 +61,8 @@ class SearchHistoryEntry {
         (json['searchedAt'] ?? json['timestamp']) as String? ?? '';
     return SearchHistoryEntry(
       id: rawId,
-      name: json['name'] as String? ?? '',
+      name: (json['name'] ?? json['nameInKhmer']) as String? ?? '',
+      nameLatin: (json['nameLatin'] ?? json['nameInLatin']) as String?,
       categoryName: (json['categoryName'] as String?) ?? 'Place',
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
@@ -159,7 +174,8 @@ class SearchHistoryService {
       final uri = Uri.parse('$_baseUrl/search-history');
       final body = jsonEncode({
         'placeId': place.id,
-        'name': place.name,
+        'name': place.nameInKhmer,
+        'nameLatin': place.nameInLatin,
         'categoryName': place.category?.name ?? 'Place',
         'latitude': place.latitude,
         'longitude': place.longitude,

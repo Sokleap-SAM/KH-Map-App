@@ -1,8 +1,15 @@
 import 'package:latlong2/latlong.dart';
 
+import 'place.dart';
+
 /// A named stop within a route plan segment.
 class SegmentStop {
+  /// Khmer stop name (place `nameInKhmer`).
   final String name;
+
+  /// Latin stop name (place `nameInLatin`); null on legacy records.
+  final String? nameLatin;
+
   final LatLng coordinates;
 
   /// Backend stop id, when present. Needed to persist a favorite route's
@@ -18,10 +25,15 @@ class SegmentStop {
 
   SegmentStop({
     required this.name,
+    this.nameLatin,
     required this.coordinates,
     this.stopId,
     this.segmentPath,
   });
+
+  /// Stop name for the active language ('en' → Latin, else Khmer).
+  String localizedName(String languageCode) =>
+      localizedPlaceName(name, nameLatin, languageCode);
 
   factory SegmentStop.fromJson(Map<String, dynamic> json) {
     final coords = json['coordinates'] as List;
@@ -37,7 +49,12 @@ class SegmentStop {
     }
 
     return SegmentStop(
-      name: json['name'] as String,
+      // The /transit/plan response labels segment stops with `name` (a Khmer
+      // string); the place rename added `nameInKhmer`. Read `name` too, or
+      // every board/alight/walk label comes through blank.
+      name: (json['nameInKhmer'] ?? json['name'] ?? json['nameInLatin'] ?? '')
+          as String,
+      nameLatin: json['nameInLatin'] as String?,
       stopId: (json['stopId'] ?? json['id'] ?? json['_id'])?.toString(),
       // GeoJSON order: [lng, lat]
       coordinates: LatLng(

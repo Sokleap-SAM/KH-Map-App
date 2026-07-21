@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/route_stop.dart';
 import '../../models/trip.dart';
 import '../../providers/driver_provider.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/transit_service.dart';
 import '../../utils/constants/colors.dart';
 import '../../widgets/transit/stop_timeline.dart';
@@ -49,8 +50,7 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
         _stops = stops;
         _loading = false;
       });
-    } catch (e) {
-      debugPrint('DriverTripDetail: stop load failed: $e');
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -89,12 +89,12 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
             child: Text(
-              'ចំណតទាំងអស់ · ALL STOPS',
+              context.watch<SettingsProvider>().t.allStopsHeader,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -107,12 +107,12 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
               child: Center(child: CircularProgressIndicator()),
             )
           else if (_stops.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
-                'មិនមានទិន្នន័យចំណត',
+                context.watch<SettingsProvider>().t.noStopData,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white38),
+                style: const TextStyle(color: Colors.white38),
               ),
             )
           else
@@ -125,7 +125,9 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
                       index: i,
                       activeIndex: trip.nextStopIndex,
                       totalStops: _stops.length,
-                      stopName: _stops[i].stopName,
+                      stopName: _stops[i].localizedStopName(
+                        context.watch<SettingsProvider>().languageCode,
+                      ),
                     ),
                 ],
               ),
@@ -138,12 +140,13 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final d = context.watch<DriverProvider>();
+    final t = context.watch<SettingsProvider>().t;
     final trip = _findTrip(d);
     final assignedBus = d.profile?.assignedBusId;
 
     if (trip == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('ព័ត៌មានដំណើរ')),
+        appBar: AppBar(title: Text(t.tripDetails)),
         body: const Center(child: Text('Trip not found.')),
       );
     }
@@ -157,7 +160,7 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
     final canStart = isMineScheduled && !offShift && d.hasLocationPermission;
     final canCancel = trip.isInProgress;
 
-    final header = d.routeTitle(trip);
+    final header = d.routeTitle(trip, fallback: t.tripFallbackName);
     final busNumber = d.busNumberOf(trip);
 
     return Scaffold(
@@ -189,7 +192,7 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              if (busNumber != null) Text('ឡានលេខ $busNumber'),
+              if (busNumber != null) Text(t.busNumberLabel(busNumber)),
             ],
           ),
           const SizedBox(height: 16),
@@ -210,25 +213,28 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              child: const Text(
-                'ចាប់ផ្តើមដំណើរ',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              child: Text(
+                t.startTrip,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
             ),
             if (offShift)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'សូមបើកវេនជាមុនសិន (Turn on shift first)',
-                  style: TextStyle(color: Colors.orange),
+                  t.turnOnShiftFirst,
+                  style: const TextStyle(color: Colors.orange),
                 ),
               )
             else if (!d.hasLocationPermission)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'ត្រូវការការអនុញ្ញាតទីតាំង (Location permission required)',
-                  style: TextStyle(color: Colors.orange),
+                  t.locationPermissionRequired,
+                  style: const TextStyle(color: Colors.orange),
                 ),
               ),
           ],
@@ -247,9 +253,12 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              child: const Text(
-                'បោះបង់ការធ្វើដំណើរ',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              child: Text(
+                t.cancelTrip,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
             ),
           if (d.lastError != null) ...[

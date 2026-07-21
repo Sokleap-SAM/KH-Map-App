@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/place.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
 import '../../utils/place_request_status.dart';
 import '../../widgets/bookmark_screen/favorite_place_card.dart';
 import 'admin_place_request_detail_screen.dart';
@@ -65,12 +68,18 @@ class _AdminPlaceRequestHistoryScreenState
       ),
     );
     if (decision == null || !mounted) return;
+    final settings = context.read<SettingsProvider>();
+    final t = settings.t;
+    final name = p.localizedName(settings.languageCode);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          decision == AdminRequestDecision.approved
-              ? 'បានប្ដូរ «${p.name}» ទៅ បានអនុម័ត'
-              : 'បានប្ដូរ «${p.name}» ទៅ បានបដិសេធ',
+          t.changedTo(
+            name,
+            decision == AdminRequestDecision.approved
+                ? t.statusApproved
+                : t.statusRejected,
+          ),
         ),
       ),
     );
@@ -90,41 +99,42 @@ class _AdminPlaceRequestHistoryScreenState
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        title: const Text('ប្រវត្តិការត្រួតពិនិត្យ (History)'),
+        title: Text(t.reviewHistory),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'ផ្ទុកឡើងវិញ (Refresh)',
+            tooltip: t.refresh,
             onPressed: _loading ? null : _load,
           ),
         ],
       ),
       body: Column(
         children: [
-          _filterBar(),
+          _filterBar(t),
           const Divider(height: 1),
-          Expanded(child: _buildBody()),
+          Expanded(child: _buildBody(t)),
         ],
       ),
     );
   }
 
-  Widget _filterBar() {
+  Widget _filterBar(AppTexts t) {
     final approved = _all.where((p) => p.isApproved).length;
     final rejected = _all.where((p) => p.isRejected).length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Row(
         children: [
-          _filterChip('ទាំងអស់ (${_all.length})', _HistoryFilter.all),
+          _filterChip(t.filterAll(_all.length), _HistoryFilter.all),
           const SizedBox(width: 8),
-          _filterChip('បានអនុម័ត ($approved)', _HistoryFilter.approved),
+          _filterChip(t.filterApproved(approved), _HistoryFilter.approved),
           const SizedBox(width: 8),
-          _filterChip('បានបដិសេធ ($rejected)', _HistoryFilter.rejected),
+          _filterChip(t.filterRejected(rejected), _HistoryFilter.rejected),
         ],
       ),
     );
@@ -144,7 +154,7 @@ class _AdminPlaceRequestHistoryScreenState
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AppTexts t) {
     if (_loading && _all.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -159,7 +169,7 @@ class _AdminPlaceRequestHistoryScreenState
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: _load,
-                child: const Text('ព្យាយាមម្ដងទៀត'),
+                child: Text(t.tryAgain),
               ),
             ],
           ),
@@ -171,14 +181,14 @@ class _AdminPlaceRequestHistoryScreenState
       return RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          children: const [
-            SizedBox(height: 120),
-            Icon(Icons.history_toggle_off, size: 64, color: Colors.black26),
-            SizedBox(height: 12),
+          children: [
+            const SizedBox(height: 120),
+            const Icon(Icons.history_toggle_off, size: 64, color: Colors.black26),
+            const SizedBox(height: 12),
             Center(
               child: Text(
-                'គ្មានប្រវត្តិទេ',
-                style: TextStyle(color: Colors.black54, fontSize: 15),
+                t.noHistoryYet,
+                style: const TextStyle(color: Colors.black54, fontSize: 15),
               ),
             ),
           ],
@@ -197,6 +207,8 @@ class _AdminPlaceRequestHistoryScreenState
   }
 
   Widget _historyCard(Place p) {
+    final settings = context.watch<SettingsProvider>();
+    final t = settings.t;
     final color = getColorForCategory(p.category?.name);
     final icon = getIconForCategory(p.category?.name);
 
@@ -235,7 +247,7 @@ class _AdminPlaceRequestHistoryScreenState
                     children: [
                       Expanded(
                         child: Text(
-                          p.name,
+                          p.localizedName(settings.languageCode),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -270,7 +282,7 @@ class _AdminPlaceRequestHistoryScreenState
                     const SizedBox(height: 4),
                     _metaRow(
                       Icons.person_outline,
-                      'ស្នើដោយ ${p.createdByName}',
+                      t.submittedByName(p.createdByName!),
                     ),
                   ],
                   if (p.reviewedAt != null) ...[
@@ -278,16 +290,16 @@ class _AdminPlaceRequestHistoryScreenState
                     _metaRow(
                       Icons.schedule,
                       p.reviewedByName != null
-                          ? 'ត្រួតពិនិត្យ ${_ago(p.reviewedAt!)} ដោយ ${p.reviewedByName}'
-                          : 'ត្រួតពិនិត្យ ${_ago(p.reviewedAt!)}',
+                          ? t.reviewedAgoBy(p.reviewedAt!, p.reviewedByName!)
+                          : t.reviewedAgo(p.reviewedAt!),
                     ),
                   ] else if (p.createdAt != null) ...[
                     const SizedBox(height: 2),
-                    _metaRow(Icons.schedule, 'ស្នើ ${_ago(p.createdAt!)}'),
+                    _metaRow(Icons.schedule, t.submittedAgo(p.createdAt!)),
                   ],
                   if (p.isRejected && p.rejectionReason != null) ...[
                     const SizedBox(height: 8),
-                    _rejectionReason(p.rejectionReason!),
+                    _rejectionReason(t, p.rejectionReason!),
                   ],
                 ],
               ),
@@ -299,7 +311,7 @@ class _AdminPlaceRequestHistoryScreenState
     );
   }
 
-  Widget _rejectionReason(String reason) {
+  Widget _rejectionReason(AppTexts t, String reason) {
     final color = AppColors.alertBorderColor;
     return Container(
       width: double.infinity,
@@ -319,7 +331,7 @@ class _AdminPlaceRequestHistoryScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'មូលហេតុនៃការបដិសេធ',
+                  t.rejectionReasonLabel,
                   style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
@@ -364,11 +376,4 @@ class _AdminPlaceRequestHistoryScreenState
     );
   }
 
-  String _ago(DateTime t) {
-    final diff = DateTime.now().difference(t);
-    if (diff.inDays >= 1) return '${diff.inDays} ថ្ងៃមុន';
-    if (diff.inHours >= 1) return '${diff.inHours} ម៉ោងមុន';
-    if (diff.inMinutes >= 1) return '${diff.inMinutes} នាទីមុន';
-    return 'អម្បាញ់មិញ';
-  }
 }

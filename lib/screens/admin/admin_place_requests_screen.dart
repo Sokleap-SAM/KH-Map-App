@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/place.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
 import '../../widgets/admin/reject_reason_dialog.dart';
 import '../../widgets/bookmark_screen/favorite_place_card.dart';
 import 'admin_place_request_detail_screen.dart';
@@ -56,12 +59,18 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
   Future<void> _approve(Place p) => _act(p, approve: true);
 
   Future<void> _reject(Place p) async {
-    final reason = await showRejectReasonDialog(context, placeName: p.name);
+    final reason = await showRejectReasonDialog(
+      context,
+      placeName: p.localizedName(context.read<SettingsProvider>().languageCode),
+    );
     if (reason == null || !mounted) return;
     await _act(p, approve: false, reason: reason);
   }
 
   Future<void> _act(Place p, {required bool approve, String? reason}) async {
+    final settings = context.read<SettingsProvider>();
+    final t = settings.t;
+    final name = p.localizedName(settings.languageCode);
     setState(() => _processing.add(p.id));
     try {
       if (approve) {
@@ -74,16 +83,12 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
         _requests = _requests.where((r) => r.id != p.id).toList();
         _processing.remove(p.id);
       });
-      _snack(
-        approve
-            ? 'បានអនុម័ត «${p.name}» — បង្ហាញលើផែនទីហើយ'
-            : 'បានបដិសេធ «${p.name}»',
-      );
+      _snack(approve ? t.approvedShown(name) : t.rejectedName(name));
     } catch (e) {
       if (!mounted) return;
       setState(() => _processing.remove(p.id));
       final msg = e is AdminApiException ? e.message : e.toString();
-      _snack('បរាជ័យ: $msg');
+      _snack(t.failedWith(msg));
     }
   }
 
@@ -94,14 +99,16 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
       ),
     );
     if (decision == null || !mounted) return;
+    final settings = context.read<SettingsProvider>();
+    final name = p.localizedName(settings.languageCode);
     setState(() {
       _requests = _requests.where((r) => r.id != p.id).toList();
       _processing.remove(p.id);
     });
     _snack(
       decision == AdminRequestDecision.approved
-          ? 'បានអនុម័ត «${p.name}» — បង្ហាញលើផែនទីហើយ'
-          : 'បានបដិសេធ «${p.name}»',
+          ? settings.t.approvedShown(name)
+          : settings.t.rejectedName(name),
     );
   }
 
@@ -111,19 +118,20 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
         title: Text(
           _requests.isEmpty
-              ? 'សំណើទីកន្លែង (Requests)'
-              : 'សំណើទីកន្លែង (${_requests.length})',
+              ? t.placeRequestsTitle
+              : t.placeRequestsTitleCount(_requests.length),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
-            tooltip: 'ប្រវត្តិ (History)',
+            tooltip: t.history,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => const AdminPlaceRequestHistoryScreen(),
@@ -132,16 +140,16 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'ផ្ទុកឡើងវិញ (Refresh)',
+            tooltip: t.refresh,
             onPressed: _loading ? null : _load,
           ),
         ],
       ),
-      body: _buildBody(),
+      body: _buildBody(t),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AppTexts t) {
     if (_loading && _requests.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -156,7 +164,7 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: _load,
-                child: const Text('ព្យាយាមម្ដងទៀត'),
+                child: Text(t.tryAgain),
               ),
             ],
           ),
@@ -167,14 +175,14 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
       return RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          children: const [
-            SizedBox(height: 120),
-            Icon(Icons.inbox_outlined, size: 64, color: Colors.black26),
-            SizedBox(height: 12),
+          children: [
+            const SizedBox(height: 120),
+            const Icon(Icons.inbox_outlined, size: 64, color: Colors.black26),
+            const SizedBox(height: 12),
             Center(
               child: Text(
-                'គ្មានសំណើថ្មីទេ',
-                style: TextStyle(color: Colors.black54, fontSize: 15),
+                t.noNewRequests,
+                style: const TextStyle(color: Colors.black54, fontSize: 15),
               ),
             ),
           ],
@@ -193,6 +201,8 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
   }
 
   Widget _requestCard(Place p) {
+    final settings = context.watch<SettingsProvider>();
+    final t = settings.t;
     final color = getColorForCategory(p.category?.name);
     final icon = getIconForCategory(p.category?.name);
     final busy = _processing.contains(p.id);
@@ -231,7 +241,7 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        p.name,
+                        p.localizedName(settings.languageCode),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -269,7 +279,7 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
                       if (p.createdAt != null) ...[
                         const SizedBox(height: 2),
                         Text(
-                          _submittedLabel(p.createdAt!),
+                          t.submittedAgo(p.createdAt!),
                           style: const TextStyle(
                             fontSize: 11.5,
                             color: Colors.black38,
@@ -313,7 +323,7 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
                   child: OutlinedButton.icon(
                     onPressed: busy ? null : () => _reject(p),
                     icon: const Icon(Icons.close, size: 18),
-                    label: const Text('បដិសេធ'),
+                    label: Text(t.reject),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.alertBorderColor,
                       side: const BorderSide(color: AppColors.alertBorderColor),
@@ -334,7 +344,7 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
                             ),
                           )
                         : const Icon(Icons.check, size: 18),
-                    label: const Text('អនុម័ត'),
+                    label: Text(t.approve),
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF4CAF7D),
                     ),
@@ -357,11 +367,4 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
     );
   }
 
-  String _submittedLabel(DateTime createdAt) {
-    final diff = DateTime.now().difference(createdAt);
-    if (diff.inDays >= 1) return 'ស្នើ ${diff.inDays} ថ្ងៃមុន';
-    if (diff.inHours >= 1) return 'ស្នើ ${diff.inHours} ម៉ោងមុន';
-    if (diff.inMinutes >= 1) return 'ស្នើ ${diff.inMinutes} នាទីមុន';
-    return 'ស្នើអម្បាញ់មិញ';
-  }
 }

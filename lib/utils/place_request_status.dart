@@ -1,24 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/settings_provider.dart';
 import 'constants/colors.dart';
 
 /// Presentation helpers for a place request's approval status
 /// ('pending' | 'approved' | 'rejected'). Shared by the admin review screen
 /// and the user's contribution screen so the colours/labels stay consistent.
-
-/// Khmer label for a status value.
-String placeStatusLabel(String status) {
-  switch (status) {
-    case 'approved':
-      return 'បានអនុម័ត';
-    case 'rejected':
-      return 'បានបដិសេធ';
-    case 'pending':
-    default:
-      return 'កំពុងរង់ចាំ';
-  }
-}
+/// The localized status label lives on `AppTexts.placeStatusLabel`.
 
 /// Accent colour for a status value.
 Color placeStatusColor(String status) {
@@ -74,7 +64,7 @@ class PlaceStatusChip extends StatelessWidget {
           Icon(placeStatusIcon(status), size: fontSize + 3, color: color),
           const SizedBox(width: 4),
           Text(
-            placeStatusLabel(status),
+            context.watch<SettingsProvider>().t.placeStatusLabel(status),
             style: GoogleFonts.notoSansKhmer(
               color: color,
               fontSize: fontSize,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
 
 /// Prompts the admin for a required rejection reason before rejecting a place
@@ -39,7 +41,8 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
   void _submit() {
     final reason = _controller.text.trim();
     if (reason.isEmpty) {
-      setState(() => _errorText = 'សូមបញ្ជាក់មូលហេតុនៃការបដិសេធ');
+      setState(() =>
+          _errorText = context.read<SettingsProvider>().t.pleaseGiveRejectReason);
       return;
     }
     Navigator.of(context).pop(reason);
@@ -47,17 +50,17 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text('បដិសេធ «${widget.placeName}»'),
+      title: Text(t.rejectTitle(widget.placeName)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'សូមសរសេររបាយការណ៍ថាហេតុអ្វីបានជាបដិសេធ ដើម្បីឲ្យអ្នកស្នើអាចមើលឃើញ '
-            'និងកែសម្រួល។',
-            style: TextStyle(fontSize: 13, color: Colors.black54),
+          Text(
+            t.rejectReasonHelp,
+            style: const TextStyle(fontSize: 13, color: Colors.black54),
           ),
           const SizedBox(height: 14),
           TextField(
@@ -71,7 +74,7 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
               if (_errorText != null) setState(() => _errorText = null);
             },
             decoration: InputDecoration(
-              hintText: 'ឧ. រូបភាពមិនច្បាស់ / ទីតាំងមិនត្រឹមត្រូវ ...',
+              hintText: t.rejectReasonHint,
               errorText: _errorText,
               border: const OutlineInputBorder(),
               alignLabelWithHint: true,
@@ -82,14 +85,14 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('បោះបង់'),
+          child: Text(t.cancel),
         ),
         FilledButton(
           onPressed: _submit,
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.alertBorderColor,
           ),
-          child: const Text('បដិសេធ'),
+          child: Text(t.reject),
         ),
       ],
     );

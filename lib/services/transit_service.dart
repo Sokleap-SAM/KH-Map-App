@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
@@ -46,9 +47,18 @@ class TransitService {
       throw Exception('Failed to load stops for route $routeId');
     }
     final List data = jsonDecode(response.body) as List;
-    return data
-        .map((e) => RouteStop.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final stops = <RouteStop>[];
+    for (final e in data) {
+      if (e is! Map<String, dynamic>) continue;
+      try {
+        stops.add(RouteStop.fromJson(e));
+      } catch (err) {
+        // Corrupt entry — e.g. an orphaned stop whose place was deleted
+        // (`stop: null`). Skip it; one bad stop must not blank the route.
+        debugPrint('Skipping corrupt stop on route $routeId: $err');
+      }
+    }
+    return stops;
   }
 
   Future<List<Trip>> fetchActiveTrips() async {
@@ -99,6 +109,9 @@ class TransitService {
     required double destLat,
     required double destLng,
     String type = 'transit',
+    // Transit planning (walk + bus legs + transfers) is much heavier than a
+    // single walk query, so callers give the first fetch a longer budget.
+    Duration timeout = const Duration(seconds: 10),
   }) async {
     final uri = Uri.parse('$_baseUrl/transit/plan').replace(
       queryParameters: {
@@ -109,7 +122,7 @@ class TransitService {
         'type': type,
       },
     );
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await http.get(uri).timeout(timeout);
     if (response.statusCode != 200) {
       throw Exception('Failed to fetch route plan (${response.statusCode})');
     }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/trip.dart';
 import '../../providers/driver_provider.dart';
+import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
 import 'driver_trip_detail_screen.dart';
 
@@ -40,6 +41,7 @@ class _DriverTripsScreenState extends State<DriverTripsScreen> {
   @override
   Widget build(BuildContext context) {
     final d = context.watch<DriverProvider>();
+    final tx = context.watch<SettingsProvider>().t;
     final today = d.today;
     final history = d.history;
 
@@ -47,7 +49,7 @@ class _DriverTripsScreenState extends State<DriverTripsScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        title: const Text('ដំណើរ'),
+        title: Text(tx.tripsTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -73,32 +75,30 @@ class _DriverTripsScreenState extends State<DriverTripsScreen> {
                       ),
                     ),
                   if (today.isNotEmpty) ...[
-                    const _SectionHeader(title: 'ថ្ងៃនេះ'),
+                    _SectionHeader(title: tx.today),
                     for (final t in today)
                       _TripCard(
                         trip: t,
-                        title: d.routeTitle(t),
+                        title: d.routeTitle(t, fallback: tx.tripFallbackName),
                         busNumber: d.busNumberOf(t),
                         statusColor: _statusColor(t.status),
                       ),
                   ],
                   if (history.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    const _SectionHeader(title: 'ប្រវត្តិ'),
+                    _SectionHeader(title: tx.history),
                     for (final t in history)
                       _TripCard(
                         trip: t,
-                        title: d.routeTitle(t),
+                        title: d.routeTitle(t, fallback: tx.tripFallbackName),
                         busNumber: d.busNumberOf(t),
                         statusColor: _statusColor(t.status),
                       ),
                   ],
                   if (today.isEmpty && history.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 32),
-                      child: Center(
-                        child: Text('មិនមានដំណើរសម្រាប់ឡានរបស់អ្នក'),
-                      ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 32),
+                      child: Center(child: Text(tx.noTripsForYourBus)),
                     ),
                 ],
               ),
@@ -138,7 +138,9 @@ class _TripCard extends StatelessWidget {
       child: ListTile(
         title: Text(title),
         subtitle: Text(
-          busNumber != null ? 'ឡានលេខ $busNumber' : trip.direction,
+          busNumber != null
+              ? context.watch<SettingsProvider>().t.busNumberLabel(busNumber!)
+              : trip.direction,
         ),
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

@@ -92,10 +92,6 @@ class MqttService {
     final clientId = _newClientId();
     final url = _brokerUrl();
 
-    debugPrint(
-      'MqttService: Attempting connection to $url with client ID: $clientId...',
-    );
-
     final c = createMqttClient(url, clientId);
 
     c.keepAlivePeriod = 30;
@@ -103,12 +99,6 @@ class MqttService {
     c.resubscribeOnAutoReconnect = false;
     c.onConnected = _onConnected;
     c.onDisconnected = _onDisconnected;
-    c.onAutoReconnect = () {
-      debugPrint(
-        'MqttService: Connection dropped. Auto-reconnecting to broker...',
-      );
-    };
-
     c.connectionMessage = MqttConnectMessage()
         .withClientIdentifier(clientId)
         .startClean();
@@ -116,7 +106,6 @@ class MqttService {
     try {
       await c.connect();
     } catch (e) {
-      debugPrint('MqttService: Connection failed critically: $e');
       c.disconnect();
       rethrow;
     }
@@ -126,22 +115,14 @@ class MqttService {
   }
 
   void _onConnected() {
-    debugPrint('MqttService: Connected successfully! ✅');
-
     final currentSubscriptions = List<String>.from(_activeTopics);
-    debugPrint(
-      'MqttService: Restoring ${currentSubscriptions.length} active route subscriptions...',
-    );
 
     for (final topic in currentSubscriptions) {
       _client?.subscribe(topic, MqttQos.atMostOnce);
-      debugPrint('MqttService: Re-subscribed to topic -> $topic');
     }
   }
 
-  void _onDisconnected() {
-    debugPrint('MqttService: Disconnected from broker ❌');
-  }
+  void _onDisconnected() {}
 
   void _onMessages(List<MqttReceivedMessage<MqttMessage>> events) {
     for (final event in events) {
@@ -149,15 +130,12 @@ class MqttService {
       final msg = event.payload as MqttPublishMessage;
       final payloadStr = utf8.decode(msg.payload.message);
 
-      debugPrint('MqttService: Incoming data received on topic [$topic]');
-
       final detailHandlers = _detailHandlers[topic];
       if (detailHandlers != null && detailHandlers.isNotEmpty) {
         Map<String, dynamic> json;
         try {
           json = jsonDecode(payloadStr) as Map<String, dynamic>;
-        } catch (e) {
-          debugPrint('MqttService: Failed to parse detail payload on $topic: $e');
+        } catch (_) {
           continue;
         }
         for (final h in List<DetailHandler>.from(detailHandlers)) {
@@ -173,8 +151,7 @@ class MqttService {
       try {
         final json = jsonDecode(payloadStr) as Map<String, dynamic>;
         position = BusPosition.fromJson(json);
-      } catch (e) {
-        debugPrint('MqttService: Failed to parse bad payload on $topic: $e');
+      } catch (_) {
         continue;
       }
 
@@ -193,40 +170,29 @@ class MqttService {
 
     _activeTopics.add(topic);
     (_handlers[topic] ??= <PositionHandler>[]).add(onPosition);
-    debugPrint('MqttService: Local handler registered for route: $routeId');
 
     try {
       await _ensureConnected();
-    } catch (e) {
-      debugPrint(
-        'MqttService: Delayed subscription registration. Will retry on reconnect sync. Error: $e',
-      );
+    } catch (_) {
+      // Will retry on the next reconnect sync.
     }
 
     if (_client?.connectionStatus?.state == MqttConnectionState.connected) {
       _client!.subscribe(topic, MqttQos.atMostOnce);
-      debugPrint(
-        'MqttService: Active subscription request dispatched for topic -> $topic',
-      );
     }
 
     return () {
       final list = _handlers[topic];
       if (list != null) {
         list.remove(onPosition);
-        debugPrint('MqttService: Local handler removed for route: $routeId');
 
         if (list.isEmpty) {
           _handlers.remove(topic);
           _activeTopics.remove(topic);
-          debugPrint(
-            'MqttService: No remaining active lookups. Tearing down broker channel.',
-          );
 
           if (_client?.connectionStatus?.state ==
               MqttConnectionState.connected) {
             _client?.unsubscribe(topic);
-            debugPrint('MqttService: Unsubscribed from broker topic -> $topic');
           }
         }
       }
@@ -244,35 +210,27 @@ class MqttService {
 
     _activeTopics.add(topic);
     (_detailHandlers[topic] ??= <DetailHandler>[]).add(onDetail);
-    debugPrint('MqttService: Local detail handler registered for trip: $tripId');
 
     try {
       await _ensureConnected();
-    } catch (e) {
-      debugPrint(
-        'MqttService: Delayed detail subscription. Will retry on reconnect sync. Error: $e',
-      );
+    } catch (_) {
+      // Will retry on the next reconnect sync.
     }
 
     if (_client?.connectionStatus?.state == MqttConnectionState.connected) {
       _client!.subscribe(topic, MqttQos.atMostOnce);
-      debugPrint(
-        'MqttService: Active detail subscription dispatched for topic -> $topic',
-      );
     }
 
     return () {
       final list = _detailHandlers[topic];
       if (list == null) return;
       list.remove(onDetail);
-      debugPrint('MqttService: Local detail handler removed for trip: $tripId');
 
       if (list.isEmpty) {
         _detailHandlers.remove(topic);
         _activeTopics.remove(topic);
         if (_client?.connectionStatus?.state == MqttConnectionState.connected) {
           _client?.unsubscribe(topic);
-          debugPrint('MqttService: Unsubscribed from detail topic -> $topic');
         }
       }
     };

@@ -13,6 +13,10 @@ import '../services/location_service.dart';
 import '../services/place_service.dart';
 import '../services/transit_service.dart';
 
+/// Why a route-plan request failed — mapped to a friendly, localized message
+/// in the UI rather than surfacing a raw exception string to the user.
+enum RoutePlanError { timeout, offline, generic }
+
 class MapProvider extends ChangeNotifier {
   final LocationService _locationService;
   final TransitService _transitService = TransitService();
@@ -161,7 +165,7 @@ class MapProvider extends ChangeNotifier {
   bool _showBusLines = true;
   bool _isRoutingActive = false;
   bool _isLoadingRoute = false;
-  String? _routeError;
+  RoutePlanError? _routeError;
   RoutePlanResult? _routePlan;
 
   int _activeOptionIndex = 0;
@@ -184,7 +188,7 @@ class MapProvider extends ChangeNotifier {
   bool get showBusLines => _showBusLines;
   bool get isRoutingActive => _isRoutingActive;
   bool get isLoadingRoute => _isLoadingRoute;
-  String? get routeError => _routeError;
+  RoutePlanError? get routeError => _routeError;
   RoutePlanResult? get routePlan => _routePlan;
   int get activeOptionIndex => _activeOptionIndex;
   String get planType => _planType;
@@ -246,7 +250,6 @@ class MapProvider extends ChangeNotifier {
       if (_activeCategoryKey != null) _recomputeNearbyCategory();
     } catch (e) {
       _placesError = e.toString();
-      debugPrint('MapProvider: failed to load places: $e');
     } finally {
       _placesLoading = false;
       notifyListeners();
@@ -302,8 +305,8 @@ class MapProvider extends ChangeNotifier {
               address['road'] ?? address['pedestrian'] ?? address['footway'];
         }
       }
-    } catch (e) {
-      debugPrint('MapProvider: Reverse geocoding failed: $e');
+    } catch (_) {
+      // reverse geocoding is best-effort
     } finally {
       _isLoadingPinInfo = false;
       notifyListeners();
@@ -600,8 +603,8 @@ class MapProvider extends ChangeNotifier {
         _routePlan = plan;
         notifyListeners();
       }
-    } catch (e) {
-      debugPrint('MapProvider: silent refresh failed: $e');
+    } catch (_) {
+      // silent refresh is best-effort; keep the existing plan on failure
     } finally {
       _refreshInProgress = false;
     }
@@ -626,15 +629,36 @@ class MapProvider extends ChangeNotifier {
         destLat: destination.latitude,
         destLng: destination.longitude,
         type: _planType,
+        // Transit planning can be slow server-side; give the user-initiated
+        // fetch a generous budget before giving up.
+        timeout: const Duration(seconds: 25),
       );
       _routePlan = plan;
     } catch (e) {
-      _routeError = e.toString();
-      debugPrint('MapProvider: routing failed: $e');
+      _routeError = _classifyRoutePlanError(e);
     } finally {
       _isLoadingRoute = false;
       notifyListeners();
     }
+  }
+
+  /// Maps a raw plan-fetch exception to a user-facing category. The UI renders
+  /// a friendly localized message per category — the raw error is never shown.
+  RoutePlanError _classifyRoutePlanError(Object e) {
+    if (e is TimeoutException) return RoutePlanError.timeout;
+    // package:http throws ClientException for connection failures on every
+    // platform (including web), so no dart:io SocketException needed.
+    if (e is http.ClientException) return RoutePlanError.offline;
+    return RoutePlanError.generic;
+  }
+
+  /// Re-runs the route plan for the current origin/destination — wired to the
+  /// "Try again" button shown when a plan fetch fails.
+  Future<void> retryRoutePlan() async {
+    final origin = _activeOriginForQuery();
+    final destination = _routingDestination;
+    if (origin == null || destination == null) return;
+    await _fetchRoutePlan(origin: origin, destination: destination);
   }
 
   void clearRouting() {
@@ -669,8 +693,8 @@ class MapProvider extends ChangeNotifier {
         _recentSearchIds.addAll(savedIds);
         notifyListeners();
       }
-    } catch (e) {
-      debugPrint('MapProvider: Failed to load recent searches: $e');
+    } catch (_) {
+      // recent searches are best-effort
     }
   }
 
@@ -690,8 +714,8 @@ class MapProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('recent_searches', _recentSearchIds);
-    } catch (e) {
-      debugPrint('MapProvider: Failed to save recent searches: $e');
+    } catch (_) {
+      // recent searches are best-effort
     }
   }
 

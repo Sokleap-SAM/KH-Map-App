@@ -86,7 +86,6 @@ class FavoriteRoutesService {
       if (res.statusCode != 200) return null;
       return _parseList(res.body);
     } catch (e) {
-      debugPrint('[FavRoutes] load failed: $e');
       return null;
     }
   }
@@ -109,9 +108,7 @@ class FavoriteRoutesService {
         destination: destination,
         label: label,
       );
-      if (saved == null) {
-        debugPrint('[FavRoutes] add: remote failed — falling back to LOCAL');
-      }
+      // If the remote add failed (saved == null) we fall back to LOCAL below.
     }
     saved ??= await _localAdd(
       origin: origin,
@@ -140,13 +137,11 @@ class FavoriteRoutesService {
       final res = await http
           .post(uri, headers: _authHeaders(token, json: true), body: body)
           .timeout(const Duration(seconds: 10));
-      debugPrint('[FavRoutes] POST $uri -> ${res.statusCode}');
       if (res.statusCode != 200 && res.statusCode != 201) return null;
       return FavoriteRoute.fromJson(
         jsonDecode(res.body) as Map<String, dynamic>,
       );
     } catch (e) {
-      debugPrint('[FavRoutes] POST threw: $e');
       return null;
     }
   }
@@ -172,12 +167,10 @@ class FavoriteRoutesService {
       final res = await http
           .delete(uri, headers: _authHeaders(token))
           .timeout(const Duration(seconds: 10));
-      debugPrint('[FavRoutes] DELETE $uri -> ${res.statusCode}');
       return res.statusCode == 204 ||
           res.statusCode == 200 ||
           res.statusCode == 404;
     } catch (e) {
-      debugPrint('[FavRoutes] DELETE threw: $e');
       return false;
     }
   }

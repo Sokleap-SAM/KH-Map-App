@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/place.dart';
+import '../../providers/settings_provider.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/constants/text_strings.dart';
 import '../../utils/place_request_status.dart';
 import '../bookmark_screen/favorite_place_card.dart';
 
@@ -34,13 +37,14 @@ class MyRequestsSheet extends StatelessWidget {
               const Divider(color: Colors.white12, height: 1),
               Expanded(
                 child: requests.isEmpty
-                    ? _empty()
+                    ? _empty(context)
                     : ListView.separated(
                         controller: scrollController,
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                         itemCount: requests.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) => _requestTile(requests[i]),
+                        itemBuilder: (_, i) =>
+                            _requestTile(context, requests[i]),
                       ),
               ),
             ],
@@ -63,6 +67,7 @@ class MyRequestsSheet extends StatelessWidget {
       );
 
   Widget _header(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 8, 12),
       child: Row(
@@ -77,7 +82,7 @@ class MyRequestsSheet extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'សំណើទីកន្លែងរបស់ខ្ញុំ',
+                  t.myPlaceRequests,
                   style: GoogleFonts.notoSansKhmer(
                     color: Colors.white,
                     fontSize: 17,
@@ -85,7 +90,7 @@ class MyRequestsSheet extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'ស្ថានភាពនៃការស្នើសុំទីកន្លែងថ្មី',
+                  t.newPlaceRequestStatus,
                   style: GoogleFonts.notoSansKhmer(
                     color: AppColors.secondaryTextColor,
                     fontSize: 12,
@@ -95,7 +100,7 @@ class MyRequestsSheet extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'បិទ',
+            tooltip: t.close,
             onPressed: () => Navigator.of(context).pop(),
             icon: const Icon(Icons.close, color: Colors.white70),
           ),
@@ -104,7 +109,7 @@ class MyRequestsSheet extends StatelessWidget {
     );
   }
 
-  Widget _empty() {
+  Widget _empty(BuildContext context) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -116,7 +121,7 @@ class MyRequestsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'អ្នកមិនទាន់បានស្នើសុំទីកន្លែងថ្មីទេ',
+            context.watch<SettingsProvider>().t.noRequestsYet,
             style: GoogleFonts.notoSansKhmer(
               color: Colors.white70,
               fontSize: 14,
@@ -127,7 +132,9 @@ class MyRequestsSheet extends StatelessWidget {
     );
   }
 
-  Widget _requestTile(Place p) {
+  Widget _requestTile(BuildContext context, Place p) {
+    final settings = context.watch<SettingsProvider>();
+    final t = settings.t;
     final color = getColorForCategory(p.category?.name);
     final icon = getIconForCategory(p.category?.name);
 
@@ -161,7 +168,7 @@ class MyRequestsSheet extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  p.name,
+                  p.localizedName(settings.languageCode),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.notoSansKhmer(
@@ -196,7 +203,7 @@ class MyRequestsSheet extends StatelessWidget {
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
-                          'មិនបង្ហាញលើផែនទី',
+                          t.notShownOnMap,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.notoSansKhmer(
@@ -210,7 +217,7 @@ class MyRequestsSheet extends StatelessWidget {
                 ),
                 if (p.isRejected && p.rejectionReason != null) ...[
                   const SizedBox(height: 8),
-                  _rejectionReason(p.rejectionReason!),
+                  _rejectionReason(t, p.rejectionReason!),
                 ],
               ],
             ),
@@ -220,7 +227,7 @@ class MyRequestsSheet extends StatelessWidget {
     );
   }
 
-  Widget _rejectionReason(String reason) {
+  Widget _rejectionReason(AppTexts t, String reason) {
     const color = AppColors.alertBorderColor;
     return Container(
       width: double.infinity,
@@ -242,7 +249,7 @@ class MyRequestsSheet extends StatelessWidget {
               ),
               const SizedBox(width: 5),
               Text(
-                'មូលហេតុនៃការបដិសេធ',
+                t.rejectionReasonLabel,
                 style: GoogleFonts.notoSansKhmer(
                   color: color,
                   fontSize: 11.5,

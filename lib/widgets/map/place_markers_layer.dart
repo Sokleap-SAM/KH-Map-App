@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart' as fm;
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 import '../../models/place.dart';
+import '../../providers/settings_provider.dart';
 import '../../utils/category_icon.dart';
 
 class PlaceMarkersLayer extends StatelessWidget {
@@ -20,15 +22,18 @@ class PlaceMarkersLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String lang = context.watch<SettingsProvider>().languageCode;
     return fm.MarkerLayer(
       markers: places.map((place) {
         // 'places' is now assumed to be pre-filtered
         final bool isRecent = recentSearchIds.contains(place.id);
         final String? categoryName = place.category?.name;
 
-        // Determine if this place should use a specific route color
+        // Determine if this place should use a specific route color. Match
+        // against both names so the English "bus stop" check works too.
         final String cat = (categoryName ?? '').toLowerCase();
-        final String name = place.name.toLowerCase();
+        final String name =
+            '${place.nameInKhmer} ${place.nameInLatin}'.toLowerCase();
         final bool isBusStop =
             cat.contains('bus') ||
             cat.contains('stop') ||
@@ -95,7 +100,7 @@ class PlaceMarkersLayer extends StatelessWidget {
                           border: Border.all(color: Colors.black12),
                         ),
                         child: Text(
-                          place.name,
+                          place.localizedName(lang),
                           softWrap: false, // Keep name on one line
                           style: const TextStyle(
                             fontSize: 10,

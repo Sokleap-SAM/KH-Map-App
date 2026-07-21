@@ -24,6 +24,7 @@ import 'package:provider/provider.dart';
 import '../models/favorite_route.dart';
 import '../models/route_plan.dart';
 import '../providers/map_provider.dart';
+import '../providers/settings_provider.dart';
 import '../services/auth_service.dart';
 import '../utils/constants/colors.dart';
 import '../services/favorite_routes_service.dart';
@@ -92,8 +93,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           ..clear()
           ..addAll(favorites.map((f) => f.placeId));
       });
-    } catch (e) {
-      debugPrint('Failed to load favorites: $e');
+    } catch (_) {
+      // favorites are best-effort
     }
   }
 
@@ -112,7 +113,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         await _favoritesService.remove(place.id);
       }
     } catch (e) {
-      debugPrint('Failed to persist favorite: $e');
       if (!mounted) return;
       setState(() {
         if (isFav) {
@@ -139,11 +139,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// its saved state and later remove it), or null on failure.
   Future<String?> _saveFavoriteRoute(RouteOption option) async {
     final provider = context.read<MapProvider>();
+    final t = context.read<SettingsProvider>().t;
     final originPos = provider.routingOrigin;
     final destPos = provider.routingDestination;
 
     if (originPos == null || destPos == null) {
-      _snack('មិនអាចរក្សាទុកផ្លូវនេះបានទេ');
+      _snack(t.couldNotSaveThisRoute);
       return null;
     }
 
@@ -163,7 +164,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       coordinates: originPos,
     );
     final destination = FavoriteRouteEndpoint(
-      name: provider.routingDestinationLabel ?? 'គោលដៅ',
+      name: provider.routingDestinationLabel ?? t.destinationLabel,
       coordinates: destPos,
     );
 
@@ -173,24 +174,23 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         destination: destination,
         label: '${origin.name} → ${destination.name}',
       );
-      _snack('បានរក្សាទុកផ្លូវទៅចំណាំ');
+      _snack(t.routeSavedToBookmarks);
       return saved.id;
     } catch (e) {
-      debugPrint('Failed to save favorite route: $e');
-      _snack('មិនអាចរក្សាទុកផ្លូវបានទេ');
+      _snack(t.couldNotSaveRoute);
       return null;
     }
   }
 
   /// Removes the favorite route saved during this routing view.
   Future<bool> _removeFavoriteRoute(String favoriteId) async {
+    final t = context.read<SettingsProvider>().t;
     try {
       await _favoriteRoutesService.remove(favoriteId);
-      _snack('បានលុបផ្លូវចេញពីចំណាំ');
+      _snack(t.routeRemovedFromBookmarks);
       return true;
     } catch (e) {
-      debugPrint('Failed to remove favorite route: $e');
-      _snack('មិនអាចលុបផ្លូវបានទេ');
+      _snack(t.couldNotRemoveRoute);
       return false;
     }
   }
@@ -235,9 +235,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     provider.setFollowUser(false);
 
     if (results.isEmpty) {
+      final t = context.read<SettingsProvider>().t;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('រកមិនឃើញ${category.label}ទេ')));
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              t.categoryNotFoundNearby(t.mapCategoryLabel(category.key)),
+            ),
+          ),
+        );
       if (user != null) _mapController.move(user, 15);
       return;
     }
@@ -369,7 +376,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   void _showPlaceDetail(BuildContext context, Place place) {
     final String cat = (place.category?.name ?? '').toLowerCase();
-    final String name = place.name.toLowerCase();
+    // Scan both names so the check works in either language.
+    final String name =
+        '${place.nameInKhmer} ${place.nameInLatin}'.toLowerCase();
 
     // Extremely robust check: covers categories or names containing 'bus' or 'stop'
     if (cat.contains('bus') ||
@@ -377,7 +386,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         cat.contains('transit') ||
         name.contains('bus stop') ||
         name.contains('ចំណត')) {
-      debugPrint("Opening specialized Bus Stop panel for: ${place.name}");
       _showBusStopPanel(place);
       return;
     }
@@ -393,7 +401,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         onDirections: () {
           context.read<MapProvider>().openRouteSearch(
             RouteSearchSelection(
-              label: place.name,
+              label: place.localizedName(
+                context.read<SettingsProvider>().languageCode,
+              ),
               location: LatLng(place.latitude, place.longitude),
             ),
           );
@@ -410,9 +420,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Live bus details are not available right now.'),
-        duration: Duration(seconds: 2),
+      SnackBar(
+        content: Text(context.read<SettingsProvider>().t.couldNotViewBusInfo),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -430,6 +440,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           expand: false,
           builder: (context, scrollController) {
             final transit = context.watch<TransitProvider>();
+            final settings = context.watch<SettingsProvider>();
+            // Named `tx` — `t` is used for Trip in the builders below.
+            final tx = settings.t;
             final stopName = _normalizeKhmer(stop.name);
 
             final stopTrips = transit.trips.where((t) {
@@ -500,12 +513,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             ),
                           ),
                         ),
-                        const Text(
-                          "ចំណតរថយន្តក្រុង · BUS STOP",
-                          style: TextStyle(color: Colors.white70, fontSize: 10),
+                        Text(
+                          tx.busStopHeader,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 10,
+                          ),
                         ),
                         Text(
-                          stop.name,
+                          // Display localized; matching above stays on the
+                          // Khmer name because trip.allStops holds Khmer.
+                          stop.localizedName(settings.languageCode),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
@@ -526,24 +544,24 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             controller: scrollController,
                             trip: closestBus,
                             currentStopName: stop.name,
-                            header: const [
-                              SizedBox(height: 20),
+                            header: [
+                              const SizedBox(height: 20),
                               Text(
-                                "ការធ្វើដំណើររបស់រថយន្តនេះ · ROUTE ITINERARY",
-                                style: TextStyle(
+                                tx.routeItineraryHeader,
+                                style: const TextStyle(
                                   color: Colors.white38,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              SizedBox(height: 15),
+                              const SizedBox(height: 15),
                             ],
                             trailing: [
                               if (otherTrips.isNotEmpty) ...[
                                 const SizedBox(height: 24),
-                                const Text(
-                                  "ខ្សែរត់ផ្សេងទៀតដែលឆ្លងកាត់ · OTHER BUS LINES",
-                                  style: TextStyle(
+                                Text(
+                                  tx.otherBusLinesHeader,
+                                  style: const TextStyle(
                                     color: Colors.white38,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
@@ -559,9 +577,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             padding: const EdgeInsets.all(20),
                             children: [
                               if (otherTrips.isNotEmpty) ...[
-                                const Text(
-                                  "ខ្សែរត់ផ្សេងទៀតដែលឆ្លងកាត់ · OTHER BUS LINES",
-                                  style: TextStyle(
+                                Text(
+                                  tx.otherBusLinesHeader,
+                                  style: const TextStyle(
                                     color: Colors.white38,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
@@ -598,7 +616,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withAlpha(13),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white12),
       ),
@@ -687,6 +705,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
+        final tx = context.watch<SettingsProvider>().t;
         return Container(
           margin: const EdgeInsets.all(10),
           decoration: BoxDecoration(
@@ -710,9 +729,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              "ខ្សែរត់ · ROUTE",
-                              style: TextStyle(
+                            Text(
+                              tx.routeHeaderShort,
+                              style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
@@ -739,9 +758,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           ),
                           child: Column(
                             children: [
-                              const Text(
-                                "ផ្លាកលេខ",
-                                style: TextStyle(
+                              Text(
+                                tx.plateNumber,
+                                style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 10,
                                 ),
@@ -788,10 +807,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   children: [
                     Row(
                       children: [
-                        const Expanded(
+                        Expanded(
                           child: _InfoBox(
-                            label: "ស្ថានភាព",
-                            content: Row(
+                            label: tx.statusLabel,
+                            content: const Row(
                               children: [
                                 Icon(
                                   Icons.circle,
@@ -840,9 +859,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  "ចំណតបន្ទាប់ · NEXT STOP",
-                                  style: TextStyle(
+                                Text(
+                                  tx.nextStopHeader,
+                                  style: const TextStyle(
                                     color: Colors.white38,
                                     fontSize: 10,
                                   ),
@@ -907,6 +926,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
       ),
       builder: (context) {
+        final tx = context.watch<SettingsProvider>().t;
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Padding(
@@ -914,18 +934,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    "ជ្រើសរើសខ្សែរត់ · SELECT ROUTES",
-                    style: TextStyle(
+                  Text(
+                    tx.selectRoutesHeader,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 15),
                   CheckboxListTile(
-                    title: const Text(
-                      "បង្ហាញទាំងអស់ (Show All)",
-                      style: TextStyle(color: Colors.white),
+                    title: Text(
+                      tx.showAll,
+                      style: const TextStyle(color: Colors.white),
                     ),
                     value:
                         lineRoutes.isNotEmpty &&
@@ -959,7 +979,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           activeColor: color,
                           secondary: Icon(Icons.directions_bus, color: color),
                           title: Text(
-                            "ខ្សែរត់ ${route.code ?? '??'}",
+                            tx.routeCodeLabel(route.code ?? '??'),
                             style: const TextStyle(color: Colors.white),
                           ),
                           subtitle: Text(
@@ -1034,11 +1054,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Text(
-                      "ចំណតទាំងអស់ · ALL STOPS",
-                      style: TextStyle(
+                      context.watch<SettingsProvider>().t.allStopsHeader,
+                      style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -1068,15 +1088,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (context) {
+        final tx = context.watch<SettingsProvider>().t;
         return Padding(
           padding: const EdgeInsets.all(25.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "ទិសដៅរត់ · DIRECTIONS",
-                style: TextStyle(
+              Text(
+                tx.directionsHeader,
+                style: const TextStyle(
                   color: Color(0xFFE8B67D),
                   fontWeight: FontWeight.bold,
                 ),
@@ -1090,9 +1111,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     size: 20,
                   ),
                   const SizedBox(width: 15),
-                  const Text(
-                    "ចាប់ផ្តើម: ",
-                    style: TextStyle(color: Colors.white54),
+                  Text(
+                    tx.startColon,
+                    style: const TextStyle(color: Colors.white54),
                   ),
                   Expanded(
                     child: Text(
@@ -1115,9 +1136,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 children: [
                   const Icon(Icons.location_on, color: Colors.red, size: 20),
                   const SizedBox(width: 15),
-                  const Text(
-                    "គោលដៅ: ",
-                    style: TextStyle(color: Colors.white54),
+                  Text(
+                    tx.destinationColon,
+                    style: const TextStyle(color: Colors.white54),
                   ),
                   Expanded(
                     child: Text(
@@ -1131,11 +1152,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 ],
               ),
               const SizedBox(height: 30),
-              const Center(
+              Center(
                 child: Text(
-                  "មុខងារនេះនឹងមកដល់ឆាប់ៗនេះ\n(Navigation coming soon)",
+                  tx.navigationComingSoon,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white24, fontSize: 12),
+                  style: const TextStyle(color: Colors.white24, fontSize: 12),
                 ),
               ),
               const SizedBox(height: 10),
@@ -1776,6 +1797,7 @@ class _NearbyResultsBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Container(
       width: double.infinity,
       color: AppColors.primaryColor,
@@ -1786,7 +1808,7 @@ class _NearbyResultsBanner extends StatelessWidget {
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              count == 0 ? 'រកមិនឃើញ' : 'ឃើញ $count កន្លែង',
+              count == 0 ? t.notFoundShort : t.foundPlaces(count),
               style: GoogleFonts.notoSansKhmer(
                 color: Colors.white,
                 fontSize: 12,
@@ -1797,7 +1819,7 @@ class _NearbyResultsBanner extends StatelessWidget {
             onPressed: onClear,
             icon: const Icon(Icons.close, size: 16, color: Colors.white70),
             label: Text(
-              'សម្អាត',
+              t.clearFilter,
               style: GoogleFonts.notoSansKhmer(
                 color: Colors.white70,
                 fontSize: 12,
@@ -2014,7 +2036,6 @@ class _LiveEtaBoxState extends State<_LiveEtaBox> {
       }
       _unsubscribeDetail = unsub;
     } catch (e) {
-      debugPrint('_LiveEtaBox: detail subscribe failed: $e');
       if (!mounted) return;
       setState(() => _snapshotLoaded = true);
     }
@@ -2028,8 +2049,8 @@ class _LiveEtaBoxState extends State<_LiveEtaBox> {
         _snapshot = snap;
         _snapshotLoaded = true;
       });
-    } catch (e) {
-      debugPrint('_LiveEtaBox: bad detail payload: $e');
+    } catch (_) {
+      // ignore malformed detail payloads
     }
   }
 

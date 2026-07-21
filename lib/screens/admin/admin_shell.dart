@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
 import '../account_screen.dart';
+import 'admin_dashboard_screen.dart';
+import 'admin_places_screen.dart';
 import 'admin_routes_screen.dart';
-import 'admin_stops_screen.dart';
 
-/// Admin shell: Stops + Routes management, plus Account (kept for logout).
-/// Reuses the existing AccountScreen unchanged, same as the driver shell.
+/// Admin shell: Dashboard home, Places + Routes management, plus Account (kept
+/// for logout). Reuses the existing AccountScreen unchanged, same as the driver
+/// shell.
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
 
@@ -18,13 +22,15 @@ class _AdminShellState extends State<AdminShell> {
   int _index = 0;
 
   static const _screens = <Widget>[
-    AdminStopsScreen(),
+    AdminDashboardScreen(),
+    AdminPlacesScreen(),
     AdminRoutesScreen(),
     AccountScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: BottomNavigationBar(
@@ -36,21 +42,26 @@ class _AdminShellState extends State<AdminShell> {
         unselectedItemColor: AppColors.secondaryTextColor,
         selectedFontSize: 12,
         unselectedFontSize: 12,
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.place_outlined),
-            activeIcon: Icon(Icons.place),
-            label: 'ចំណត',
+            icon: const Icon(Icons.dashboard_outlined),
+            activeIcon: const Icon(Icons.dashboard),
+            label: t.adminDashboardTab,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.route_outlined),
-            activeIcon: Icon(Icons.route),
-            label: 'ផ្លូវ',
+            icon: const Icon(Icons.place_outlined),
+            activeIcon: const Icon(Icons.place),
+            label: t.placesTab,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'គណនី',
+            icon: const Icon(Icons.route_outlined),
+            activeIcon: const Icon(Icons.route),
+            label: t.routesTab,
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.person_outline),
+            activeIcon: const Icon(Icons.person),
+            label: t.navAccount,
           ),
         ],
       ),

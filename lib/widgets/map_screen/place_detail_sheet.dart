@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:kh_map_app/models/place.dart';
+import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/screens/place_reviews_screen.dart';
 import 'package:kh_map_app/utils/category_icon.dart';
 
@@ -56,14 +58,17 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   void _toggleFavorite() {
     setState(() => _isFavorite = !_isFavorite);
     widget.onFavoriteChanged?.call(_isFavorite);
+    final name = widget.place.localizedName(
+      context.read<SettingsProvider>().languageCode,
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
         content: Text(
           _isFavorite
-              ? 'Saved "${widget.place.name}" to favorites'
-              : 'Removed "${widget.place.name}" from favorites',
+              ? 'Saved "$name" to favorites'
+              : 'Removed "$name" from favorites',
         ),
       ),
     );
@@ -234,7 +239,9 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  place.name,
+                  place.localizedName(
+                    context.watch<SettingsProvider>().languageCode,
+                  ),
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w600,

@@ -2,10 +2,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/place.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/place_service.dart';
+import '../../utils/constants/text_strings.dart';
 
 /// Bottom-sheet form that lets a logged-in user rate a place: a 1–5 star score,
 /// an optional comment, and optional photos. Submits to the backend via
@@ -58,7 +61,10 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
       if (!mounted) return;
       setState(() => _photos.addAll(picked.map((f) => f.path)));
     } catch (_) {
-      if (mounted) setState(() => _error = 'Could not pick photos');
+      if (mounted) {
+        setState(
+            () => _error = context.read<SettingsProvider>().t.couldNotPickPhotos);
+      }
     } finally {
       if (mounted) setState(() => _picking = false);
     }
@@ -67,8 +73,9 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
   void _removePhoto(int index) => setState(() => _photos.removeAt(index));
 
   Future<void> _submit() async {
+    final t = context.read<SettingsProvider>().t;
     if (_score <= 0) {
-      setState(() => _error = 'Please pick a star rating first');
+      setState(() => _error = t.pickStarRatingFirst);
       return;
     }
     setState(() {
@@ -81,7 +88,7 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _error = 'Please log in to write a review';
+        _error = t.logInToReview;
       });
       return;
     }
@@ -100,13 +107,14 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _error = 'Could not submit review — please try again';
+        _error = t.couldNotSubmitReview;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
@@ -124,11 +132,11 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
               children: [
                 _handle(),
                 const SizedBox(height: 8),
-                _header(),
+                _header(t),
                 const SizedBox(height: 18),
-                const Text(
-                  'Your rating',
-                  style: TextStyle(
+                Text(
+                  t.yourRating,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
@@ -137,19 +145,8 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                 const SizedBox(height: 8),
                 _starPicker(),
                 const SizedBox(height: 18),
-                const Text(
-                  'Comment',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _commentField(),
-                const SizedBox(height: 18),
                 Text(
-                  'Photos (${_photos.length})',
+                  t.commentLabel,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13.5,
@@ -157,7 +154,18 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                _photoGrid(),
+                _commentField(t),
+                const SizedBox(height: 18),
+                Text(
+                  t.photosCount(_photos.length),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _photoGrid(t),
                 if (_error != null) ...[
                   const SizedBox(height: 14),
                   Text(
@@ -169,7 +177,7 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                   ),
                 ],
                 const SizedBox(height: 22),
-                _submitButton(),
+                _submitButton(t),
               ],
             ),
           ),
@@ -189,16 +197,16 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
         ),
       );
 
-  Widget _header() {
+  Widget _header(AppTexts t) {
     return Row(
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Write a review',
-                style: TextStyle(
+              Text(
+                t.writeReview,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 19,
                   fontWeight: FontWeight.w700,
@@ -206,7 +214,9 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
               ),
               const SizedBox(height: 2),
               Text(
-                widget.place.name,
+                widget.place.localizedName(
+                  context.watch<SettingsProvider>().languageCode,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: Colors.grey, fontSize: 13),
@@ -215,7 +225,7 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
           ),
         ),
         IconButton(
-          tooltip: 'Close',
+          tooltip: t.close,
           onPressed: () => Navigator.of(context).pop(),
           icon: const Icon(Icons.close, color: Colors.white70),
         ),
@@ -252,14 +262,14 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
     );
   }
 
-  Widget _commentField() {
+  Widget _commentField(AppTexts t) {
     return TextField(
       controller: _commentCtrl,
       maxLines: 4,
       minLines: 3,
       style: const TextStyle(color: Colors.white, fontSize: 14),
       decoration: InputDecoration(
-        hintText: 'Share details of your experience at this place…',
+        hintText: t.reviewCommentHint,
         hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
         filled: true,
         fillColor: _surfaceColor,
@@ -276,7 +286,7 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
     );
   }
 
-  Widget _photoGrid() {
+  Widget _photoGrid(AppTexts t) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -319,12 +329,12 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
               ),
             ],
           ),
-        _addPhotoTile(),
+        _addPhotoTile(t),
       ],
     );
   }
 
-  Widget _addPhotoTile() {
+  Widget _addPhotoTile(AppTexts t) {
     return InkWell(
       onTap: _pickPhotos,
       borderRadius: BorderRadius.circular(10),
@@ -346,15 +356,15 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                   color: _accentBlue,
                 ),
               )
-            : const Column(
+            : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.add_a_photo_outlined,
+                  const Icon(Icons.add_a_photo_outlined,
                       color: _accentBlue, size: 22),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
-                    'Add',
-                    style: TextStyle(
+                    t.add,
+                    style: const TextStyle(
                       color: _accentBlue,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -366,7 +376,7 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
     );
   }
 
-  Widget _submitButton() {
+  Widget _submitButton(AppTexts t) {
     return SizedBox(
       width: double.infinity,
       child: FilledButton(
@@ -388,9 +398,10 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                   color: Colors.white,
                 ),
               )
-            : const Text(
-                'Submit review',
-                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+            : Text(
+                t.submitReview,
+                style: const TextStyle(
+                    fontSize: 14.5, fontWeight: FontWeight.w600),
               ),
       ),
     );
