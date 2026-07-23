@@ -1,5 +1,36 @@
 import 'place.dart';
 
+/// ETA to a *specific* stop on a live trip, from `GET /transit/eta?tripId&stopId`.
+/// Used to refresh the on-bus alight ETA without re-planning the whole journey.
+class StopEta {
+  final String tripId;
+  final String stopId;
+
+  /// Seconds until the bus reaches [stopId]. `0` when at or past the stop.
+  final int etaSeconds;
+
+  /// True when the bus is currently at the target stop.
+  final bool atStop;
+
+  StopEta({
+    required this.tripId,
+    required this.stopId,
+    required this.etaSeconds,
+    required this.atStop,
+  });
+
+  int get etaMinutes => (etaSeconds / 60).round();
+
+  factory StopEta.fromJson(Map<String, dynamic> json) {
+    return StopEta(
+      tripId: json['tripId'] as String,
+      stopId: json['stopId'] as String,
+      etaSeconds: (json['etaSeconds'] as num?)?.toInt() ?? 0,
+      atStop: (json['atStop'] as bool?) ?? false,
+    );
+  }
+}
+
 /// Snapshot returned by `GET /transit/trips/:id/eta`. Fetched once on
 /// detail-card open; subsequent ETA updates are computed locally from MQTT.
 class TripEtaSnapshot {

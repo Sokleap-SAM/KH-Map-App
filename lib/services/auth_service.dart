@@ -14,6 +14,13 @@ class AuthService {
     null,
   );
 
+  // Whether a user is currently signed in. Reads the in-memory notifier, which
+  // is kept in sync with SharedPreferences on startup, login and logout.
+  static bool get isLoggedIn {
+    final token = tokenNotifier.value;
+    return token != null && token.isNotEmpty;
+  }
+
   // Call once during app startup so the notifier reflects any persisted token.
   static Future<void> initTokenNotifier() async {
     final prefs = await SharedPreferences.getInstance();

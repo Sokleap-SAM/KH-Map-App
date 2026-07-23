@@ -93,7 +93,10 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _codeCtrl = TextEditingController();
   final TextEditingController _filterCtrl = TextEditingController();
-  bool _isLine = false; // false = directional line, true = loop
+  // Backend `isLine`: true = directional line, false = circular loop. The UI
+  // toggle below is "Loop (circular)", so state is kept as `_isLoop` and
+  // converted to `isLine: !_isLoop` when sent.
+  bool _isLoop = false; // true = circular loop, false = directional line
   String _direction = 'outbound'; // 'outbound' | 'inbound' (lines only)
   String _color = '#2196F3'; // route color (create mode)
   Color get _routeColor => routeColorFromHex(_color) ?? Colors.blueAccent;
@@ -358,10 +361,10 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
         code: widget.isAppend
             ? null
             : (_codeCtrl.text.trim().isEmpty ? null : _codeCtrl.text.trim()),
-        isLine: widget.isAppend ? null : _isLine,
+        isLine: widget.isAppend ? null : !_isLoop,
         color: widget.isAppend ? null : _color,
         // Loops have no direction; only directional lines send one.
-        direction: (widget.isAppend || _isLine) ? null : _direction,
+        direction: (widget.isAppend || _isLoop) ? null : _direction,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -507,12 +510,12 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                 contentPadding: EdgeInsets.zero,
                 title: Text(t.loopCircular),
                 subtitle: Text(
-                  _isLine ? t.departureEqualsTerminal : t.directionalLine,
+                  _isLoop ? t.departureEqualsTerminal : t.directionalLine,
                 ),
-                value: _isLine,
-                onChanged: (v) => setState(() => _isLine = v),
+                value: _isLoop,
+                onChanged: (v) => setState(() => _isLoop = v),
               ),
-              if (!_isLine)
+              if (!_isLoop)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Column(
@@ -1249,7 +1252,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
           if (!widget.isAppend)
             Text(
               '${_codeCtrl.text.trim().isEmpty ? '' : '${_codeCtrl.text.trim()}  '}'
-              '${_nameCtrl.text.trim()}  ·  ${_isLine ? 'Line' : 'Circular'}',
+              '${_nameCtrl.text.trim()}  ·  ${_isLoop ? 'Circular' : 'Line'}',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           Text('${_sequence.length} stops · ${_segments.length} segments'),

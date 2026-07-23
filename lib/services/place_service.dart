@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import '../models/place.dart';
 import '../models/place_category.dart';
+import '../models/place_rating.dart';
 
 class PlaceService {
   static String get _baseUrl =>
@@ -28,23 +29,24 @@ class PlaceService {
         .toList();
   }
 
-  /// Creates a brand-new place in the `places` collection. Photos are uploaded
-  /// as multipart files and stored on Cloudinary by the backend. Returns the
-  /// created [Place] (with its server id and remote photo URLs).
-  Future<Place> createPlace({
+  /// Submits a brand-new place as a PENDING request (POST /places/requests).
+  /// The place is NOT published to the map until an admin approves it. Photos
+  /// are uploaded as multipart files and stored on Cloudinary by the backend.
+  /// Requires a logged-in user — the backend derives the submitter from the JWT.
+  /// Returns the created [Place] (with its server id, remote photo URLs and
+  /// status: pending).
+  Future<Place> submitPlaceRequest({
     required String nameInKhmer,
     required String nameInLatin,
     String? categoryId,
     required double longitude,
     required double latitude,
     List<String> photoPaths = const [],
-    String? token,
+    required String token,
   }) async {
-    final uri = Uri.parse('$_baseUrl/places');
+    final uri = Uri.parse('$_baseUrl/places/requests');
     final request = http.MultipartRequest('POST', uri);
-    if (token != null && token.isNotEmpty) {
-      request.headers['Authorization'] = 'Bearer $token';
-    }
+    request.headers['Authorization'] = 'Bearer $token';
     request.fields['nameInKhmer'] = nameInKhmer;
     request.fields['nameInLatin'] = nameInLatin;
     if (categoryId != null && categoryId.isNotEmpty) {
@@ -60,10 +62,40 @@ class PlaceService {
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception(
-        'Failed to create place: ${response.statusCode} ${response.body}',
+        'Failed to submit place request: ${response.statusCode} ${response.body}',
       );
     }
     return Place.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// Fetches the current user's own place requests (all statuses), newest
+  /// first. Used by the contribution screen to show whether each submission is
+  /// still pending or has been approved / rejected.
+  Future<List<Place>> fetchMyPlaceRequests(String token) async {
+    final uri = Uri.parse('$_baseUrl/places/requests/mine');
+    final response = await http.get(
+      uri,
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load place requests');
+    }
+    final List data = jsonDecode(response.body) as List;
+    return data.map((e) => Place.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Fetches every review for a place (newest first), each carrying the
+  /// reviewer's name, score, optional comment and attached photos.
+  Future<List<PlaceRating>> fetchRatings(String placeId) async {
+    final uri = Uri.parse('$_baseUrl/places/$placeId/ratings');
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load ratings');
+    }
+    final List data = jsonDecode(response.body) as List;
+    return data
+        .map((e) => PlaceRating.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Submits a rating (score + optional comment + optional photos) for an

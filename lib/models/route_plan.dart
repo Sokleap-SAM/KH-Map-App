@@ -23,12 +23,30 @@ class SegmentStop {
   /// response. Null for the first stop of a segment.
   final List<LatLng>? segmentPath;
 
+  /// Logical index of this stop within its route's stop list (`0..n-1`), in the
+  /// same coordinate space as the live bus `currentStopIndex` from MQTT — so a
+  /// bus's index can be compared directly against a segment stop. Null on
+  /// legacy responses. Present only on bus-segment stops.
+  final int? stopIndex;
+
+  /// Expected minutes from the bus segment's `boardAt` to this stop (0 at
+  /// board, leg total at alight). Lets the alight ETA update from the live
+  /// `currentStopIndex` without a re-plan. Null on legacy responses.
+  final int? cumulativeMinutesFromBoard;
+
+  /// Distance in metres from the bus segment's `boardAt` to this stop. Used to
+  /// interpolate ETA between two stops. Null on legacy responses.
+  final int? cumulativeMetersFromBoard;
+
   SegmentStop({
     required this.name,
     this.nameLatin,
     required this.coordinates,
     this.stopId,
     this.segmentPath,
+    this.stopIndex,
+    this.cumulativeMinutesFromBoard,
+    this.cumulativeMetersFromBoard,
   });
 
   /// Stop name for the active language ('en' → Latin, else Khmer).
@@ -62,6 +80,11 @@ class SegmentStop {
         (coords[0] as num).toDouble(),
       ),
       segmentPath: segmentPath,
+      stopIndex: (json['stopIndex'] as num?)?.toInt(),
+      cumulativeMinutesFromBoard:
+          (json['cumulativeMinutesFromBoard'] as num?)?.toInt(),
+      cumulativeMetersFromBoard:
+          (json['cumulativeMetersFromBoard'] as num?)?.toInt(),
     );
   }
 }
@@ -223,6 +246,12 @@ class RouteSegment {
 /// The API returns up to five options ranked by travel time, with dynamic
 /// labels: Fastest / Fast / Average / Slower / Slowest.
 class RouteOption {
+  /// Deterministic identifier of the journey *shape* (ordered bus legs, each as
+  /// `routeId:boardStopId>alightStopId`), stable across re-plans regardless of
+  /// rank/label/timing. Used for sticky selection so a re-plan keeps the user's
+  /// committed journey. Null on legacy responses. Format: `opt_` + 6 hex chars.
+  final String? id;
+
   /// 'fastest' | 'fast' | 'average' | 'slower' | 'slowest' | 'walk'
   final String type;
 
@@ -239,6 +268,7 @@ class RouteOption {
   final List<RouteSegment> segments;
 
   RouteOption({
+    this.id,
     required this.type,
     required this.label,
     required this.totalEstimatedMinutes,
@@ -251,6 +281,7 @@ class RouteOption {
 
   factory RouteOption.fromJson(Map<String, dynamic> json) {
     return RouteOption(
+      id: json['id'] as String?,
       type: (json['type'] as String?) ?? 'average',
       label: (json['label'] as String?) ?? 'Route',
       totalEstimatedMinutes:

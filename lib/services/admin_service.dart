@@ -289,6 +289,60 @@ class AdminService {
     if (!_ok(r.statusCode)) _throwFor(r);
   }
 
+  // ─────────────────────────── Place requests ───────────────────────────────
+
+  /// GET /places/requests/pending — user-submitted places awaiting review.
+  Future<List<Place>> fetchPendingPlaceRequests() async {
+    final r = await http
+        .get(
+          Uri.parse('$_baseUrl/places/requests/pending'),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) _throwFor(r);
+    final data = jsonDecode(r.body) as List;
+    return data.whereType<Map<String, dynamic>>().map(Place.fromJson).toList();
+  }
+
+  /// GET /places/requests/history — every request an admin has approved or
+  /// rejected, newest review first (the admin review log).
+  Future<List<Place>> fetchPlaceRequestHistory() async {
+    final r = await http
+        .get(
+          Uri.parse('$_baseUrl/places/requests/history'),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) _throwFor(r);
+    final data = jsonDecode(r.body) as List;
+    return data.whereType<Map<String, dynamic>>().map(Place.fromJson).toList();
+  }
+
+  /// PATCH /places/requests/:id/approve — publish the place to the map.
+  Future<void> approvePlaceRequest(String id) async {
+    final r = await http
+        .patch(
+          Uri.parse('$_baseUrl/places/requests/$id/approve'),
+          headers: await _authHeaders(json: true),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (!_ok(r.statusCode)) _throwFor(r);
+  }
+
+  /// PATCH /places/requests/:id/reject — keep hidden, flag for the submitter.
+  /// [reason] is required by the backend and shown to the submitter so they can
+  /// see why the place was rejected and fix/re-submit it.
+  Future<void> rejectPlaceRequest(String id, String reason) async {
+    final r = await http
+        .patch(
+          Uri.parse('$_baseUrl/places/requests/$id/reject'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode({'reason': reason}),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (!_ok(r.statusCode)) _throwFor(r);
+  }
+
   /// GET /transit/stops/:stopId/routes — routes that reference a place.
   /// NOTE: response shape parsed tolerantly (list of route docs, or
   /// `{ count, routes }`); confirm against the controller.

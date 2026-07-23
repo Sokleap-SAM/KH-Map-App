@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/contribution.dart';
+import '../models/place.dart';
 import 'place_service.dart';
 
 /// Local-first store for [Contribution]s. Persists to SharedPreferences,
@@ -15,6 +16,7 @@ import 'place_service.dart';
 /// into the documents directory via [persistPhoto] before saving.
 class ContributionService {
   static const String _keyPrefix = 'contributions_';
+  static const String _seenPrefix = 'seen_place_requests_';
   static const String _guestSuffix = 'guest';
   static const String _tokenKey = 'access_token';
   static const String _photoDir = 'contribution_photos';
@@ -83,6 +85,46 @@ class ContributionService {
   Future<List<Contribution>> update(Contribution contribution) =>
       _localAdd(contribution);
 
+  /// The current user's submitted place requests (all statuses), newest first.
+  /// Returns an empty list for guests or on failure. Used to surface whether a
+  /// new-place submission is still pending or has been approved / rejected.
+  Future<List<Place>> myPlaceRequests() async {
+    final token = await _accessToken();
+    if (token == null) return const <Place>[];
+    try {
+      return await _placeService.fetchMyPlaceRequests(token);
+    } catch (e) {
+      return const <Place>[];
+    }
+  }
+
+  // ─── Request notifications (seen / unseen tracking) ────────────────────────
+
+  Future<String> _seenKey() async {
+    final token = await _accessToken();
+    final userId = _extractUserId(token);
+    return '$_seenPrefix${userId ?? _guestSuffix}';
+  }
+
+  /// Ids of resolved requests the user has already viewed in the notifications
+  /// sheet — used to decide which approvals/rejections still count as "new".
+  Future<Set<String>> acknowledgedRequestIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _seenKey();
+    return (prefs.getStringList(key) ?? const <String>[]).toSet();
+  }
+
+  /// Marks the given request ids as seen so they stop showing on the badge.
+  Future<void> acknowledgeRequests(Iterable<String> ids) async {
+    final list = ids.toList();
+    if (list.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _seenKey();
+    final current = (prefs.getStringList(key) ?? const <String>[]).toSet()
+      ..addAll(list);
+    await prefs.setStringList(key, current.toList());
+  }
+
   Future<List<Contribution>> _localAdd(Contribution contribution) async {
     final entries = await load();
     entries.removeWhere((c) => c.id == contribution.id);
@@ -100,9 +142,15 @@ class ContributionService {
     final localPhotos = c.photos.where((p) => !_isRemote(p)).toList();
     try {
       if (c.isCustomPlace) {
+        // A new place is a request that needs admin approval — it requires a
+        // logged-in user (the backend ties the request to the JWT). Guests
+        // fall back to a local-only entry.
         final token = await _accessToken();
+        if (token == null) {
+          return null;
+        }
         final categoryId = await _resolveCategoryId(c.categoryName);
-        final place = await _placeService.createPlace(
+        final place = await _placeService.submitPlaceRequest(
           nameInKhmer: c.placeNameKhmer,
           nameInLatin: c.placeNameLatin,
           categoryId: categoryId,

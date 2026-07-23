@@ -9,6 +9,7 @@ import '../../providers/settings_provider.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
+import '../../utils/place_request_status.dart';
 import '../bookmark_screen/favorite_place_card.dart';
 
 /// Renders a single photo path (local file or remote URL) into an Image widget.
@@ -28,6 +29,10 @@ Widget contributionPhoto(
 class ContributionCard extends StatelessWidget {
   final Contribution contribution;
   final String? distanceLabel;
+
+  /// Approval status of the underlying place request ('pending' | 'approved' |
+  /// 'rejected'), for self-created places. Null for ratings of existing places.
+  final String? requestStatus;
   final VoidCallback onTap;
   final VoidCallback onRemove;
   final VoidCallback onEdit;
@@ -39,6 +44,7 @@ class ContributionCard extends StatelessWidget {
     required this.onRemove,
     required this.onEdit,
     this.distanceLabel,
+    this.requestStatus,
   });
 
   @override
@@ -143,6 +149,13 @@ class ContributionCard extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         _ratingLine(icon, color),
+        if (requestStatus != null) ...[
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: PlaceStatusChip(status: requestStatus!),
+          ),
+        ],
         const SizedBox(height: 5),
         _metaLine(Icons.place_outlined, locationLine),
         const SizedBox(height: 3),

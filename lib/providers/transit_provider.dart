@@ -180,6 +180,19 @@ class TransitProvider extends ChangeNotifier {
     }
   }
 
+  /// Returns the trip [id] from the live list, or fetches it by id when it's
+  /// not there (e.g. a plan's recommended trip that isn't in the active-trips
+  /// feed). Best-effort — returns null if the fetch fails or the trip is gone.
+  Future<Trip?> loadTripById(String id) async {
+    final existing = _trips.where((t) => t.id == id).firstOrNull;
+    if (existing != null) return existing;
+    try {
+      return await _service.fetchTripById(id);
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── MQTT subscriptions ────────────────────────────────────────────────────
 
   /// Idempotent: subscribe to position topics for [routeIds], unsubscribe
