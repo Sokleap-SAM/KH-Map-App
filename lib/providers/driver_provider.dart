@@ -57,7 +57,10 @@ class DriverProvider extends ChangeNotifier {
 
   /// Human-readable route title for a trip ("code name"), resolved from the
   /// route cache, falling back to whatever the trip payload carried.
-  String routeTitle(Trip t) {
+  ///
+  /// [fallback] is used when nothing resolves; pass the localized
+  /// `AppTexts.tripFallbackName` from the UI (this provider has no context).
+  String routeTitle(Trip t, {String? fallback}) {
     final r = _routes[t.routeId];
     final code = r?.code ?? (t.routeNumber == '??' ? null : t.routeNumber);
     final name = r?.name ?? t.routeName;
@@ -65,7 +68,7 @@ class DriverProvider extends ChangeNotifier {
       code,
       name,
     ].where((e) => e != null && e.isNotEmpty).join(' ');
-    return label.isEmpty ? 'ដំណើរ' : label;
+    return label.isEmpty ? (fallback ?? 'ដំណើរ') : label;
   }
 
   /// Bus number for a trip. Every trip is on the driver's assigned bus, so we
@@ -110,8 +113,8 @@ class DriverProvider extends ChangeNotifier {
         _routes[r.id] = r;
       }
       notifyListeners();
-    } catch (e) {
-      debugPrint('DriverProvider: route metadata load failed: $e');
+    } catch (_) {
+      // route metadata is best-effort
     }
   }
 
@@ -123,11 +126,8 @@ class DriverProvider extends ChangeNotifier {
       _profile = await _service.fetchProfile();
       notifyListeners();
       return;
-    } on DriverApiException catch (e) {
-      debugPrint(
-        'DriverProvider: /drivers/me failed (${e.statusCode}); '
-        'falling back to JWT claims.',
-      );
+    } on DriverApiException catch (_) {
+      // Fall back to JWT claims below so the shell still shows the name.
     }
     await _profileFromToken();
   }
@@ -136,7 +136,6 @@ class DriverProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
     final claims = decodeJwtPayload(token);
-    debugPrint('DriverProvider: JWT claims = $claims');
     if (claims == null) return;
     _profile = DriverProfile(
       id: (claims['sub'] ?? claims['_id'] ?? claims['userId'] ?? '') as String,
@@ -144,12 +143,6 @@ class DriverProvider extends ChangeNotifier {
       role: (claims['role'] ?? 'driver') as String,
       assignedBusId: assignedBusFromToken(token),
     );
-    if (!_profile!.hasAssignedBus) {
-      debugPrint(
-        'DriverProvider: assignedBus not present in JWT; '
-        'trip filtering needs a backend source.',
-      );
-    }
     notifyListeners();
   }
 
@@ -295,7 +288,6 @@ class DriverProvider extends ChangeNotifier {
     try {
       return await _transit.fetchRouteStops(routeId);
     } catch (e) {
-      debugPrint('DriverProvider: fetchActiveRouteStops failed: $e');
       return const [];
     }
   }
@@ -315,10 +307,8 @@ class DriverProvider extends ChangeNotifier {
       if (fresh != null) {
         try {
           await _mqtt.connect(fresh);
-        } catch (e) {
-          debugPrint(
-            'DriverProvider: MQTT reconnect after rotation failed: $e',
-          );
+        } catch (_) {
+          // reconnect after rotation is best-effort
         }
       }
     }
@@ -360,7 +350,6 @@ class DriverProvider extends ChangeNotifier {
     // Fired from inside the publisher's connect path; defer the credential
     // rotation so we don't re-enter connect synchronously.
     Future.microtask(() async {
-      debugPrint('DriverProvider: rotating MQTT creds after auth failure');
       await _fetchAndCacheCreds();
     });
   }

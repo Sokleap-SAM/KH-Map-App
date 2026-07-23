@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/contribution.dart';
+import '../models/place.dart';
 import 'place_service.dart';
 
 /// Local-first store for [Contribution]s. Persists to SharedPreferences,
@@ -16,6 +16,7 @@ import 'place_service.dart';
 /// into the documents directory via [persistPhoto] before saving.
 class ContributionService {
   static const String _keyPrefix = 'contributions_';
+  static const String _seenPrefix = 'seen_place_requests_';
   static const String _guestSuffix = 'guest';
   static const String _tokenKey = 'access_token';
   static const String _photoDir = 'contribution_photos';
@@ -84,6 +85,46 @@ class ContributionService {
   Future<List<Contribution>> update(Contribution contribution) =>
       _localAdd(contribution);
 
+  /// The current user's submitted place requests (all statuses), newest first.
+  /// Returns an empty list for guests or on failure. Used to surface whether a
+  /// new-place submission is still pending or has been approved / rejected.
+  Future<List<Place>> myPlaceRequests() async {
+    final token = await _accessToken();
+    if (token == null) return const <Place>[];
+    try {
+      return await _placeService.fetchMyPlaceRequests(token);
+    } catch (e) {
+      return const <Place>[];
+    }
+  }
+
+  // ─── Request notifications (seen / unseen tracking) ────────────────────────
+
+  Future<String> _seenKey() async {
+    final token = await _accessToken();
+    final userId = _extractUserId(token);
+    return '$_seenPrefix${userId ?? _guestSuffix}';
+  }
+
+  /// Ids of resolved requests the user has already viewed in the notifications
+  /// sheet — used to decide which approvals/rejections still count as "new".
+  Future<Set<String>> acknowledgedRequestIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _seenKey();
+    return (prefs.getStringList(key) ?? const <String>[]).toSet();
+  }
+
+  /// Marks the given request ids as seen so they stop showing on the badge.
+  Future<void> acknowledgeRequests(Iterable<String> ids) async {
+    final list = ids.toList();
+    if (list.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _seenKey();
+    final current = (prefs.getStringList(key) ?? const <String>[]).toSet()
+      ..addAll(list);
+    await prefs.setStringList(key, current.toList());
+  }
+
   Future<List<Contribution>> _localAdd(Contribution contribution) async {
     final entries = await load();
     entries.removeWhere((c) => c.id == contribution.id);
@@ -101,10 +142,17 @@ class ContributionService {
     final localPhotos = c.photos.where((p) => !_isRemote(p)).toList();
     try {
       if (c.isCustomPlace) {
+        // A new place is a request that needs admin approval — it requires a
+        // logged-in user (the backend ties the request to the JWT). Guests
+        // fall back to a local-only entry.
         final token = await _accessToken();
+        if (token == null) {
+          return null;
+        }
         final categoryId = await _resolveCategoryId(c.categoryName);
-        final place = await _placeService.createPlace(
-          name: c.placeName,
+        final place = await _placeService.submitPlaceRequest(
+          nameInKhmer: c.placeNameKhmer,
+          nameInLatin: c.placeNameLatin,
           categoryId: categoryId,
           longitude: c.longitude,
           latitude: c.latitude,
@@ -119,7 +167,6 @@ class ContributionService {
       // Rating an existing place — needs a logged-in user and a real placeId.
       final token = await _accessToken();
       if (token == null || c.placeId == null || c.placeId!.isEmpty) {
-        debugPrint('[Contributions] rating not synced (guest or no placeId)');
         return null;
       }
       final rating = await _placeService.submitRating(
@@ -131,14 +178,12 @@ class ContributionService {
       );
       final remotePhotos =
           (rating['photos'] as List?)?.whereType<String>().toList() ??
-              const <String>[];
+          const <String>[];
       final photos = _mergeRemotePhotos(c.photos, remotePhotos);
-      final ratingId =
-          (rating['_id'] ?? rating['id'])?.toString();
+      final ratingId = (rating['_id'] ?? rating['id'])?.toString();
       await _cleanupPhotos(localPhotos);
       return c.copyWith(photos: photos, ratingId: ratingId);
     } catch (e) {
-      debugPrint('[Contributions] backend sync failed: $e — keeping local copy');
       return null;
     }
   }
@@ -151,7 +196,9 @@ class ContributionService {
       for (final c in cats) {
         if (c.name.toLowerCase() == name.toLowerCase()) return c.id;
       }
-    } catch (_) {/* category lookup is best-effort */}
+    } catch (_) {
+      /* category lookup is best-effort */
+    }
     return null;
   }
 
@@ -194,8 +241,8 @@ class ContributionService {
               token: token,
             );
           }
-        } catch (e) {
-          debugPrint('[Contributions] backend delete failed: $e');
+        } catch (_) {
+          // backend delete is best-effort; local removal still applies
         }
       }
     }
@@ -218,8 +265,7 @@ class ContributionService {
   /// survives app relaunches. Returns the absolute path to the stored copy.
   /// Remote URLs (http/https) are passed through unchanged.
   Future<String> persistPhoto(String sourcePath) async {
-    if (sourcePath.startsWith('http://') ||
-        sourcePath.startsWith('https://')) {
+    if (sourcePath.startsWith('http://') || sourcePath.startsWith('https://')) {
       return sourcePath;
     }
     try {
@@ -233,7 +279,6 @@ class ContributionService {
       await File(sourcePath).copy(target.path);
       return target.path;
     } catch (e) {
-      debugPrint('[Contributions] persistPhoto failed: $e — keeping original');
       return sourcePath;
     }
   }
@@ -244,7 +289,9 @@ class ContributionService {
       try {
         final f = File(p);
         if (await f.exists()) await f.delete();
-      } catch (_) {/* ignore */}
+      } catch (_) {
+        /* ignore */
+      }
     }
   }
 

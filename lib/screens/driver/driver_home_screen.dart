@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/route_stop.dart';
 import '../../providers/driver_provider.dart';
+import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
 import 'driver_trip_detail_screen.dart';
 
@@ -87,7 +88,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        title: const Text('អ្នកបើកបរ'),
+        title: Text(context.watch<SettingsProvider>().t.driverTitle),
         actions: [
           _StatusPill(online: online),
           const SizedBox(width: 8),
@@ -235,6 +236,7 @@ class _ActiveTripSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = context.read<DriverProvider>();
+    final t = context.watch<SettingsProvider>().t;
     final routeNumber = trip.routeNumber ?? '';
     final routeName = trip.routeName ?? '';
     final nextStop = trip.nextStopName ?? '';
@@ -264,7 +266,7 @@ class _ActiveTripSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text('បន្ទាប់: $nextStop'),
+              Text(t.nextStopColon(nextStop)),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
@@ -275,9 +277,12 @@ class _ActiveTripSheet extends StatelessWidget {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: const Text(
-                    'បោះបង់ការធ្វើដំណើរ',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  child: Text(
+                    t.cancelTrip,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               ),

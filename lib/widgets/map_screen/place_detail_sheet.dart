@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:kh_map_app/models/place.dart';
+import 'package:kh_map_app/providers/settings_provider.dart';
+import 'package:kh_map_app/screens/place_reviews_screen.dart';
 import 'package:kh_map_app/utils/category_icon.dart';
 
 class PlaceDetailSheet extends StatefulWidget {
@@ -44,17 +47,28 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     super.dispose();
   }
 
+  void _openReviews() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PlaceReviewsScreen(place: widget.place),
+      ),
+    );
+  }
+
   void _toggleFavorite() {
     setState(() => _isFavorite = !_isFavorite);
     widget.onFavoriteChanged?.call(_isFavorite);
+    final name = widget.place.localizedName(
+      context.read<SettingsProvider>().languageCode,
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
         content: Text(
           _isFavorite
-              ? 'Saved "${widget.place.name}" to favorites'
-              : 'Removed "${widget.place.name}" from favorites',
+              ? 'Saved "$name" to favorites'
+              : 'Removed "$name" from favorites',
         ),
       ),
     );
@@ -103,7 +117,13 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
                     ? '${place.averageRating!.toStringAsFixed(1)} '
                           '· ${place.ratingCount ?? 0} ratings'
                     : 'No ratings yet',
-                secondary: 'Rating',
+                secondary: 'Rating · Tap to read reviews',
+                onTap: _openReviews,
+                trailing: const Icon(
+                  Icons.chevron_right,
+                  color: Colors.grey,
+                  size: 22,
+                ),
               ),
               const Divider(color: _dividerColor, height: 1),
               _InfoRow(
@@ -219,7 +239,9 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  place.name,
+                  place.localizedName(
+                    context.watch<SettingsProvider>().languageCode,
+                  ),
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w600,
@@ -406,17 +428,21 @@ class _InfoRow extends StatelessWidget {
   final Color? iconColor;
   final String primary;
   final String? secondary;
+  final VoidCallback? onTap;
+  final Widget? trailing;
 
   const _InfoRow({
     required this.icon,
     required this.primary,
     this.secondary,
     this.iconColor,
+    this.onTap,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final row = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -441,8 +467,12 @@ class _InfoRow extends StatelessWidget {
               ],
             ),
           ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
         ],
       ),
     );
+
+    if (onTap == null) return row;
+    return InkWell(onTap: onTap, child: row);
   }
 }

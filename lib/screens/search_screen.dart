@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../models/place.dart';
 import '../models/place_category.dart';
+import '../providers/settings_provider.dart';
 import '../services/place_service.dart';
+import '../utils/constants/text_strings.dart';
 import '../services/search_history_service.dart';
 import '../utils/constants/colors.dart';
 import '../widgets/search_screen/search_field.dart';
@@ -32,7 +35,7 @@ class _SearchScreenState extends State<SearchScreen> {
   List<SearchHistoryEntry> _history = [];
   String _query = '';
   bool _isLoading = true;
-  String? _error;
+  bool _hasError = false;
   Timer? _debounce;
 
   @override
@@ -68,7 +71,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Future<void> _loadPlaces() async {
     setState(() {
       _isLoading = true;
-      _error = null;
+      _hasError = false;
     });
     try {
       final places = await _placeService.fetchPlaces();
@@ -81,7 +84,7 @@ class _SearchScreenState extends State<SearchScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'មិនអាចទាញយកទីកន្លែងបានទេ';
+        _hasError = true;
         _isLoading = false;
       });
     }
@@ -107,18 +110,22 @@ class _SearchScreenState extends State<SearchScreen> {
 
     final scored = <_ScoredPlace>[];
     for (final place in _allPlaces) {
-      final name = _normalize(place.name);
+      // Match against both the Khmer and Latin names so a query in either
+      // language finds the place.
+      final nameKh = _normalize(place.nameInKhmer);
+      final nameLat = _normalize(place.nameInLatin);
       final categoryName = _normalize(place.category?.name ?? '');
 
       int score;
-      if (name == query) {
+      if (nameKh == query || nameLat == query) {
         score = 0;
-      } else if (name.startsWith(query)) {
+      } else if (nameKh.startsWith(query) || nameLat.startsWith(query)) {
         score = 1;
-      } else if (name.contains(query)) {
+      } else if (nameKh.contains(query) || nameLat.contains(query)) {
         score = 2;
       } else if (queryTokens.length > 1 &&
-          queryTokens.every((t) => name.contains(t))) {
+          (queryTokens.every((t) => nameKh.contains(t)) ||
+              queryTokens.every((t) => nameLat.contains(t)))) {
         score = 3;
       } else if (categoryName.contains(query)) {
         score = 4;
@@ -128,10 +135,14 @@ class _SearchScreenState extends State<SearchScreen> {
       scored.add(_ScoredPlace(place, score));
     }
 
+    final lang = context.read<SettingsProvider>().languageCode;
     scored.sort((a, b) {
       final byScore = a.score.compareTo(b.score);
       if (byScore != 0) return byScore;
-      return a.place.name.toLowerCase().compareTo(b.place.name.toLowerCase());
+      return a.place
+          .localizedName(lang)
+          .toLowerCase()
+          .compareTo(b.place.localizedName(lang).toLowerCase());
     });
 
     return scored.take(50).map((s) => s.place).toList(growable: false);
@@ -170,7 +181,9 @@ class _SearchScreenState extends State<SearchScreen> {
       (p) => p.id == entry.id,
       orElse: () => Place(
         id: entry.id,
-        name: entry.name,
+        nameInKhmer: entry.name,
+        // Older history entries predate the Latin field; reuse the Khmer name.
+        nameInLatin: entry.nameLatin ?? entry.name,
         category: PlaceCategory(id: '', name: entry.categoryName),
         longitude: entry.longitude,
         latitude: entry.latitude,
@@ -190,6 +203,7 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final hasQuery = _query.trim().isNotEmpty;
+    final t = context.watch<SettingsProvider>().t;
 
     return Scaffold(
       backgroundColor: AppColors.primaryColor,
@@ -200,7 +214,7 @@ class _SearchScreenState extends State<SearchScreen> {
               padding: const EdgeInsets.fromLTRB(12, 12, 16, 8),
               child: SearchField(
                 controller: _controller,
-                hint: 'ស្វែងរកនៅទីនេះ',
+                hint: t.searchHereHint,
                 onBack: () => Navigator.of(context).pop(),
               ),
             ),
@@ -219,28 +233,28 @@ class _SearchScreenState extends State<SearchScreen> {
                 endIndent: 16,
               ),
             ],
-            Expanded(child: _buildBody(hasQuery)),
+            Expanded(child: _buildBody(hasQuery, t)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBody(bool hasQuery) {
+  Widget _buildBody(bool hasQuery, AppTexts t) {
     if (_isLoading && _allPlaces.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.secondaryColor),
       );
     }
 
-    if (_error != null && _allPlaces.isEmpty) {
+    if (_hasError && _allPlaces.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              _error!,
+              t.couldNotLoadPlaces,
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKhmer(
                 color: Colors.white70,
@@ -251,7 +265,7 @@ class _SearchScreenState extends State<SearchScreen> {
             TextButton(
               onPressed: _loadPlaces,
               child: Text(
-                'ព្យាយាមម្តងទៀត',
+                t.tryAgain,
                 style: GoogleFonts.notoSansKhmer(
                   color: AppColors.secondaryColor,
                   fontSize: 14,
@@ -270,7 +284,7 @@ class _SearchScreenState extends State<SearchScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           child: Center(
             child: Text(
-              'ចាប់ផ្តើមវាយដើម្បីស្វែងរកទីកន្លែង ឬចំណតឡានក្រុង',
+              t.searchEmptyPrompt,
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKhmer(
                 color: Colors.white70,
@@ -289,7 +303,7 @@ class _SearchScreenState extends State<SearchScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
               child: Text(
-                'ប្រវត្តិស្វែងរក',
+                t.searchHistory,
                 style: GoogleFonts.notoSansKhmer(
                   color: Colors.white,
                   fontSize: 14,
@@ -315,9 +329,7 @@ class _SearchScreenState extends State<SearchScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
             child: Text(
-              _results.isEmpty
-                  ? 'លទ្ធផល'
-                  : 'លទ្ធផល (${_results.length})',
+              _results.isEmpty ? t.results : t.resultsCount(_results.length),
               style: GoogleFonts.notoSansKhmer(
                 color: Colors.white,
                 fontSize: 14,

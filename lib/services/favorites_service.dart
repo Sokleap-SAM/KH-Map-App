@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,7 +8,14 @@ import '../models/place.dart';
 
 class FavoritePlace {
   final String placeId;
+
+  /// Khmer place name (place `nameInKhmer`).
   final String name;
+
+  /// Latin place name (place `nameInLatin`); null on entries saved before the
+  /// field existed.
+  final String? nameLatin;
+
   final String categoryName;
   final double latitude;
   final double longitude;
@@ -21,6 +27,7 @@ class FavoritePlace {
   const FavoritePlace({
     required this.placeId,
     required this.name,
+    this.nameLatin,
     required this.categoryName,
     required this.latitude,
     required this.longitude,
@@ -30,29 +37,35 @@ class FavoritePlace {
     this.ratingCount,
   });
 
+  /// Place name for the active language ('en' → Latin, else Khmer).
+  String localizedName(String languageCode) =>
+      localizedPlaceName(name, nameLatin, languageCode);
+
   factory FavoritePlace.fromPlace(Place p) => FavoritePlace(
-        placeId: p.id,
-        name: p.name,
-        categoryName: p.category?.name ?? 'Place',
-        latitude: p.latitude,
-        longitude: p.longitude,
-        photo: p.photos.isNotEmpty ? p.photos.first : null,
-        averageRating: p.averageRating,
-        ratingCount: p.ratingCount,
-        favoritedAt: DateTime.now(),
-      );
+    placeId: p.id,
+    name: p.nameInKhmer,
+    nameLatin: p.nameInLatin,
+    categoryName: p.category?.name ?? 'Place',
+    latitude: p.latitude,
+    longitude: p.longitude,
+    photo: p.photos.isNotEmpty ? p.photos.first : null,
+    averageRating: p.averageRating,
+    ratingCount: p.ratingCount,
+    favoritedAt: DateTime.now(),
+  );
 
   Map<String, dynamic> toJson() => {
-        'placeId': placeId,
-        'name': name,
-        'categoryName': categoryName,
-        'latitude': latitude,
-        'longitude': longitude,
-        'photo': photo,
-        'averageRating': averageRating,
-        'ratingCount': ratingCount,
-        'favoritedAt': favoritedAt.toIso8601String(),
-      };
+    'placeId': placeId,
+    'name': name,
+    'nameLatin': nameLatin,
+    'categoryName': categoryName,
+    'latitude': latitude,
+    'longitude': longitude,
+    'photo': photo,
+    'averageRating': averageRating,
+    'ratingCount': ratingCount,
+    'favoritedAt': favoritedAt.toIso8601String(),
+  };
 
   factory FavoritePlace.fromJson(Map<String, dynamic> json) {
     final rawId = (json['placeId'] ?? json['id'])?.toString() ?? '';
@@ -60,7 +73,8 @@ class FavoritePlace {
         (json['favoritedAt'] ?? json['createdAt']) as String? ?? '';
     return FavoritePlace(
       placeId: rawId,
-      name: json['name'] as String? ?? '',
+      name: (json['name'] ?? json['nameInKhmer']) as String? ?? '',
+      nameLatin: (json['nameLatin'] ?? json['nameInLatin']) as String?,
       categoryName: (json['categoryName'] as String?) ?? 'Place',
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
@@ -122,24 +136,20 @@ class FavoritesService {
   Future<List<FavoritePlace>> add(Place place) async {
     final token = await _accessToken();
     if (token == null) {
-      debugPrint('[Favorites] add: no access_token — using LOCAL only');
       return _localAdd(place);
     }
     final remote = await _remoteAdd(token, place);
     if (remote != null) return remote;
-    debugPrint('[Favorites] add: remote failed — falling back to LOCAL');
     return _localAdd(place);
   }
 
   Future<List<FavoritePlace>> remove(String placeId) async {
     final token = await _accessToken();
     if (token == null) {
-      debugPrint('[Favorites] remove: no access_token — using LOCAL only');
       return _localRemove(placeId);
     }
     final remote = await _remoteRemove(token, placeId);
     if (remote != null) return remote;
-    debugPrint('[Favorites] remove: remote failed — falling back to LOCAL');
     return _localRemove(placeId);
   }
 
@@ -155,9 +165,9 @@ class FavoritesService {
   // ---------- Remote (DB-backed) ----------
 
   Map<String, String> _authHeaders(String token, {bool json = false}) => {
-        'Authorization': 'Bearer $token',
-        if (json) 'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $token',
+    if (json) 'Content-Type': 'application/json',
+  };
 
   Future<List<FavoritePlace>?> _remoteLoad(String token) async {
     try {
@@ -177,7 +187,8 @@ class FavoritesService {
     try {
       final body = jsonEncode({
         'placeId': place.id,
-        'name': place.name,
+        'name': place.nameInKhmer,
+        'nameLatin': place.nameInLatin,
         'categoryName': place.category?.name ?? 'Place',
         'latitude': place.latitude,
         'longitude': place.longitude,
@@ -188,11 +199,9 @@ class FavoritesService {
       final res = await http
           .post(uri, headers: _authHeaders(token, json: true), body: body)
           .timeout(const Duration(seconds: 10));
-      debugPrint('[Favorites] POST $uri -> ${res.statusCode} ${res.body}');
       if (res.statusCode != 200 && res.statusCode != 201) return null;
       return _parseList(res.body);
     } catch (e) {
-      debugPrint('[Favorites] POST $uri threw: $e');
       return null;
     }
   }
@@ -206,11 +215,9 @@ class FavoritesService {
       final res = await http
           .delete(uri, headers: _authHeaders(token))
           .timeout(const Duration(seconds: 10));
-      debugPrint('[Favorites] DELETE $uri -> ${res.statusCode}');
       if (res.statusCode != 200 && res.statusCode != 201) return null;
       return _parseList(res.body);
     } catch (e) {
-      debugPrint('[Favorites] DELETE $uri threw: $e');
       return null;
     }
   }

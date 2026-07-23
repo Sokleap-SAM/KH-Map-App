@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../models/place.dart';
+import '../../providers/settings_provider.dart';
 import '../../screens/search_screen.dart';
 import '../../utils/constants/colors.dart';
 
@@ -60,7 +62,7 @@ const List<MapCategory> kMapCategories = [
   ),
 ];
 
-class MapSearchBar extends StatelessWidget {
+class MapSearchBar extends StatefulWidget {
   final ValueChanged<Place>? onPlaceSelected;
 
   /// Key of the currently active nearby-category filter, used to highlight
@@ -78,6 +80,13 @@ class MapSearchBar extends StatelessWidget {
     this.onCategorySelected,
   });
 
+  @override
+  State<MapSearchBar> createState() => _MapSearchBarState();
+}
+
+class _MapSearchBarState extends State<MapSearchBar> {
+  bool _showCategories = true;
+
   Future<void> _openSearch(BuildContext context, {String? initialQuery}) async {
     final selected = await Navigator.of(context).push<Place>(
       MaterialPageRoute(
@@ -85,15 +94,16 @@ class MapSearchBar extends StatelessWidget {
       ),
     );
     if (selected != null) {
-      onPlaceSelected?.call(selected);
+      widget.onPlaceSelected?.call(selected);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Container(
       color: AppColors.primaryColor,
-      padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 12),
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 4),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -105,10 +115,7 @@ class MapSearchBar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFF243350),
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: AppColors.secondaryColor,
-                  width: 1.5,
-                ),
+                border: Border.all(color: AppColors.secondaryColor, width: 1.5),
               ),
               child: Row(
                 children: [
@@ -121,7 +128,7 @@ class MapSearchBar extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'ស្វែងរកទីកន្លែង . . .',
+                      t.searchPlacesHint,
                       style: GoogleFonts.notoSansKhmer(
                         color: Colors.white70,
                         fontSize: 14,
@@ -132,20 +139,45 @@ class MapSearchBar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          // Category buttons — tap to find that category near you on the map.
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              for (final category in kMapCategories)
-                _CategoryButton(
-                  icon: category.icon,
-                  label: category.label,
-                  color: category.color,
-                  selected: activeCategory == category.key,
-                  onTap: () => onCategorySelected?.call(category),
-                ),
-            ],
+          // Category buttons — collapsible. Tap to find that category nearby.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            alignment: Alignment.topCenter,
+            child: _showCategories
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        for (final category in kMapCategories)
+                          _CategoryButton(
+                            icon: category.icon,
+                            label: t.mapCategoryLabel(category.key),
+                            color: category.color,
+                            selected: widget.activeCategory == category.key,
+                            onTap: () =>
+                                widget.onCategorySelected?.call(category),
+                          ),
+                      ],
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+          // Toggle handle — hides/shows the category row.
+          InkWell(
+            onTap: () => setState(() => _showCategories = !_showCategories),
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
+              child: Icon(
+                _showCategories
+                    ? Icons.keyboard_arrow_up
+                    : Icons.keyboard_arrow_down,
+                color: Colors.white70,
+                size: 14,
+              ),
+            ),
           ),
         ],
       ),

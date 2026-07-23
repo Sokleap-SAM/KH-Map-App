@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
@@ -46,9 +47,18 @@ class TransitService {
       throw Exception('Failed to load stops for route $routeId');
     }
     final List data = jsonDecode(response.body) as List;
-    return data
-        .map((e) => RouteStop.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final stops = <RouteStop>[];
+    for (final e in data) {
+      if (e is! Map<String, dynamic>) continue;
+      try {
+        stops.add(RouteStop.fromJson(e));
+      } catch (err) {
+        // Corrupt entry — e.g. an orphaned stop whose place was deleted
+        // (`stop: null`). Skip it; one bad stop must not blank the route.
+        debugPrint('Skipping corrupt stop on route $routeId: $err');
+      }
+    }
+    return stops;
   }
 
   Future<List<Trip>> fetchActiveTrips() async {
@@ -75,6 +85,21 @@ class TransitService {
     return TripEtaSnapshot.fromJson(decoded as Map<String, dynamic>);
   }
 
+  /// One-shot fetch of a single trip by id. Fallback for the bus-detail view
+  /// when the trip isn't in the active-trips list (e.g. it's broadcasting over
+  /// MQTT but `/transit/trips/active` doesn't currently return it). Returns null
+  /// on 404 / empty body so the caller can fall back gracefully.
+  Future<Trip?> fetchTripById(String id) async {
+    final uri = Uri.parse('$_baseUrl/transit/trips/$id');
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    if (response.statusCode == 404) return null;
+    if (response.statusCode != 200) {
+      throw Exception('Failed to fetch trip (${response.statusCode})');
+    }
+    if (response.body.isEmpty || response.body.trim() == 'null') return null;
+    return Trip.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   Future<Trip> startTrip(String id) async {
     final uri = Uri.parse('$_baseUrl/transit/trips/$id/start');
     final response = await http.post(uri).timeout(const Duration(seconds: 10));
@@ -99,6 +124,13 @@ class TransitService {
     required double destLat,
     required double destLng,
     String type = 'transit',
+    // Transit planning (walk + bus legs + transfers) is much heavier than a
+    // single walk query, so callers give the first fetch a longer budget.
+    Duration timeout = const Duration(seconds: 10),
+    // Route ids the user is currently committed to. On a triggered (off-route)
+    // re-plan, nudges the ranking toward the committed journey so it isn't
+    // silently swapped for a different "fastest". Omit for normal planning.
+    List<String> preferRouteIds = const [],
   }) async {
     final uri = Uri.parse('$_baseUrl/transit/plan').replace(
       queryParameters: {
@@ -107,9 +139,10 @@ class TransitService {
         'destLng': destLng.toString(),
         'destLat': destLat.toString(),
         'type': type,
+        if (preferRouteIds.isNotEmpty) 'preferRouteIds': preferRouteIds.join(','),
       },
     );
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await http.get(uri).timeout(timeout);
     if (response.statusCode != 200) {
       throw Exception('Failed to fetch route plan (${response.statusCode})');
     }
@@ -117,5 +150,25 @@ class TransitService {
     final body = jsonDecode(response.body) as Map<String, dynamic>;
 
     return RoutePlanResult.fromJson(body);
+  }
+
+  /// ETA to a specific [stopId] on the live trip [tripId], from
+  /// `GET /transit/eta`. Cheap enough to poll per active trip. Returns `null`
+  /// when the trip has no live position yet (404) so callers can fall back to
+  /// a locally-derived estimate.
+  Future<StopEta?> fetchStopEta({
+    required String tripId,
+    required String stopId,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/transit/eta').replace(
+      queryParameters: {'tripId': tripId, 'stopId': stopId},
+    );
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    if (response.statusCode == 404) return null;
+    if (response.statusCode != 200) {
+      throw Exception('Failed to fetch stop ETA (${response.statusCode})');
+    }
+    if (response.body.isEmpty || response.body.trim() == 'null') return null;
+    return StopEta.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 }

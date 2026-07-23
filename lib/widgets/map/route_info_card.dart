@@ -2,10 +2,72 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/route_plan.dart';
+import '../../models/route_progress.dart';
 import '../../providers/map_provider.dart';
+import '../../providers/settings_provider.dart';
+import '../../utils/constants/text_strings.dart';
 
 // Snap stops: collapsed (header only) · mid (summary) · fully expanded.
 const _kSnapSizes = [0.2, 0.5, 0.88];
+
+/// Friendly, localized message for a failed route-plan fetch. The raw
+/// exception is intentionally never shown to the user.
+String _routePlanErrorMessage(AppTexts t, RoutePlanError e) {
+  switch (e) {
+    case RoutePlanError.timeout:
+      return t.routePlanTimeout;
+    case RoutePlanError.offline:
+      return t.routePlanOffline;
+    case RoutePlanError.generic:
+      return t.routePlanGeneric;
+  }
+}
+
+/// Error state for the route info card: an icon, a friendly message and a
+/// "Try again" button that re-runs the plan.
+class _RoutePlanErrorView extends StatelessWidget {
+  const _RoutePlanErrorView({
+    required this.message,
+    required this.retryLabel,
+    required this.onRetry,
+  });
+
+  final String message;
+  final String retryLabel;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.wifi_tethering_error_rounded,
+            color: Colors.white38,
+            size: 40,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: Text(retryLabel),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF1565C0),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class RouteInfoCard extends StatefulWidget {
   const RouteInfoCard({
@@ -50,7 +112,27 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
   bool _busy = false;
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_reportSheetVisibility);
+    // The sheet opens expanded — report visible now so the 60 s alternative
+    // refresh runs from the start of the trip.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<MapProvider>().setRouteSheetVisible(true);
+    });
+  }
+
+  /// Tells the provider whether the tabs are on screen (sheet not collapsed),
+  /// so the 60 s refresh of the alternative tabs only runs when they're visible.
+  void _reportSheetVisibility() {
+    if (!mounted) return;
+    final visible = _controller.isAttached && _controller.size > 0.3;
+    context.read<MapProvider>().setRouteSheetVisible(visible);
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_reportSheetVisibility);
     _controller.dispose();
     super.dispose();
   }
@@ -105,6 +187,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
       snap: true,
       snapSizes: _kSnapSizes,
       builder: (context, scrollController) {
+        final t = context.watch<SettingsProvider>().t;
         return Consumer<MapProvider>(
           builder: (context, provider, _) {
             final routePlan = provider.routePlan;
@@ -178,16 +261,22 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                           size: 20,
                         ),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'ឡានក្រុង',
-                            style: TextStyle(
+                            t.busShort,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
+                        // Live "arrive in ~X min" countdown, recomputed locally
+                        // from GPS progress — no re-plan.
+                        if (provider.routeProgress != null) ...[
+                          _LiveEtaPill(progress: provider.routeProgress!, t: t),
+                          const SizedBox(width: 8),
+                        ],
                         if (canSave)
                           IconButton(
                             onPressed: _busy
@@ -216,8 +305,8 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                                     size: 20,
                                   ),
                             tooltip: isSaved
-                                ? 'ដកចេញ​ថ្លូវធ្វើដំណើរពីចំណាំ' // "Remove from favorites" in Khmer
-                                : 'រក្សាទុក​ថ្លូវធ្វើដំណើរពីជាចំណាំ', // "Save route to favorites"
+                                ? t.removeRouteFromFavorites
+                                : t.saveRouteToFavorites,
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                           ),
@@ -238,20 +327,28 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                     ),
                   ),
 
+                  // ── Faster-route suggestion (non-disruptive) ─────────────
+                  if (provider.fasterSuggestion != null)
+                    _FasterRouteBanner(
+                      savingMinutes: provider.fasterSavingMinutes ?? 0,
+                      onSwitch: provider.switchToFasterRoute,
+                      onDismiss: provider.dismissFasterSuggestion,
+                    ),
+
                   // ── Walk / Transit toggle ────────────────────────────────
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
                     child: Row(
                       children: [
                         _PlanTypeChip(
-                          label: 'ដើរ',
+                          label: t.walkShort,
                           icon: Icons.directions_walk,
                           selected: planType == 'walk',
                           onTap: () => provider.setPlanType('walk'),
                         ),
                         const SizedBox(width: 8),
                         _PlanTypeChip(
-                          label: 'ឡានក្រុង',
+                          label: t.busShort,
                           icon: Icons.directions_bus,
                           selected: planType == 'transit',
                           onTap: () => provider.setPlanType('transit'),
@@ -264,12 +361,12 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
 
                   // ── Loading / error / no-route states ───────────────────
                   if (isLoading)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          SizedBox(
+                          const SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
@@ -277,10 +374,10 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                               color: Colors.white54,
                             ),
                           ),
-                          SizedBox(width: 12),
+                          const SizedBox(width: 12),
                           Text(
-                            'ស្វែងរកផ្លូវ…',
-                            style: TextStyle(
+                            t.findingRoute,
+                            style: const TextStyle(
                               color: Colors.white54,
                               fontSize: 14,
                             ),
@@ -289,22 +386,16 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       ),
                     )
                   else if (error != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                      child: Text(
-                        error,
-                        style: const TextStyle(
-                          color: Colors.redAccent,
-                          fontSize: 14,
-                        ),
-                      ),
+                    _RoutePlanErrorView(
+                      message: _routePlanErrorMessage(t, error),
+                      retryLabel: t.tryAgain,
+                      onRetry: provider.retryRoutePlan,
                     )
                   else if (routePlan != null && !routePlan.found)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                       child: Text(
-                        routePlan.message ??
-                            'No route found — try a closer destination.',
+                        routePlan.message ?? t.noRouteTryLater,
                         style: const TextStyle(
                           color: Colors.white54,
                           fontSize: 14,
@@ -328,6 +419,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                     RouteOptionDetails(
                       option: routePlan.options[clampedIndex],
                       onShowBusDetail: widget.onShowBusDetail,
+                      showLiveProgress: true,
                     ),
                   ],
 
@@ -338,6 +430,123 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
           },
         );
       },
+    );
+  }
+}
+
+/// Header pill showing the live "arrive in ~X min" countdown and current phase
+/// (walking / waiting / riding / arrived). Fed by [MapProvider.routeProgress],
+/// which is recomputed locally each second — no network, no re-plan.
+class _LiveEtaPill extends StatelessWidget {
+  const _LiveEtaPill({required this.progress, required this.t});
+
+  final RouteProgress progress;
+  final AppTexts t;
+
+  @override
+  Widget build(BuildContext context) {
+    final arrived = progress.isArrived;
+    final icon = switch (progress.phase) {
+      RoutePhase.walking => Icons.directions_walk,
+      RoutePhase.waiting => Icons.schedule,
+      RoutePhase.riding => Icons.directions_bus,
+      RoutePhase.arrived => Icons.check_circle,
+    };
+    final color = arrived ? Colors.greenAccent : const Color(0xFF64B5F6);
+    final label = arrived
+        ? t.arrivedLabel
+        : t.arriveInApprox(progress.minutesRemaining);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withAlpha(30),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withAlpha(90)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Dismissible banner offering a faster route found by the background shadow
+/// re-plan. Purely a suggestion — tapping "Switch" adopts it, the ✕ dismisses
+/// it; neither happens automatically.
+class _FasterRouteBanner extends StatelessWidget {
+  const _FasterRouteBanner({
+    required this.savingMinutes,
+    required this.onSwitch,
+    required this.onDismiss,
+  });
+
+  final int savingMinutes;
+  final VoidCallback onSwitch;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF22C55E).withAlpha(30),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF22C55E).withAlpha(120)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.bolt, color: Color(0xFF4ADE80), size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              t.fasterRouteSave(savingMinutes),
+              style: const TextStyle(
+                color: Color(0xFF86EFAC),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onSwitch,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              backgroundColor: const Color(0xFF22C55E),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: Text(
+              t.switchRoute,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+          IconButton(
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close, size: 16, color: Colors.white54),
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(),
+            tooltip: t.close,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -455,13 +664,24 @@ class RouteOptionDetails extends StatelessWidget {
     super.key,
     required this.option,
     this.onShowBusDetail,
+    this.showLiveProgress = false,
   });
 
   final RouteOption option;
   final void Function(String tripId)? onShowBusDetail;
 
+  /// When true (the live routing flow), the bus leg the user is currently on
+  /// gets a live "reach your stop in N min" row from `GET /transit/eta`. The
+  /// saved favorite-route sheet leaves this false — there's no live trip.
+  final bool showLiveProgress;
+
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
+    // Which leg the user is on now, so only the active bus leg shows live ETA.
+    final progress = showLiveProgress
+        ? context.watch<MapProvider>().routeProgress
+        : null;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -475,7 +695,7 @@ class RouteOptionDetails extends StatelessWidget {
             children: [
               _SummaryChip(
                 icon: Icons.schedule,
-                label: '~${option.totalEstimatedMinutes} min',
+                label: t.minutesApprox(option.totalEstimatedMinutes),
               ),
               _SummaryChip(
                 icon: Icons.straighten,
@@ -483,14 +703,15 @@ class RouteOptionDetails extends StatelessWidget {
               ),
               _SummaryChip(
                 icon: Icons.directions_walk,
-                label: '${_formatDistance(option.totalWalkMeters)} walk',
+                label: t.walkDistance(
+                  _formatDistance(option.totalWalkMeters),
+                ),
               ),
               _SummaryChip(
                 icon: Icons.swap_horiz,
                 label: option.transferCount == 0
-                    ? 'No transfer'
-                    : '${option.transferCount} transfer'
-                          '${option.transferCount > 1 ? 's' : ''}',
+                    ? t.noTransfers
+                    : t.transfersCount(option.transferCount),
               ),
             ],
           ),
@@ -527,20 +748,57 @@ class RouteOptionDetails extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Column(
-            children: option.segments.map((seg) {
-              if (seg.isWalk) return _WalkSegmentTile(seg: seg);
-              if (seg.isBus) {
-                return _BusSegmentTile(
-                  seg: seg,
-                  onShowBusDetail: onShowBusDetail,
-                );
-              }
-              return const SizedBox.shrink();
-            }).toList(),
+            children: [
+              for (var i = 0; i < option.segments.length; i++)
+                _buildSegment(option.segments[i], i, progress),
+            ],
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildSegment(RouteSegment seg, int index, RouteProgress? progress) {
+    final activeIdx = progress?.activeSegmentIndex;
+    final isDone = activeIdx != null && index < activeIdx;
+    final isActive = activeIdx != null && index == activeIdx;
+
+    // The active walk leg shrinks to what's left as the user advances along it.
+    final Widget base;
+    if (seg.isWalk) {
+      base = _WalkSegmentTile(
+        seg: seg,
+        remainingFraction:
+            isActive ? (1 - (progress?.fractionAlongSegment ?? 0)) : null,
+      );
+    } else if (seg.isBus) {
+      // The next bus leg (which may still be ahead while walking to it) carries
+      // live ETA: the real wait before boarding, then the ride once aboard.
+      final isLiveBusLeg = progress?.busLegIndex == index;
+      final riding = progress?.phase == RoutePhase.riding;
+      base = _BusSegmentTile(
+        seg: seg,
+        onShowBusDetail: onShowBusDetail,
+        liveBoardSeconds:
+            isLiveBusLeg && !riding ? progress?.busBoardSeconds : null,
+        liveAlightSeconds:
+            isLiveBusLeg && riding ? progress?.busAlightSeconds : null,
+      );
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    // Completed legs fade out; the active leg gets a left accent bar.
+    if (isDone) return Opacity(opacity: 0.4, child: base);
+    if (isActive) {
+      return Container(
+        decoration: const BoxDecoration(
+          border: Border(left: BorderSide(color: Color(0xFF64B5F6), width: 3)),
+        ),
+        child: base,
+      );
+    }
+    return base;
   }
 }
 
@@ -619,18 +877,33 @@ class _PlanTypeChip extends StatelessWidget {
 // ── Walk segment tile ─────────────────────────────────────────────────────────
 
 class _WalkSegmentTile extends StatelessWidget {
-  const _WalkSegmentTile({required this.seg});
+  const _WalkSegmentTile({required this.seg, this.remainingFraction});
 
   final RouteSegment seg;
 
+  /// 0..1 of the walk still ahead when this is the leg the user is on. When set
+  /// (< 1), the tile shows the remaining distance/time instead of the full leg.
+  final double? remainingFraction;
+
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    final lang = settings.languageCode;
+    final t = settings.t;
+    final frac = remainingFraction;
+    final showRemaining = frac != null && frac < 0.999;
     final dist = seg.distanceMeters;
     final mins = seg.estimatedMinutes;
+    final effDist =
+        showRemaining && dist != null ? (dist * frac).round() : dist;
+    final effMins =
+        showRemaining && mins != null ? (mins * frac).ceil() : mins;
     final label = [
-      if (dist != null) _formatDistance(dist),
-      if (mins != null) '~$mins min',
+      if (effDist != null) _formatDistance(effDist),
+      if (effMins != null) t.minutesApprox(effMins),
     ].join(' · ');
+    final titleText =
+        showRemaining ? t.walkRemaining(label) : t.walkSegment(label);
 
     final isTransfer = seg.isTransfer;
 
@@ -662,14 +935,14 @@ class _WalkSegmentTile extends StatelessWidget {
             const SizedBox(width: 6),
           ],
           Text(
-            'ដើរ${label.isNotEmpty ? ' $label' : ''}',
+            titleText,
             style: const TextStyle(color: Colors.white, fontSize: 14),
           ),
         ],
       ),
       subtitle: seg.from != null && seg.to != null
           ? Text(
-              '${seg.from!.name} → ${seg.to!.name}',
+              '${seg.from!.localizedName(lang)} → ${seg.to!.localizedName(lang)}',
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             )
           : null,
@@ -681,13 +954,29 @@ class _WalkSegmentTile extends StatelessWidget {
 // ── Bus segment tile ──────────────────────────────────────────────────────────
 
 class _BusSegmentTile extends StatelessWidget {
-  const _BusSegmentTile({required this.seg, this.onShowBusDetail});
+  const _BusSegmentTile({
+    required this.seg,
+    this.onShowBusDetail,
+    this.liveBoardSeconds,
+    this.liveAlightSeconds,
+  });
 
   final RouteSegment seg;
   final void Function(String tripId)? onShowBusDetail;
 
+  /// Live ETA (seconds) of the bus to the board stop — "arrives in N", shown in
+  /// place of the plan's static estimate while approaching/waiting. Null when
+  /// unavailable.
+  final int? liveBoardSeconds;
+
+  /// Live ETA (seconds) to the alight stop, shown once aboard. Null otherwise.
+  final int? liveAlightSeconds;
+
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    final lang = settings.languageCode;
+    final t = settings.t;
     final routeCode = seg.route?.code;
     final routeName = seg.route?.name ?? routeCode ?? 'Bus';
     final wait = seg.waitMinutes;
@@ -728,14 +1017,17 @@ class _BusSegmentTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'View',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    t.view,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  Icon(Icons.chevron_right, size: 16),
+                  const Icon(Icons.chevron_right, size: 16),
                 ],
               ),
             )
@@ -796,33 +1088,56 @@ class _BusSegmentTile extends StatelessWidget {
         children: [
           if (seg.boardAt != null)
             Text(
-              'Board at ${seg.boardAt!.name}',
+              t.boardAtStop(seg.boardAt!.localizedName(lang)),
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
           if (seg.alightAt != null)
             Text(
-              'Get off at ${seg.alightAt!.name}',
+              t.alightAtStop(seg.alightAt!.localizedName(lang)),
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
-          if (wait != null)
+          // Live "bus arrives in N" (bus → board stop) wins over the static
+          // estimate — the deadline to reach the stop, so the user can hurry.
+          if (liveBoardSeconds != null)
             Text(
-              live
-                  ? 'Wait time in ~$wait min 🟢 Live'
-                  : '~$wait min wait (estimated)',
+              liveBoardSeconds! <= 0
+                  ? t.busArrivingNow
+                  : t.busArrivesIn((liveBoardSeconds! / 60).round()),
+              style: const TextStyle(
+                color: Colors.greenAccent,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else if (wait != null)
+            Text(
+              live ? t.busArrivesIn(wait) : t.busArrivesInEstimated(wait),
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
           if (seg.rideMinutes != null || seg.distanceMeters != null)
             Text(
               [
-                if (seg.rideMinutes != null) 'ride ~${seg.rideMinutes} min',
+                if (seg.rideMinutes != null) t.rideMinutes(seg.rideMinutes!),
                 if (seg.distanceMeters != null)
                   _formatDistance(seg.distanceMeters!),
               ].join(' · '),
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
+          // Once aboard: live "reach your stop in N min".
+          if (liveAlightSeconds != null)
+            Text(
+              liveAlightSeconds! <= 0
+                  ? t.atYourStop
+                  : t.reachYourStopIn((liveAlightSeconds! / 60).round()),
+              style: const TextStyle(
+                color: Colors.greenAccent,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           if (seg.totalLegMinutes != null)
             Text(
-              'leg total ~${seg.totalLegMinutes} min',
+              t.totalLegMinutes(seg.totalLegMinutes!),
               style: const TextStyle(color: Colors.white38, fontSize: 11),
             ),
         ],

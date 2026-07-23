@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/settings_provider.dart';
 import '../../services/search_history_service.dart';
 import '../../utils/constants/colors.dart';
 
@@ -29,6 +31,7 @@ class _SearchHistoryListState extends State<SearchHistoryList> {
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) return const SizedBox.shrink();
 
+    final t = context.watch<SettingsProvider>().t;
     final showAll =
         _expanded || widget.items.length <= widget.initialVisible;
     final visible = showAll
@@ -82,9 +85,7 @@ class _SearchHistoryListState extends State<SearchHistoryList> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      _expanded
-                          ? 'បង្ហាញតិច'
-                          : 'បង្ហាញបន្ថែម ($hiddenCount)',
+                      _expanded ? t.showLess : t.showMore(hiddenCount),
                       style: GoogleFonts.notoSansKhmer(
                         color: AppColors.secondaryColor,
                         fontSize: 13,
@@ -168,7 +169,9 @@ class _HistoryRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      entry.name,
+                      entry.localizedName(
+                        context.watch<SettingsProvider>().languageCode,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.notoSansKhmer(

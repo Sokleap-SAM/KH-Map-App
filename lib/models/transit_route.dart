@@ -5,6 +5,8 @@ class TransitRoute {
   final String? name;
   final String? description;
   final String status;
+  final String? color;
+  final String? direction;
 
   TransitRoute({
     required this.id,
@@ -13,6 +15,8 @@ class TransitRoute {
     this.name,
     this.description,
     required this.status,
+    this.color,
+    this.direction,
   });
 
   factory TransitRoute.fromJson(Map<String, dynamic> json) {
@@ -23,6 +27,8 @@ class TransitRoute {
       name: json['name'] as String?,
       description: json['description'] as String?,
       status: json['status'] as String,
+      color: json['color'] as String?,
+      direction: json['direction'] as String?,
     );
   }
 }

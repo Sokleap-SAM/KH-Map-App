@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
@@ -8,7 +9,9 @@ import '../../models/contribution.dart';
 import '../../models/place.dart';
 import '../../models/place_category.dart';
 import '../../providers/map_provider.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/contribution_service.dart';
+import '../../utils/constants/text_strings.dart';
 import '../../services/place_service.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
@@ -36,8 +39,14 @@ class _ContributionFormState extends State<ContributionForm> {
   bool _useExistingPlace = true;
   Place? _selectedPlace;
   final TextEditingController _placeNameCtrl = TextEditingController();
+  final TextEditingController _placeNameLatinCtrl = TextEditingController();
   String _categoryName = 'restaurant';
   LatLng? _customLocation;
+  final MapController _locationMapController = MapController();
+
+  /// Fallback center for the picker map when no location is known yet
+  /// (central Phnom Penh).
+  static const LatLng _defaultMapCenter = LatLng(11.5564, 104.9282);
 
   double _rating = 0;
   final TextEditingController _commentCtrl = TextEditingController();
@@ -71,7 +80,8 @@ class _ContributionFormState extends State<ContributionForm> {
     final initial = widget.initial;
     if (initial != null) {
       _useExistingPlace = !initial.isCustomPlace;
-      _placeNameCtrl.text = initial.placeName;
+      _placeNameCtrl.text = initial.placeNameKhmer;
+      _placeNameLatinCtrl.text = initial.placeNameLatin;
       _categoryName = initial.categoryName;
       _customLocation = LatLng(initial.latitude, initial.longitude);
       _rating = initial.rating;
@@ -101,7 +111,9 @@ class _ContributionFormState extends State<ContributionForm> {
   @override
   void dispose() {
     _placeNameCtrl.dispose();
+    _placeNameLatinCtrl.dispose();
     _commentCtrl.dispose();
+    _locationMapController.dispose();
     super.dispose();
   }
 
@@ -120,7 +132,9 @@ class _ContributionFormState extends State<ContributionForm> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'មិនអាចជ្រើសរូបភាពបានទេ');
+      setState(
+        () => _error = context.read<SettingsProvider>().t.couldNotPickImage,
+      );
     } finally {
       if (mounted) setState(() => _pickingPhoto = false);
     }
@@ -133,10 +147,26 @@ class _ContributionFormState extends State<ContributionForm> {
   Future<void> _useCurrentLocation() async {
     final pos = context.read<MapProvider>().currentPosition;
     if (pos == null) {
-      _showError('មិនទាន់ដឹងទីតាំងអ្នកទេ');
+      _showError(context.read<SettingsProvider>().t.locationUnknownYet);
       return;
     }
     setState(() => _customLocation = pos);
+    _moveMapTo(pos);
+  }
+
+  /// Sets the pin from a tap/drag on the embedded picker map.
+  void _onLocationPicked(LatLng point) {
+    setState(() => _customLocation = point);
+  }
+
+  /// Recenters the picker map on [target] without changing zoom.
+  void _moveMapTo(LatLng target) {
+    try {
+      _locationMapController.move(target, _locationMapController.camera.zoom);
+    } catch (_) {
+      // Camera not ready yet (map not laid out) — the map will build
+      // centered on the new location anyway.
+    }
   }
 
   void _showError(String msg) {
@@ -149,17 +179,18 @@ class _ContributionFormState extends State<ContributionForm> {
   }
 
   Future<void> _save() async {
+    final t = context.read<SettingsProvider>().t;
     if (!_formKey.currentState!.validate()) return;
     if (_rating <= 0) {
-      _showError('សូមផ្ដល់ការវាយតម្លៃ');
+      _showError(t.pleaseProvideRating);
       return;
     }
     if (_useExistingPlace && _selectedPlace == null) {
-      _showError('សូមជ្រើសទីកន្លែងមួយ');
+      _showError(t.pleaseSelectPlace);
       return;
     }
     if (!_useExistingPlace && _customLocation == null) {
-      _showError('សូមកំណត់ទីតាំង');
+      _showError(t.pleaseSetLocation);
       return;
     }
 
@@ -183,7 +214,8 @@ class _ContributionFormState extends State<ContributionForm> {
           )
         : Contribution(
             id: id,
-            placeName: _placeNameCtrl.text.trim(),
+            placeNameKhmer: _placeNameCtrl.text.trim(),
+            placeNameLatin: _placeNameLatinCtrl.text.trim(),
             categoryName: _categoryName,
             latitude: _customLocation!.latitude,
             longitude: _customLocation!.longitude,
@@ -206,7 +238,7 @@ class _ContributionFormState extends State<ContributionForm> {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _error = 'រក្សាទុកមិនបាន — សូមព្យាយាមម្ដងទៀត';
+        _error = t.saveFailedTryAgain;
       });
     }
   }
@@ -216,6 +248,7 @@ class _ContributionFormState extends State<ContributionForm> {
   @override
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.of(context).viewInsets;
+    final t = context.watch<SettingsProvider>().t;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.85,
@@ -237,27 +270,27 @@ class _ContributionFormState extends State<ContributionForm> {
               children: [
                 _handle(),
                 const SizedBox(height: 4),
-                _title(),
+                _title(t),
                 const SizedBox(height: 18),
-                _placeModeToggle(),
+                _placeModeToggle(t),
                 const SizedBox(height: 14),
-                if (_useExistingPlace) _existingPlacePicker()
-                else _customPlaceFields(),
+                if (_useExistingPlace) _existingPlacePicker(t)
+                else _customPlaceFields(t),
                 const SizedBox(height: 18),
-                _sectionLabel('ការវាយតម្លៃ', Icons.star_rounded),
+                _sectionLabel(t.rating, Icons.star_rounded),
                 const SizedBox(height: 8),
                 _ratingPicker(),
                 const SizedBox(height: 18),
-                _sectionLabel('មតិយោបល់', Icons.chat_bubble_outline_rounded),
+                _sectionLabel(t.comments, Icons.chat_bubble_outline_rounded),
                 const SizedBox(height: 8),
-                _commentField(),
+                _commentField(t),
                 const SizedBox(height: 18),
                 _sectionLabel(
-                  'រូបភាព (${_photos.length})',
+                  t.photosCount(_photos.length),
                   Icons.photo_library_outlined,
                 ),
                 const SizedBox(height: 8),
-                _photoGrid(),
+                _photoGrid(t),
                 if (_error != null) ...[
                   const SizedBox(height: 14),
                   Text(
@@ -269,7 +302,7 @@ class _ContributionFormState extends State<ContributionForm> {
                   ),
                 ],
                 const SizedBox(height: 22),
-                _saveButton(),
+                _saveButton(t),
               ],
             ),
           ),
@@ -289,13 +322,13 @@ class _ContributionFormState extends State<ContributionForm> {
         ),
       );
 
-  Widget _title() {
+  Widget _title(AppTexts t) {
     final isEdit = widget.initial != null;
     return Row(
       children: [
         Expanded(
           child: Text(
-            isEdit ? 'កែសម្រួលការចូលរួម' : 'ការចូលរួមថ្មី',
+            isEdit ? t.editContribution : t.newContribution,
             style: GoogleFonts.notoSansKhmer(
               color: Colors.white,
               fontSize: 20,
@@ -304,7 +337,7 @@ class _ContributionFormState extends State<ContributionForm> {
           ),
         ),
         IconButton(
-          tooltip: 'បិទ',
+          tooltip: t.close,
           onPressed: () => Navigator.of(context).pop(),
           icon: const Icon(Icons.close, color: Colors.white70),
         ),
@@ -329,7 +362,7 @@ class _ContributionFormState extends State<ContributionForm> {
     );
   }
 
-  Widget _placeModeToggle() {
+  Widget _placeModeToggle(AppTexts t) {
     return Container(
       decoration: BoxDecoration(
         color: kFavSurfaceColor,
@@ -340,13 +373,13 @@ class _ContributionFormState extends State<ContributionForm> {
       child: Row(
         children: [
           _modeTab(
-            label: 'វាយតម្លៃ',
+            label: t.rateTab,
             icon: Icons.place_outlined,
             selected: _useExistingPlace,
             onTap: () => setState(() => _useExistingPlace = true),
           ),
           _modeTab(
-            label: 'បង្កើតថ្មី',
+            label: t.createNewTab,
             icon: Icons.add_location_alt_outlined,
             selected: !_useExistingPlace,
             onTap: () => setState(() => _useExistingPlace = false),
@@ -399,7 +432,7 @@ class _ContributionFormState extends State<ContributionForm> {
 
   // ─── Existing place mode ──────────────────────────────────────────────────
 
-  Widget _existingPlacePicker() {
+  Widget _existingPlacePicker(AppTexts t) {
     final places = context.watch<MapProvider>().places;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -430,7 +463,10 @@ class _ContributionFormState extends State<ContributionForm> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _selectedPlace?.name ?? 'ជ្រើសទីកន្លែង',
+                        _selectedPlace?.localizedName(
+                              context.watch<SettingsProvider>().languageCode,
+                            ) ??
+                            t.selectPlace,
                         style: GoogleFonts.notoSansKhmer(
                           color: Colors.white,
                           fontSize: 14,
@@ -474,24 +510,127 @@ class _ContributionFormState extends State<ContributionForm> {
 
   // ─── Custom place mode ────────────────────────────────────────────────────
 
-  Widget _customPlaceFields() {
+  Widget _customPlaceFields(AppTexts t) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _textField(
           controller: _placeNameCtrl,
-          label: 'ឈ្មោះទីកន្លែង',
-          hint: 'ឧ. កាហ្វេ​ស្រែ​ខ្មែរ',
+          label: t.nameInKhmerLabel,
+          hint: t.nameKhmerHint,
           validator: (v) {
             if (_useExistingPlace) return null;
-            if (v == null || v.trim().isEmpty) return 'សូមបញ្ចូលឈ្មោះ';
+            if (v == null || v.trim().isEmpty) return t.pleaseEnterName;
+            return null;
+          },
+        ),
+        const SizedBox(height: 12),
+        _textField(
+          controller: _placeNameLatinCtrl,
+          label: t.nameInLatinLabel,
+          hint: 'e.g. Kaffe Sre Khmer',
+          validator: (v) {
+            if (_useExistingPlace) return null;
+            if (v == null || v.trim().isEmpty) return t.pleaseEnterLatinName;
             return null;
           },
         ),
         const SizedBox(height: 12),
         _categoryDropdown(),
         const SizedBox(height: 12),
-        _locationRow(),
+        _locationRow(t),
+        const SizedBox(height: 10),
+        _locationPickerMap(t),
+      ],
+    );
+  }
+
+  /// Interactive mini-map. Tapping anywhere drops/moves the pin so the user
+  /// can choose any location instead of only their current position.
+  Widget _locationPickerMap(AppTexts t) {
+    final center = _customLocation ??
+        context.read<MapProvider>().currentPosition ??
+        _defaultMapCenter;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            height: 180,
+            child: Stack(
+              children: [
+                FlutterMap(
+                  mapController: _locationMapController,
+                  options: MapOptions(
+                    initialCenter: center,
+                    initialZoom: 15,
+                    minZoom: 5,
+                    maxZoom: 18,
+                    onTap: (_, point) => _onLocationPicked(point),
+                    onLongPress: (_, point) => _onLocationPicked(point),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.kh_map_app',
+                    ),
+                    if (_customLocation != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _customLocation!,
+                            width: 40,
+                            height: 40,
+                            alignment: Alignment.topCenter,
+                            child: const Icon(
+                              Icons.location_on,
+                              color: AppColors.secondaryColor,
+                              size: 40,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+                if (_customLocation == null)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            t.tapMapToSetLocation,
+                            style: GoogleFonts.notoSansKhmer(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          t.tapOrLongPressToMove,
+          style: GoogleFonts.notoSansKhmer(
+            color: AppColors.secondaryTextColor,
+            fontSize: 11,
+          ),
+        ),
       ],
     );
   }
@@ -548,10 +687,10 @@ class _ContributionFormState extends State<ContributionForm> {
     );
   }
 
-  Widget _locationRow() {
+  Widget _locationRow(AppTexts t) {
     final loc = _customLocation;
     final label = loc == null
-        ? 'មិនទាន់មានទីតាំង'
+        ? t.noLocationYet
         : '${loc.latitude.toStringAsFixed(5)}, ${loc.longitude.toStringAsFixed(5)}';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -569,7 +708,7 @@ class _ContributionFormState extends State<ContributionForm> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ទីតាំង',
+                  t.locationLabel,
                   style: GoogleFonts.notoSansKhmer(
                     color: AppColors.secondaryTextColor,
                     fontSize: 12,
@@ -590,7 +729,7 @@ class _ContributionFormState extends State<ContributionForm> {
             onPressed: _useCurrentLocation,
             icon: const Icon(Icons.my_location_rounded, size: 16),
             label: Text(
-              'បច្ចុប្បន្ន',
+              t.currentShort,
               style: GoogleFonts.notoSansKhmer(fontSize: 12),
             ),
             style: TextButton.styleFrom(
@@ -636,16 +775,16 @@ class _ContributionFormState extends State<ContributionForm> {
     );
   }
 
-  Widget _commentField() {
+  Widget _commentField(AppTexts t) {
     return _textField(
       controller: _commentCtrl,
-      label: 'សរសេរអ្វីៗអំពីទីកន្លែងនេះ',
-      hint: 'ឧ. បទពិសោធន៍ល្អ សេវាកម្មរហ័ស...',
+      label: t.commentFieldLabel,
+      hint: t.commentFieldHint,
       maxLines: 4,
     );
   }
 
-  Widget _photoGrid() {
+  Widget _photoGrid(AppTexts t) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -679,12 +818,12 @@ class _ContributionFormState extends State<ContributionForm> {
               ),
             ],
           ),
-        _addPhotoTile(),
+        _addPhotoTile(t),
       ],
     );
   }
 
-  Widget _addPhotoTile() {
+  Widget _addPhotoTile(AppTexts t) {
     return InkWell(
       onTap: _pickPhotos,
       borderRadius: BorderRadius.circular(10),
@@ -719,7 +858,7 @@ class _ContributionFormState extends State<ContributionForm> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'បន្ថែម',
+                    t.add,
                     style: GoogleFonts.notoSansKhmer(
                       color: AppColors.secondaryColor,
                       fontSize: 11,
@@ -777,7 +916,7 @@ class _ContributionFormState extends State<ContributionForm> {
     );
   }
 
-  Widget _saveButton() {
+  Widget _saveButton(AppTexts t) {
     return FilledButton(
       onPressed: _saving ? null : _save,
       style: FilledButton.styleFrom(
@@ -798,7 +937,7 @@ class _ContributionFormState extends State<ContributionForm> {
               ),
             )
           : Text(
-              widget.initial == null ? 'រក្សាទុក' : 'ធ្វើបច្ចុប្បន្នភាព',
+              widget.initial == null ? t.save : t.update,
               style: GoogleFonts.notoSansKhmer(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -821,11 +960,13 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<SettingsProvider>().languageCode;
     final q = _query.trim().toLowerCase();
     final visible = q.isEmpty
         ? widget.places
         : widget.places.where((p) {
-            return p.name.toLowerCase().contains(q) ||
+            return p.nameInKhmer.toLowerCase().contains(q) ||
+                p.nameInLatin.toLowerCase().contains(q) ||
                 (p.category?.name.toLowerCase().contains(q) ?? false);
           }).toList();
 
@@ -859,7 +1000,8 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
                     fontSize: 14,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'ស្វែងរកទីកន្លែង',
+                    hintText:
+                        context.watch<SettingsProvider>().t.searchPlaceHint,
                     hintStyle: GoogleFonts.notoSansKhmer(
                       color: Colors.white38,
                       fontSize: 13,
@@ -893,7 +1035,7 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
                 child: visible.isEmpty
                     ? Center(
                         child: Text(
-                          'រកមិនឃើញទីកន្លែង',
+                          context.watch<SettingsProvider>().t.placeNotFound,
                           style: GoogleFonts.notoSansKhmer(
                             color: Colors.white54,
                           ),
@@ -919,7 +1061,7 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
                               child: Icon(icon, color: color),
                             ),
                             title: Text(
-                              p.name,
+                              p.localizedName(lang),
                               style: GoogleFonts.notoSansKhmer(
                                 color: Colors.white,
                                 fontSize: 14,

@@ -47,22 +47,19 @@ class TransitProvider extends ChangeNotifier {
   static const Duration _staleAfter = Duration(seconds: 10);
 
   // ── Line routes / stops / colors ──────────────────────────────────────────
-  static const List<Color> _palette = [
-    Colors.red,
-    Colors.blue,
-    Colors.green,
-    Colors.orange,
-    Colors.purple,
-    Colors.cyan,
-    Colors.pink,
-    Colors.teal,
-    Colors.indigo,
-    Colors.amber,
-    Colors.lime,
-    Colors.deepOrange,
-    Colors.deepPurple,
-    Colors.pink,
-  ];
+  // Routes carry their own `color` field now; this is only the fallback for
+  // legacy routes that have no color set.
+  static const Color _fallbackRouteColor = Colors.blueGrey;
+
+  /// Parse a backend route `color` (`#RRGGBB` / `RRGGBB` / `#AARRGGBB`).
+  static Color? _colorFromHex(String? hex) {
+    if (hex == null) return null;
+    var h = hex.trim().replaceFirst('#', '');
+    if (h.length == 6) h = 'FF$h';
+    if (h.length != 8) return null;
+    final v = int.tryParse(h, radix: 16);
+    return v == null ? null : Color(v);
+  }
 
   List<TransitRoute> _lineRoutes = [];
   Map<String, List<RouteStop>> _routeStops = {};
@@ -92,19 +89,40 @@ class TransitProvider extends ChangeNotifier {
     _routesError = null;
     notifyListeners();
     try {
-      final routes = await _service.fetchLineRoutes();
-      final stopsMap = <String, List<RouteStop>>{};
+      // /transit/routes/active — ALL active routes, loops and directional
+      // inbound/outbound alike. (/transit/routes/lines only serves
+      // `isLine: true` docs, which silently hid directional routes.)
+      // Keep the status filter as a belt-and-braces guard.
+      final routes = (await _service.fetchActiveRoutes())
+          .where((r) => r.status == 'active')
+          .toList();
       final colors = <String, Color>{};
+      // Stops load in parallel — sequential fetches took seconds at ~40 routes.
+      // Per-route fallback: one failing route renders as stop-less (dropped
+      // below) instead of erroring the whole map empty.
+      final stopsLists = await Future.wait(
+        routes.map(
+          (r) => _service.fetchRouteStops(r.id).catchError((Object e) {
+            debugPrint('Stops failed for route ${r.code ?? r.id}: $e');
+            return <RouteStop>[];
+          }),
+        ),
+      );
+      final stopsMap = <String, List<RouteStop>>{};
       for (var i = 0; i < routes.length; i++) {
-        stopsMap[routes[i].id] = await _service.fetchRouteStops(routes[i].id);
-        colors[routes[i].id] = _palette[i % _palette.length];
+        stopsMap[routes[i].id] = stopsLists[i];
+        colors[routes[i].id] =
+            _colorFromHex(routes[i].color) ?? _fallbackRouteColor;
       }
-      _lineRoutes = routes;
+      // Drop routes with no stops — there's nothing to draw or filter on.
+      final visible = routes
+          .where((r) => (stopsMap[r.id]?.isNotEmpty ?? false))
+          .toList();
+      _lineRoutes = visible;
       _routeStops = stopsMap;
       _routeColors = colors;
     } catch (e) {
       _routesError = e.toString();
-      debugPrint('TransitProvider: failed to load routes: $e');
     } finally {
       _routesLoading = false;
       notifyListeners();
@@ -156,10 +174,22 @@ class TransitProvider extends ChangeNotifier {
       _trips = merged;
     } catch (e) {
       _error = e.toString();
-      debugPrint('TransitProvider: failed to refresh trips: $e');
     } finally {
       _loading = false;
       notifyListeners();
+    }
+  }
+
+  /// Returns the trip [id] from the live list, or fetches it by id when it's
+  /// not there (e.g. a plan's recommended trip that isn't in the active-trips
+  /// feed). Best-effort — returns null if the fetch fails or the trip is gone.
+  Future<Trip?> loadTripById(String id) async {
+    final existing = _trips.where((t) => t.id == id).firstOrNull;
+    if (existing != null) return existing;
+    try {
+      return await _service.fetchTripById(id);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -178,8 +208,8 @@ class TransitProvider extends ChangeNotifier {
       if (pending != null) {
         try {
           (await pending)();
-        } catch (e) {
-          debugPrint('TransitProvider: unsubscribe failed for $id: $e');
+        } catch (_) {
+          // best-effort unsubscribe
         }
       }
       // Per spec: when unsubscribing, immediately drop any markers whose
@@ -247,23 +277,13 @@ class TransitProvider extends ChangeNotifier {
   // ── Trip lifecycle helpers (unchanged HTTP commands) ──────────────────────
 
   Future<void> startTrip(String id) async {
-    try {
-      await _service.startTrip(id);
-      await refresh();
-    } catch (e) {
-      debugPrint('TransitProvider: failed to start trip $id: $e');
-      rethrow;
-    }
+    await _service.startTrip(id);
+    await refresh();
   }
 
   Future<void> advanceTrip(String id) async {
-    try {
-      await _service.advanceTrip(id);
-      await refresh();
-    } catch (e) {
-      debugPrint('TransitProvider: failed to advance trip $id: $e');
-      rethrow;
-    }
+    await _service.advanceTrip(id);
+    await refresh();
   }
 
   @override

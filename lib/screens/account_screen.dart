@@ -5,6 +5,7 @@ import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/screens/login_screen.dart';
 import 'package:kh_map_app/services/auth_service.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
+import 'package:kh_map_app/utils/constants/text_strings.dart';
 import 'package:provider/provider.dart';
 import 'package:kh_map_app/utils/jwt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -53,8 +54,6 @@ class _AccountScreenState extends State<AccountScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        print("PROFILE DATA FROM BACKEND: $data");
-
         setState(() {
           userName = data['name'] ?? "No Name Found";
           isLoggedIn = true;
@@ -68,7 +67,6 @@ class _AccountScreenState extends State<AccountScreen> {
         _fallbackToTokenName(token);
       }
     } catch (e) {
-      debugPrint("Error fetching profile: $e");
       // Network error but we have a token — stay logged in using JWT claims.
       _fallbackToTokenName(token);
     } finally {
@@ -102,8 +100,8 @@ class _AccountScreenState extends State<AccountScreen> {
         ? Colors.white70
         : Colors.black54;
     final Color containerColor = settings.isDarkMode
-        ? Colors.white.withOpacity(0.05)
-        : Colors.black.withOpacity(0.05);
+        ? Colors.white.withAlpha(13)
+        : Colors.black.withAlpha(13);
     return Scaffold(
       backgroundColor: settings.isDarkMode
           ? AppColors.primaryColor
@@ -162,9 +160,7 @@ class _AccountScreenState extends State<AccountScreen> {
                               // --- START CONDITIONAL UI ---
                               if (!isLoggedIn) ...[
                                 Text(
-                                  settings.locale.languageCode == 'km'
-                                      ? "មិនមានគណនី"
-                                      : "No Account",
+                                  settings.t.noAccount,
                                   style: const TextStyle(
                                     color: Color(0xFFE8B67D),
                                     fontSize: 22,
@@ -172,15 +168,9 @@ class _AccountScreenState extends State<AccountScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 25),
-                                _buildDescriptionBox(
-                                  settings.locale.languageCode,
-                                  textColor,
-                                ),
+                                _buildDescriptionBox(settings.t, textColor),
                                 const SizedBox(height: 40),
-                                _buildLoginButton(
-                                  context,
-                                  settings.locale.languageCode,
-                                ),
+                                _buildLoginButton(context, settings.t),
                                 const SizedBox(height: 15),
                                 _buildSocialRow(),
                               ] else ...[
@@ -193,9 +183,7 @@ class _AccountScreenState extends State<AccountScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 25),
-                                _buildLogoutButton(
-                                  settings.locale.languageCode,
-                                ),
+                                _buildLogoutButton(settings.t),
                               ],
 
                               const SizedBox(height: 40),
@@ -221,7 +209,7 @@ class _AccountScreenState extends State<AccountScreen> {
                         ),
                       ),
                     ),
-                    _buildSupportBar(settings.locale.languageCode),
+                    _buildSupportBar(settings.t),
                   ],
                 ),
         ),
@@ -237,6 +225,7 @@ class _AccountScreenState extends State<AccountScreen> {
     Color bgColor,
   ) {
     bool isKhmer = settings.locale.languageCode == 'km';
+    final t = settings.t;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -244,7 +233,7 @@ class _AccountScreenState extends State<AccountScreen> {
         Padding(
           padding: const EdgeInsets.only(left: 10, bottom: 10),
           child: Text(
-            isKhmer ? "ការកំណត់" : "Settings",
+            t.settings,
             style: TextStyle(
               color: textColor,
               fontWeight: FontWeight.bold,
@@ -266,7 +255,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   color: isKhmer ? const Color(0xFFE8B67D) : Colors.blue,
                 ),
                 title: Text(
-                  isKhmer ? "ប្ដូវពណ៌ផ្ទាំង" : "Dark Mode",
+                  t.darkMode,
                   style: TextStyle(color: textColor),
                 ),
                 trailing: Switch(
@@ -280,7 +269,7 @@ class _AccountScreenState extends State<AccountScreen> {
               ListTile(
                 leading: Icon(Icons.language, color: Colors.blueAccent),
                 title: Text(
-                  isKhmer ? "ភាសា" : "Language",
+                  t.language,
                   style: TextStyle(color: textColor),
                 ),
                 trailing: DropdownButton<String>(
@@ -317,23 +306,20 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  // Updated Helper Methods to handle translations
-  Widget _buildDescriptionBox(String lang, Color textColor) {
-    String text = lang == 'km'
-        ? "សូមបង្កើតឬចូលក្នុងគណនីដើម្បីរក្សាទុកទិន្នន័យ និងទទួលបានបទពិសោធន៍ពេញលេញជាមួយ KH-Map"
-        : "Please create or login to an account to save data and get the full experience with KH-Map";
+  // Helper methods read localized text from the shared [AppTexts] store.
+  Widget _buildDescriptionBox(AppTexts t, Color textColor) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white24),
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withAlpha(13),
       ),
       child: Text(
-        text,
+        t.accountPrompt,
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: textColor.withOpacity(0.7),
+          color: textColor.withAlpha(179), // 0.7 * 255
           fontSize: 14,
           height: 1.5,
         ),
@@ -341,7 +327,7 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  Widget _buildLoginButton(BuildContext context, String lang) {
+  Widget _buildLoginButton(BuildContext context, AppTexts t) {
     return SizedBox(
       width: 140,
       child: ElevatedButton(
@@ -361,14 +347,14 @@ class _AccountScreenState extends State<AccountScreen> {
           padding: const EdgeInsets.symmetric(vertical: 12),
         ),
         child: Text(
-          lang == 'km' ? "ចូលគណនី" : "Login",
+          t.login,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
     );
   }
 
-  Widget _buildLogoutButton(String lang) {
+  Widget _buildLogoutButton(AppTexts t) {
     return GestureDetector(
       onTap: _handleLogout,
       child: Container(
@@ -381,7 +367,7 @@ class _AccountScreenState extends State<AccountScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              lang == 'km' ? "ផ្លាស់ប្តូរគណនី" : "Change Account",
+              t.changeAccount,
               style: const TextStyle(
                 color: Colors.black87,
                 fontWeight: FontWeight.bold,
@@ -394,7 +380,7 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  Widget _buildSupportBar(String lang) {
+  Widget _buildSupportBar(AppTexts t) {
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Container(
@@ -408,7 +394,7 @@ class _AccountScreenState extends State<AccountScreen> {
             const Icon(Icons.settings_outlined, color: Colors.black87),
             const SizedBox(width: 10),
             Text(
-              lang == 'km' ? "បច្ចេកទេស" : "Technical Support",
+              t.technicalSupport,
               style: const TextStyle(
                 color: Colors.black87,
                 fontWeight: FontWeight.bold,

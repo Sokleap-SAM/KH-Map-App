@@ -3,9 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/contribution.dart';
+import '../../providers/settings_provider.dart';
 import '../../utils/category_icon.dart';
+import '../../utils/constants/text_strings.dart';
 import '../../utils/constants/colors.dart';
 import '../bookmark_screen/favorite_place_card.dart';
 import 'contribution_card.dart';
@@ -28,6 +31,7 @@ class ContributionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     final color = getColorForCategory(contribution.categoryName);
     final icon = getIconForCategory(contribution.categoryName);
 
@@ -49,9 +53,9 @@ class ContributionSheet extends StatelessWidget {
               _dragHandle(),
               _miniMap(color, icon),
               const SizedBox(height: 16),
-              _titleBlock(context, color, icon),
+              _titleBlock(context, t, color, icon),
               const SizedBox(height: 16),
-              _actionRow(context),
+              _actionRow(context, t),
               const SizedBox(height: 12),
               if (contribution.photos.isNotEmpty) ...[
                 _photoCarousel(),
@@ -68,8 +72,8 @@ class ContributionSheet extends StatelessWidget {
                 primary: contribution.rating > 0
                     ? '${contribution.rating.toStringAsFixed(1)}  ·  '
                           '${_starString(contribution.rating)}'
-                    : 'មិនទាន់មានការវាយតម្លៃ',
-                label: 'ការវាយតម្លៃរបស់អ្នក',
+                    : t.noRatingsYet,
+                label: t.yourRating,
               ),
               const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
               _InfoRow(
@@ -77,8 +81,8 @@ class ContributionSheet extends StatelessWidget {
                 iconColor: color,
                 primary: formatCategoryLabel(contribution.categoryName),
                 label: contribution.isCustomPlace
-                    ? 'ប្រភេទ · ទីកន្លែងថ្មីបង្កើតដោយអ្នក'
-                    : 'ប្រភេទ',
+                    ? t.categoryNewPlaceByYou
+                    : t.category,
               ),
               const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
               _InfoRow(
@@ -87,14 +91,14 @@ class ContributionSheet extends StatelessWidget {
                     '${contribution.latitude.toStringAsFixed(6)}, '
                     '${contribution.longitude.toStringAsFixed(6)}',
                 label: distanceLabel == null
-                    ? 'កូអរដោនេ'
-                    : 'កូអរដោនេ  ·  $distanceLabel ពីអ្នក',
+                    ? t.coordinates
+                    : t.coordinatesFromYou(distanceLabel!),
               ),
               const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
               _InfoRow(
                 icon: Icons.edit_outlined,
-                primary: contributionAddedLabel(contribution.createdAt),
-                label: 'ស្ថានភាពចូលរួម',
+                primary: t.addedAgo(contribution.createdAt),
+                label: t.contributionStatus,
               ),
               const SizedBox(height: 28),
             ],
@@ -203,7 +207,12 @@ class ContributionSheet extends StatelessWidget {
     );
   }
 
-  Widget _titleBlock(BuildContext context, Color color, IconData icon) {
+  Widget _titleBlock(
+    BuildContext context,
+    AppTexts t,
+    Color color,
+    IconData icon,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -217,7 +226,9 @@ class ContributionSheet extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        contribution.placeName,
+                        contribution.localizedPlaceLabel(
+                          context.watch<SettingsProvider>().languageCode,
+                        ),
                         style: GoogleFonts.notoSansKhmer(
                           color: Colors.white,
                           fontSize: 21,
@@ -225,7 +236,7 @@ class ContributionSheet extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (contribution.isCustomPlace) _newBadge(),
+                    if (contribution.isCustomPlace) _newBadge(t),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -270,7 +281,7 @@ class ContributionSheet extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'បិទ',
+            tooltip: t.close,
             onPressed: () => Navigator.of(context).pop(),
             icon: const Icon(Icons.close, color: Colors.white70),
           ),
@@ -279,7 +290,7 @@ class ContributionSheet extends StatelessWidget {
     );
   }
 
-  Widget _newBadge() {
+  Widget _newBadge(AppTexts t) {
     return Container(
       margin: const EdgeInsets.only(left: 6),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -289,7 +300,7 @@ class ContributionSheet extends StatelessWidget {
         border: Border.all(color: AppColors.secondaryColor.withAlpha(120)),
       ),
       child: Text(
-        'ថ្មី',
+        t.newBadge,
         style: GoogleFonts.notoSansKhmer(
           color: AppColors.secondaryColor,
           fontSize: 11,
@@ -299,14 +310,14 @@ class ContributionSheet extends StatelessWidget {
     );
   }
 
-  Widget _actionRow(BuildContext context) {
+  Widget _actionRow(BuildContext context, AppTexts t) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           _SheetButton(
             icon: Icons.edit_outlined,
-            label: 'កែសម្រួល',
+            label: t.edit,
             background: AppColors.secondaryColor,
             foreground: AppColors.primaryColor,
             onTap: () => Navigator.of(context).pop(kContribSheetEdit),
@@ -314,15 +325,15 @@ class ContributionSheet extends StatelessWidget {
           const SizedBox(width: 10),
           _SheetButton(
             icon: Icons.copy_rounded,
-            label: 'ចម្លងទីតាំង',
+            label: t.copyLocation,
             background: kFavSurfaceColor,
             foreground: Colors.white,
-            onTap: () => _copyCoordinates(context),
+            onTap: () => _copyCoordinates(context, t),
           ),
           const SizedBox(width: 10),
           _SheetButton(
             icon: Icons.delete_outline_rounded,
-            label: 'លុប',
+            label: t.delete,
             background: kFavSurfaceColor,
             foreground: AppColors.alertBorderColor,
             onTap: () => Navigator.of(context).pop(kContribSheetRemove),
@@ -387,7 +398,7 @@ class ContributionSheet extends StatelessWidget {
     );
   }
 
-  void _copyCoordinates(BuildContext context) {
+  void _copyCoordinates(BuildContext context, AppTexts t) {
     final text = '${contribution.latitude}, ${contribution.longitude}';
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -395,7 +406,7 @@ class ContributionSheet extends StatelessWidget {
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
         content: Text(
-          'បានចម្លងទីតាំង៖ $text',
+          t.copiedLocation(text),
           style: GoogleFonts.notoSansKhmer(fontSize: 13),
         ),
       ),

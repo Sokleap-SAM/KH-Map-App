@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/models/place.dart';
 import 'package:kh_map_app/models/route_search_selection.dart';
+import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/screens/search_screen.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 class RouteSearchOverlay extends StatefulWidget {
   const RouteSearchOverlay({
@@ -57,7 +59,7 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
     _origin =
         widget.initialOrigin ??
         RouteSearchSelection(
-          label: 'ទីតាំងបច្ចុប្បន្ន', // "Current location" in Khmer
+          label: context.read<SettingsProvider>().t.currentLocation,
           location: widget.currentLocation,
           useLiveCurrentLocation: true,
         );
@@ -100,7 +102,9 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
     if (picked == null || !mounted) return;
     _applySelection(
       RouteSearchSelection(
-        label: picked.name,
+        label: picked.localizedName(
+          context.read<SettingsProvider>().languageCode,
+        ),
         location: LatLng(picked.latitude, picked.longitude),
       ),
       isOrigin,
@@ -120,20 +124,20 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
   /// Returning `false` (Cancel or dismiss) leaves the existing field value
   /// untouched.
   Future<bool> _confirmChangeLocation({required bool isOrigin}) async {
-    final label = isOrigin ? 'origin' : 'destination';
+    final t = context.read<SettingsProvider>().t;
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Change $label?'),
-        content: Text("Do you want to change your $label's location?"),
+        title: Text(t.changeLocationTitle(isOrigin)),
+        content: Text(t.changeLocationBody(isOrigin)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(t.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Yes'),
+            child: Text(t.yes),
           ),
         ],
       ),
@@ -144,7 +148,7 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
   void _resetOriginToCurrentLocation() {
     _applySelection(
       RouteSearchSelection(
-        label: 'ទីតាំងបច្ចុប្បន្ន', // "Current location" in Khmer
+        label: context.read<SettingsProvider>().t.currentLocation,
         location: widget.currentLocation,
         useLiveCurrentLocation: true,
       ),
@@ -154,6 +158,7 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Material(
       color: const Color(0xFF102038),
       child: SafeArea(
@@ -169,10 +174,10 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
                     onPressed: widget.onClose,
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'គម្រោងធ្វើដំណើរ', // "Route Planner" in Khmer
-                      style: TextStyle(
+                      t.routePlanner,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -235,19 +240,20 @@ class _SearchFieldTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     final actions = <Widget>[
       if (onUseCurrentLocation != null)
         IconButton(
           onPressed: onUseCurrentLocation,
           icon: const Icon(Icons.my_location, color: Colors.white54),
-          tooltip: 'Use current location',
+          tooltip: t.useCurrentLocation,
           visualDensity: VisualDensity.compact,
         ),
       if (onPickFromMap != null)
         IconButton(
           onPressed: onPickFromMap,
           icon: const Icon(Icons.pin_drop_outlined, color: Colors.white54),
-          tooltip: 'Pick from map',
+          tooltip: t.pickFromMap,
           visualDensity: VisualDensity.compact,
         ),
     ];

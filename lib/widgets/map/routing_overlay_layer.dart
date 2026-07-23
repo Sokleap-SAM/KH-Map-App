@@ -32,7 +32,8 @@ const Color _kDestColor = Color(0xFFEF4444); // red
 /// endpoints get numbered, so the sequence reads as the steps the user must
 /// take rather than every stop along the way.
 ///
-/// Two `PolylineLayer`s are stacked so all borders render below all fills.
+/// Bus legs are drawn first and walk legs on top, so a dashed walk that shares
+/// a road with a bus stays visible (bus shows through the dash gaps).
 class RoutingOverlayLayer extends StatefulWidget {
   const RoutingOverlayLayer({super.key, required this.option});
 
@@ -80,8 +81,14 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
     final option = widget.option;
     final segments = option.segments;
 
-    final borderPolylines = <Polyline>[];
-    final fillPolylines = <Polyline>[];
+    // Bus and walk polylines are kept separate so the dashed walk legs paint ON
+    // TOP of the solid bus legs. Where a walk shares a road with a bus, the
+    // dashes then stay visible and the bus shows through the gaps — instead of
+    // the wider, solid bus hiding the walk entirely.
+    final busBorders = <Polyline>[];
+    final busFills = <Polyline>[];
+    final walkBorders = <Polyline>[];
+    final walkFills = <Polyline>[];
     final boardMarkers = <Marker>[];
     final liveBoards = <LatLng>[];
     var firstBusSeen = false;
@@ -101,22 +108,22 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
           points = [from.coordinates, to.coordinates];
         }
 
-        final dashPattern = StrokePattern.dashed(segments: const [14, 8]);
+        final dashPattern = StrokePattern.dashed(segments: const [3.0, 8]);
 
-        borderPolylines.add(
+        walkBorders.add(
           Polyline(
             points: points,
-            color: _kNavBorder,
-            strokeWidth: 7,
+            color: const Color.fromARGB(255, 192, 21, 21),
+            strokeWidth: 5.0,
             pattern: dashPattern,
             strokeCap: StrokeCap.round,
           ),
         );
-        fillPolylines.add(
+        walkFills.add(
           Polyline(
             points: points,
             color: _kNavFill,
-            strokeWidth: 3.5,
+            strokeWidth: 2.0,
             pattern: dashPattern,
             strokeCap: StrokeCap.round,
           ),
@@ -140,7 +147,7 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
 
         final points = _buildBusPath(seg);
 
-        borderPolylines.add(
+        busBorders.add(
           Polyline(
             points: points,
             color: _kNavBorder,
@@ -149,7 +156,7 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
             strokeJoin: StrokeJoin.round,
           ),
         );
-        fillPolylines.add(
+        busFills.add(
           Polyline(
             points: points,
             color: _kNavFill,
@@ -227,9 +234,13 @@ class _RoutingOverlayLayerState extends State<RoutingOverlayLayer>
 
     return Stack(
       children: [
-        // Border polylines first so fills paint on top
-        PolylineLayer(polylines: borderPolylines),
-        PolylineLayer(polylines: fillPolylines),
+        // Bus legs first (solid), each border below its fill for the outline.
+        PolylineLayer(polylines: busBorders),
+        PolylineLayer(polylines: busFills),
+        // Walk legs on top (dashed) so a walk sharing a road with a bus stays
+        // visible — its dashes overlay the bus, which shows through the gaps.
+        PolylineLayer(polylines: walkBorders),
+        PolylineLayer(polylines: walkFills),
         // Board (bus-icon) markers under the numbered dots
         MarkerLayer(markers: boardMarkers),
         MarkerLayer(markers: numberedMarkers),

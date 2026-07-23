@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
 class Trip {
@@ -100,7 +99,6 @@ class Trip {
   bool get isCancelled => status == 'cancelled';
 
   factory Trip.fromJson(Map<String, dynamic> json) {
-    debugPrint('Trip.fromJson: $json');
     // route can be a populated object or a bare string ID
     final routeRaw = json['route'];
     String routeId;
@@ -171,8 +169,13 @@ class Trip {
       'status': status,
       'currentStopIndex': currentStopIndex,
       'nextStopIndex': nextStopIndex,
-      'currentLocation': currentLocation != null 
-          ? {'coordinates': [currentLocation!.longitude, currentLocation!.latitude]} 
+      'currentLocation': currentLocation != null
+          ? {
+              'coordinates': [
+                currentLocation!.longitude,
+                currentLocation!.latitude,
+              ],
+            }
           : null,
       'passengerCount': passengerCount,
       'nextStopName': nextStopName,
@@ -184,7 +187,7 @@ class Trip {
 
   static String _resolveBusImage(double? bearing, String? fallback) {
     if (bearing == null) return fallback ?? 'bus_go_right.png';
-    
+
     // Normalize bearing to 0-359 degrees
     // 0 is North, 90 is East, 180 is South, 270 is West
     final double b = (bearing % 360 + 360) % 360;

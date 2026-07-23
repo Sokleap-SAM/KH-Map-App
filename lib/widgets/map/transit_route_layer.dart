@@ -20,15 +20,17 @@ class TransitRouteLayer extends StatelessWidget {
   final Map<String, Color> routeColors;
   final void Function(LatLng latLng) onStopTap;
   final double currentZoom;
+  /// Concatenates the stored road-snapped segments exactly as-is. Stop
+  /// coordinates are sidewalk markers, never part of the line (segments are
+  /// stitched continuous server-side). Legacy routes without any segment
+  /// geometry fall back to a stop-to-stop line.
   List<LatLng> _buildRoutePath(List<RouteStop> stops) {
-    final points = <LatLng>[];
-    for (final stop in stops) {
-      if (stop.segmentPath != null && stop.segmentPath!.isNotEmpty) {
-        if (points.isNotEmpty) points.removeLast();
-        points.addAll(stop.segmentPath!);
-      } else {
-        points.add(stop.location);
-      }
+    final points = <LatLng>[
+      for (final stop in stops)
+        if (stop.segmentPath != null) ...stop.segmentPath!,
+    ];
+    if (points.isEmpty) {
+      return [for (final stop in stops) stop.location];
     }
     return points;
   }
