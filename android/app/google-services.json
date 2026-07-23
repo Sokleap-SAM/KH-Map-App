@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "840116567603",
+    "project_id": "khmapauth",
+    "storage_bucket": "khmapauth.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:840116567603:android:d8e51e10fd33bcdcbaed46",
+        "android_client_info": {
+          "package_name": "khmap.com"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "840116567603-r3g94ihh7v0a5qht89i2bf917v2fsjue.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "khmap.com",
+            "certificate_hash": "868d5c015915ef5a7345d363586c7204ed0c189c"
+          }
+        },
+        {
+          "client_id": "840116567603-i1krpt64eis7csuin8kp5adj756omuur.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDRLs0ylLVQNTV1hT45DqkDnP2DoyjLbFg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "840116567603-i1krpt64eis7csuin8kp5adj756omuur.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "840116567603-cmm4dig2ndb7cvv7o4plua88i0vjnsuu.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.khMapApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
