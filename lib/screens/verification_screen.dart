@@ -1,8 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/services/auth_service.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
+import 'package:provider/provider.dart';
 
+/// Email-OTP verification, shown right after email/password [register] so the
+/// user can prove they own the address by typing the code sent to their inbox.
+/// Pops `true` once verified. Google 1-click sign-in never routes here.
 class VerificationScreen extends StatefulWidget {
   final String email;
 
@@ -14,6 +19,7 @@ class VerificationScreen extends StatefulWidget {
 
 class _VerificationScreenState extends State<VerificationScreen> {
   final AuthService _authService = AuthService();
+  final TextEditingController otpController = TextEditingController();
   bool _isLoading = false;
   int _countdownSeconds = 60;
   Timer? _timer;
@@ -28,54 +34,66 @@ class _VerificationScreenState extends State<VerificationScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    otpController.dispose();
     super.dispose();
   }
 
   void _startTimer() {
+    _timer?.cancel();
     setState(() {
       _countdownSeconds = 60;
       _canResend = false;
     });
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_countdownSeconds == 0) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_countdownSeconds <= 1) {
+        timer.cancel();
         setState(() {
+          _countdownSeconds = 0;
           _canResend = true;
-          _timer?.cancel();
         });
       } else {
-        setState(() {
-          _countdownSeconds--;
-        });
+        setState(() => _countdownSeconds--);
       }
     });
   }
 
-  void _handleVerify() async {
+  Future<void> _handleVerify() async {
+    final t = context.read<SettingsProvider>().t;
+    final code = otpController.text.trim();
+    if (code.isEmpty) {
+      _showMessage(t.pleaseEnterCode);
+      return;
+    }
     setState(() => _isLoading = true);
-    // Call verifyOtp, which checks if the user has clicked the verification link.
-    bool success = await _authService.verifyOtp(widget.email, "");
+    final success = await _authService.verifyOtp(widget.email, code);
+    if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (success) {
-      _showMessage("គណនីរបស់អ្នកត្រូវបានផ្ទៀងផ្ទាត់រួចរាល់!");
-      Navigator.pop(context, true); // Returns true to login screen to navigate
+      _showMessage(t.accountVerified);
+      Navigator.pop(context, true); // Verified — resume registration → login.
     } else {
-      _showMessage("សូមចុចលើតំណភ្ជាប់ក្នុងអ៊ីមែលរបស់អ្នកជាមុនសិន ដើម្បីផ្ទៀងផ្ទាត់");
+      _showMessage(t.invalidCode);
     }
   }
 
-  void _handleResendCode() async {
-    if (!_canResend) return;
-
+  Future<void> _handleResendCode() async {
+    if (!_canResend || _isLoading) return;
+    final t = context.read<SettingsProvider>().t;
     setState(() => _isLoading = true);
-    bool success = await _authService.resendVerificationCode(widget.email);
+    final success = await _authService.resendVerificationCode(widget.email);
+    if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (success) {
-      _showMessage("តំណភ្ជាប់ផ្ទៀងផ្ទាត់ថ្មីត្រូវបានផ្ញើ!");
+      _showMessage(t.codeSent);
       _startTimer();
     } else {
-      _showMessage("បរាជ័យក្នុងការផ្ញើផ្ទៀងផ្ទាត់ឡើងវិញ");
+      _showMessage(t.resendFailed);
     }
   }
 
@@ -85,6 +103,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
     return Scaffold(
       backgroundColor: AppColors.primaryColor,
       appBar: AppBar(
@@ -100,9 +119,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "ផ្ទៀងផ្ទាត់គណនី",
-              style: TextStyle(
+            Text(
+              t.verifyAccountTitle,
+              style: const TextStyle(
                 color: Color(0xFFE8B67D),
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
@@ -110,7 +129,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
             const SizedBox(height: 15),
             Text(
-              "តំណភ្ជាប់ផ្ទៀងផ្ទាត់ត្រូវបានផ្ញើទៅកាន់អ៊ីមែល:\n${widget.email}",
+              t.verifyAccountSubtitle(widget.email),
               style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 16,
@@ -124,7 +143,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               child: Container(
                 padding: const EdgeInsets.all(25),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white.withValues(alpha: 0.05),
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white12, width: 2),
                 ),
@@ -138,19 +157,33 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
             const SizedBox(height: 40),
 
-            Text(
-              "សូមពិនិត្យប្រអប់សំបុត្រអ៊ីមែលរបស់អ្នក ហើយចុចលើតំណភ្ជាប់ដើម្បីផ្ទៀងផ្ទាត់គណនី។ បន្ទាប់ពីចុចរួច សូមចុចប៊ូតុងខាងក្រោមដើម្បីបន្ត។",
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
-                fontSize: 14,
-                height: 1.6,
-              ),
+            // OTP code input
+            TextField(
+              controller: otpController,
+              keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                letterSpacing: 6,
+                fontWeight: FontWeight.bold,
+              ),
+              decoration: InputDecoration(
+                labelText: t.codeField,
+                labelStyle: const TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Colors.white.withAlpha(13),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onSubmitted: (_) => _handleVerify(),
             ),
 
-            const SizedBox(height: 40),
+            const SizedBox(height: 30),
 
-            // Action Button
+            // Confirm button
             SizedBox(
               width: double.infinity,
               height: 55,
@@ -165,9 +198,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 ),
                 child: _isLoading
                     ? const CircularProgressIndicator(color: Colors.black)
-                    : const Text(
-                        "ខ្ញុំបានចុចផ្ទៀងផ្ទាត់រួចហើយ",
-                        style: TextStyle(
+                    : Text(
+                        t.confirmWord,
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
@@ -177,23 +210,19 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
             const SizedBox(height: 30),
 
-            // Resend code Section
+            // Resend code with countdown
             Center(
-              child: Column(
-                children: [
-                  TextButton(
-                    onPressed: _canResend ? _handleResendCode : null,
-                    child: Text(
-                      _canResend
-                          ? "ផ្ញើតំណភ្ជាប់ឡើងវិញ (Resend Link)"
-                          : "ផ្ញើតំណភ្ជាប់ឡើងវិញ ក្នុងរយៈពេល ($_countdownSeconds​ វិនាទី)",
-                      style: TextStyle(
-                        color: _canResend ? const Color(0xFFE8B67D) : Colors.white30,
-                        fontSize: 14,
-                      ),
-                    ),
+              child: TextButton(
+                onPressed: (_canResend && !_isLoading) ? _handleResendCode : null,
+                child: Text(
+                  _canResend ? t.resendCode : t.resendCodeIn(_countdownSeconds),
+                  style: TextStyle(
+                    color: _canResend
+                        ? const Color(0xFFE8B67D)
+                        : Colors.white30,
+                    fontSize: 14,
                   ),
-                ],
+                ),
               ),
             ),
           ],

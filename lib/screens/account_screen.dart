@@ -92,6 +92,28 @@ class _AccountScreenState extends State<AccountScreen> {
     });
   }
 
+  Future<void> _handleGoogleSignIn() async {
+    final t = context.read<SettingsProvider>().t;
+    setState(() => isLoading = true);
+    final outcome = await AuthService().loginWithGoogle();
+    if (!mounted) return;
+    switch (outcome) {
+      case GoogleAuthOutcome.success:
+        await _fetchProfile(); // Also flips isLoading back off.
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(t.loginSuccess)));
+      case GoogleAuthOutcome.cancelled:
+        setState(() => isLoading = false);
+      case GoogleAuthOutcome.failed:
+        setState(() => isLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(t.googleSignInFailed)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
@@ -420,7 +442,10 @@ class _AccountScreenState extends State<AccountScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _socialIcon('assets/images/google_icon.png'),
+        GestureDetector(
+          onTap: _handleGoogleSignIn,
+          child: _socialIcon('assets/images/google_icon.png'),
+        ),
         const SizedBox(width: 20),
         _socialIcon('assets/images/apple_icon.png'),
         const SizedBox(width: 20),

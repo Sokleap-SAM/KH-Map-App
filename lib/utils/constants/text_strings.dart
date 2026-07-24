@@ -599,6 +599,14 @@ class AppTexts {
       _km ? 'ភ្លេចលេខសម្ងាត់?' : 'Forgot password?';
   String get signIn => _km ? 'ចូល' : 'Sign in';
   String get signUp => _km ? 'ចុះឈ្មោះ' : 'Sign up';
+  String get continueWithGoogle =>
+      _km ? 'បន្តជាមួយ Google' : 'Continue with Google';
+  String get orDivider => _km ? 'ឬ' : 'or';
+  String get googleSignInFailed => _km
+      ? 'ការចូលជាមួយ Google បរាជ័យ — សូមព្យាយាមម្ដងទៀត'
+      : 'Google sign-in failed — please try again';
+  String get googleSignInCancelled =>
+      _km ? 'បានបោះបង់ការចូលជាមួយ Google' : 'Google sign-in cancelled';
   String get noAccountSignUp =>
       _km ? 'មិនទាន់មានគណនី? ចុះឈ្មោះនៅទីនេះ' : "Don't have an account? Sign up";
   String get haveAccountSignIn =>
@@ -621,6 +629,21 @@ class AppTexts {
   String get newPasswordField => _km ? 'លេខសម្ងាត់ថ្មី' : 'New password';
   String get changePassword => _km ? 'ប្តូរលេខសម្ងាត់' : 'Change password';
   String get sendCode => _km ? 'ផ្ញើលេខកូដ' : 'Send code';
+
+  // Account verification (email OTP after register).
+  String get verifyAccountTitle => _km ? 'ផ្ទៀងផ្ទាត់គណនី' : 'Verify account';
+  String verifyAccountSubtitle(String email) => _km
+      ? 'យើងបានផ្ញើលេខកូដ ៦ ខ្ទង់ទៅកាន់អ៊ីមែល:\n$email'
+      : 'We sent a 6-digit code to:\n$email';
+  String get pleaseEnterCode =>
+      _km ? 'សូមបញ្ចូលលេខកូដ' : 'Please enter the code';
+  String get accountVerified =>
+      _km ? 'គណនីរបស់អ្នកត្រូវបានផ្ទៀងផ្ទាត់!' : 'Your account is verified!';
+  String get resendCode => _km ? 'ផ្ញើលេខកូដឡើងវិញ' : 'Resend code';
+  String resendCodeIn(int seconds) =>
+      _km ? 'ផ្ញើឡើងវិញក្នុងរយៈពេល $seconds វិនាទី' : 'Resend in $seconds s';
+  String get resendFailed =>
+      _km ? 'ការផ្ញើឡើងវិញបរាជ័យ' : 'Could not resend the code';
 
   // ─── Driver ────────────────────────────────────────────────────────────
   String get driverTitle => _km ? 'អ្នកបើកបរ' : 'Driver';
