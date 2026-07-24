@@ -11,6 +11,7 @@ import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
+import '../../utils/theme/app_palette.dart';
 import 'package:provider/provider.dart';
 
 /// Create or edit a place. Pick a category, tap the map to set/move the
@@ -201,8 +202,8 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(_t.noPhotos,
-                        style: const TextStyle(
-                            color: Colors.grey, fontSize: 12)),
+                        style: TextStyle(
+                            color: context.palette.textFaint, fontSize: 12)),
                   ),
               ],
             ),
@@ -229,9 +230,12 @@ class _AdminPlaceEditScreenState extends State<AdminPlaceEditScreen> {
                 errorBuilder: (_, _, _) => Container(
                   width: 80,
                   height: 80,
-                  color: Colors.black12,
+                  color: context.palette.surfaceAlt,
                   alignment: Alignment.center,
-                  child: const Icon(Icons.broken_image, color: Colors.grey),
+                  child: Icon(
+                    Icons.broken_image,
+                    color: context.palette.textFaint,
+                  ),
                 ),
               ),
             ),

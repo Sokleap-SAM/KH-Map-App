@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/place.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 
 class SearchResultsList extends StatelessWidget {
   final List<Place> results;
@@ -29,7 +30,7 @@ class SearchResultsList extends StatelessWidget {
             t.noResultsFor(query),
             textAlign: TextAlign.center,
             style: GoogleFonts.notoSansKhmer(
-              color: Colors.white70,
+              color: context.palette.textSecondary,
               fontSize: 14,
             ),
           ),
@@ -39,9 +40,9 @@ class SearchResultsList extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2A4C),
+        color: context.palette.surfaceAlt,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12, width: 1),
+        border: Border.all(color: context.palette.border, width: 1),
       ),
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
@@ -53,10 +54,10 @@ class SearchResultsList extends StatelessWidget {
               onTap: () => onTap(results[i]),
             ),
             if (i != results.length - 1)
-              const Divider(
+              Divider(
                 height: 1,
                 thickness: 1,
-                color: Colors.white12,
+                color: context.palette.divider,
                 indent: 16,
                 endIndent: 16,
               ),
@@ -145,16 +146,16 @@ class _ResultRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.notoSansKhmer(
-                      color: AppColors.secondaryTextColor,
+                      color: context.palette.subtitle,
                       fontSize: 12,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.north_west,
-              color: Colors.white38,
+              color: context.palette.textFaintest,
               size: 18,
             ),
           ],
@@ -173,7 +174,7 @@ class _HighlightedText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseStyle = GoogleFonts.notoSansKhmer(
-      color: Colors.white,
+      color: context.palette.textPrimary,
       fontSize: 14,
       fontWeight: FontWeight.w600,
     );

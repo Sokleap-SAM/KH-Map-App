@@ -13,6 +13,7 @@ import '../utils/auth_guard.dart';
 import '../utils/constants/colors.dart';
 import '../utils/constants/text_strings.dart';
 import '../utils/place_request_status.dart';
+import '../utils/theme/app_palette.dart';
 import '../widgets/bookmark_screen/favorite_place_card.dart';
 import '../widgets/contribute_screen/contribution_card.dart';
 import '../widgets/contribute_screen/contribution_form.dart';
@@ -83,21 +84,25 @@ class _ContributeScreenState extends State<ContributeScreen> {
         _loading = false;
       });
     }
-    // Sync the server-side request statuses (best-effort, non-blocking for the
-    // contributions list above).
-    _loadRequests();
+    // Merge the server-side copy of this account's contributions back in
+    // (best-effort, non-blocking for the locally-loaded list above).
+    _syncWithBackend();
   }
 
-  /// Pulls the user's place requests and their statuses, plus the set of
-  /// already-seen resolved requests, to drive the inline badges and the bell.
-  Future<void> _loadRequests() async {
-    final requests = await _service.myPlaceRequests();
+  /// Merges the account's database-side contributions (place requests created
+  /// by the user + ratings they left) into the local list, and pulls the
+  /// request statuses plus the set of already-seen resolved requests that
+  /// drive the inline badges and the bell.
+  Future<void> _syncWithBackend() async {
+    final result = await _service.syncWithBackend();
     final seen = await _service.acknowledgedRequestIds();
     if (!mounted) return;
     setState(() {
-      _requests = requests;
-      _statusByPlaceId = {for (final p in requests) p.id: p.status};
+      _contributions = result.contributions;
+      _requests = result.requests;
+      _statusByPlaceId = {for (final p in result.requests) p.id: p.status};
       _seenRequestIds = seen;
+      _loading = false;
     });
   }
 
@@ -284,22 +289,23 @@ class _ContributeScreenState extends State<ContributeScreen> {
 
   Future<void> _confirmClearAll() async {
     final t = context.read<SettingsProvider>().t;
+    final p = context.palette;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF243456),
+        backgroundColor: p.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           t.clearAllContributionsTitle,
           style: GoogleFonts.notoSansKhmer(
-            color: Colors.white,
+            color: p.textPrimary,
             fontWeight: FontWeight.w600,
           ),
         ),
         content: Text(
           t.clearAllContributionsBody(_contributions.length),
           style: GoogleFonts.notoSansKhmer(
-            color: Colors.white70,
+            color: p.textSecondary,
             fontSize: 13,
           ),
         ),
@@ -308,7 +314,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               t.cancel,
-              style: GoogleFonts.notoSansKhmer(color: Colors.white70),
+              style: GoogleFonts.notoSansKhmer(color: p.textSecondary),
             ),
           ),
           TextButton(
@@ -353,7 +359,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
     final visible = _visible(user);
 
     return Scaffold(
-      backgroundColor: AppColors.primaryColor,
+      backgroundColor: context.palette.scaffold,
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'contribute_fab',
         backgroundColor: AppColors.secondaryColor,
@@ -395,7 +401,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
                 Text(
                   t.myContributions,
                   style: GoogleFonts.notoSansKhmer(
-                    color: Colors.white,
+                    color: context.palette.textPrimary,
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
                   ),
@@ -406,7 +412,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
                       ? t.loading
                       : t.contributionsCount(_contributions.length),
                   style: GoogleFonts.notoSansKhmer(
-                    color: AppColors.secondaryTextColor,
+                    color: context.palette.subtitle,
                     fontSize: 12.5,
                   ),
                 ),
@@ -429,15 +435,16 @@ class _ContributeScreenState extends State<ContributeScreen> {
         isLabelVisible: count > 0,
         label: Text('$count'),
         backgroundColor: AppColors.alertBorderColor,
-        child: const Icon(Icons.notifications_outlined, color: Colors.white),
+        child: Icon(Icons.notifications_outlined, color: context.palette.textPrimary),
       ),
     );
   }
 
   Widget _sortMenu(bool hasLocation, AppTexts t) {
+    final p = context.palette;
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.tune_rounded, color: Colors.white),
-      color: const Color(0xFF243456),
+      icon: Icon(Icons.tune_rounded, color: p.textPrimary),
+      color: p.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       tooltip: t.sort,
       onSelected: (value) {
@@ -462,7 +469,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
                 Icons.delete_sweep_outlined,
                 size: 18,
                 color: _contributions.isEmpty
-                    ? Colors.white24
+                    ? p.textFaintest
                     : AppColors.alertBorderColor,
               ),
               const SizedBox(width: 10),
@@ -470,7 +477,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
                 t.deleteAll,
                 style: GoogleFonts.notoSansKhmer(
                   color: _contributions.isEmpty
-                      ? Colors.white24
+                      ? p.textFaintest
                       : AppColors.alertBorderColor,
                   fontSize: 13,
                 ),
@@ -484,6 +491,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
 
   PopupMenuItem<String> _sortItem(String value, String label) {
     final selected = _sort == value;
+    final p = context.palette;
     return PopupMenuItem<String>(
       value: value,
       child: Row(
@@ -491,13 +499,13 @@ class _ContributeScreenState extends State<ContributeScreen> {
           Icon(
             selected ? Icons.radio_button_checked : Icons.radio_button_off,
             size: 18,
-            color: selected ? AppColors.secondaryColor : Colors.white38,
+            color: selected ? AppColors.secondaryColor : p.textFaintest,
           ),
           const SizedBox(width: 10),
           Text(
             label,
             style: GoogleFonts.notoSansKhmer(
-              color: selected ? Colors.white : Colors.white70,
+              color: selected ? p.textPrimary : p.textSecondary,
               fontSize: 13,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             ),
@@ -508,18 +516,19 @@ class _ContributeScreenState extends State<ContributeScreen> {
   }
 
   Widget _listBanner(AppTexts t) {
+    final p = context.palette;
     final avg = _averageRating;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF243456), Color(0xFF1A2A4C)],
+        gradient: LinearGradient(
+          colors: [p.surface, p.surfaceAlt],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: kFavBorderColor),
+        border: Border.all(color: p.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -551,7 +560,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
                     Text(
                       t.communityContributor,
                       style: GoogleFonts.notoSansKhmer(
-                        color: Colors.white,
+                        color: p.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
@@ -559,16 +568,16 @@ class _ContributeScreenState extends State<ContributeScreen> {
                     const SizedBox(height: 3),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.public_rounded,
                           size: 13,
-                          color: Colors.white54,
+                          color: p.textFaint,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           t.contributionTypesLine,
                           style: GoogleFonts.notoSansKhmer(
-                            color: Colors.white54,
+                            color: p.textFaint,
                             fontSize: 12,
                           ),
                         ),
@@ -615,13 +624,14 @@ class _ContributeScreenState extends State<ContributeScreen> {
     required String label,
     required String value,
   }) {
+    final p = context.palette;
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withAlpha(14),
+          color: p.surfaceAlt,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white12),
+          border: Border.all(color: p.border),
         ),
         child: Column(
           children: [
@@ -630,7 +640,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
             Text(
               value,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white,
+                color: p.textPrimary,
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
               ),
@@ -639,7 +649,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
             Text(
               label,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white54,
+                color: p.textFaint,
                 fontSize: 11,
               ),
             ),
@@ -680,10 +690,11 @@ class _ContributeScreenState extends State<ContributeScreen> {
     required bool selected,
     required VoidCallback onTap,
   }) {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: Material(
-        color: selected ? AppColors.secondaryColor : kFavSurfaceColor,
+        color: selected ? AppColors.secondaryColor : p.surfaceAlt,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           onTap: onTap,
@@ -694,13 +705,13 @@ class _ContributeScreenState extends State<ContributeScreen> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: selected ? AppColors.secondaryColor : kFavBorderColor,
+                color: selected ? AppColors.secondaryColor : p.border,
               ),
             ),
             child: Text(
               label,
               style: GoogleFonts.notoSansKhmer(
-                color: selected ? AppColors.primaryColor : Colors.white70,
+                color: selected ? AppColors.primaryColor : p.textSecondary,
                 fontSize: 12.5,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               ),
@@ -748,7 +759,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
 
     return RefreshIndicator(
       color: AppColors.secondaryColor,
-      backgroundColor: const Color(0xFF243456),
+      backgroundColor: context.palette.surface,
       onRefresh: _load,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
@@ -797,6 +808,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
     String? actionLabel,
     VoidCallback? onAction,
   }) {
+    final p = context.palette;
     return Center(
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -818,7 +830,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
               title,
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white,
+                color: p.textPrimary,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -829,7 +841,7 @@ class _ContributeScreenState extends State<ContributeScreen> {
                 subtitle,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.notoSansKhmer(
-                  color: AppColors.secondaryTextColor,
+                  color: p.subtitle,
                   fontSize: 13,
                   height: 1.5,
                 ),

@@ -10,6 +10,7 @@ import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
 import '../../utils/place_request_status.dart';
+import '../../utils/theme/app_palette.dart';
 import '../bookmark_screen/favorite_place_card.dart';
 
 /// Renders a single photo path (local file or remote URL) into an Image widget.
@@ -52,11 +53,12 @@ class ContributionCard extends StatelessWidget {
     final settings = context.watch<SettingsProvider>();
     final lang = settings.languageCode;
     final t = settings.t;
+    final p = context.palette;
     final color = getColorForCategory(contribution.categoryName);
     final icon = getIconForCategory(contribution.categoryName);
 
     return Material(
-      color: kFavSurfaceColor,
+      color: p.surfaceAlt,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -64,7 +66,7 @@ class ContributionCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: kFavBorderColor),
+            border: Border.all(color: p.border),
           ),
           padding: const EdgeInsets.all(10),
           child: Column(
@@ -75,17 +77,17 @@ class ContributionCard extends StatelessWidget {
                 children: [
                   _thumbnail(icon, color),
                   const SizedBox(width: 12),
-                  Expanded(child: _details(icon, color, lang, t)),
-                  _menu(t),
+                  Expanded(child: _details(p, icon, color, lang, t)),
+                  _menu(p, t),
                 ],
               ),
               if (contribution.comment.trim().isNotEmpty) ...[
                 const SizedBox(height: 10),
-                _commentLine(),
+                _commentLine(p),
               ],
               if (contribution.photos.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                _photoStrip(),
+                _photoStrip(p),
               ],
             ],
           ),
@@ -117,7 +119,13 @@ class ContributionCard extends StatelessWidget {
     );
   }
 
-  Widget _details(IconData icon, Color color, String lang, AppTexts t) {
+  Widget _details(
+    AppPalette p,
+    IconData icon,
+    Color color,
+    String lang,
+    AppTexts t,
+  ) {
     final coords =
         '${contribution.latitude.toStringAsFixed(4)}, '
         '${contribution.longitude.toStringAsFixed(4)}';
@@ -135,7 +143,7 @@ class ContributionCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.notoSansKhmer(
-                  color: Colors.white,
+                  color: p.textPrimary,
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
@@ -148,7 +156,7 @@ class ContributionCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        _ratingLine(icon, color),
+        _ratingLine(p, icon, color),
         if (requestStatus != null) ...[
           const SizedBox(height: 6),
           Align(
@@ -157,9 +165,9 @@ class ContributionCard extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 5),
-        _metaLine(Icons.place_outlined, locationLine),
+        _metaLine(p, Icons.place_outlined, locationLine),
         const SizedBox(height: 3),
-        _metaLine(Icons.edit_outlined, t.addedAgo(contribution.createdAt)),
+        _metaLine(p, Icons.edit_outlined, t.addedAgo(contribution.createdAt)),
       ],
     );
   }
@@ -183,7 +191,7 @@ class ContributionCard extends StatelessWidget {
     );
   }
 
-  Widget _ratingLine(IconData icon, Color color) {
+  Widget _ratingLine(AppPalette p, IconData icon, Color color) {
     return Row(
       children: [
         const Icon(Icons.star_rounded, size: 15, color: Color(0xFFFFB400)),
@@ -193,7 +201,7 @@ class ContributionCard extends StatelessWidget {
               ? contribution.rating.toStringAsFixed(1)
               : '—',
           style: GoogleFonts.notoSansKhmer(
-            color: Colors.white,
+            color: p.textPrimary,
             fontSize: 12.5,
             fontWeight: FontWeight.w600,
           ),
@@ -201,7 +209,7 @@ class ContributionCard extends StatelessWidget {
         Text(
           '  ·  ',
           style: GoogleFonts.notoSansKhmer(
-            color: AppColors.secondaryTextColor,
+            color: p.subtitle,
             fontSize: 12,
           ),
         ),
@@ -213,7 +221,7 @@ class ContributionCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.notoSansKhmer(
-              color: AppColors.secondaryTextColor,
+              color: p.subtitle,
               fontSize: 12.5,
             ),
           ),
@@ -222,10 +230,10 @@ class ContributionCard extends StatelessWidget {
     );
   }
 
-  Widget _metaLine(IconData icon, String text) {
+  Widget _metaLine(AppPalette p, IconData icon, String text) {
     return Row(
       children: [
-        Icon(icon, size: 13, color: Colors.white38),
+        Icon(icon, size: 13, color: p.textFaintest),
         const SizedBox(width: 5),
         Flexible(
           child: Text(
@@ -233,7 +241,7 @@ class ContributionCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.notoSansKhmer(
-              color: Colors.white54,
+              color: p.textFaint,
               fontSize: 11.5,
             ),
           ),
@@ -242,18 +250,18 @@ class ContributionCard extends StatelessWidget {
     );
   }
 
-  Widget _commentLine() {
+  Widget _commentLine(AppPalette p) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(10),
+        color: p.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: p.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.format_quote_rounded, size: 16, color: Colors.white38),
+          Icon(Icons.format_quote_rounded, size: 16, color: p.textFaintest),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -261,7 +269,7 @@ class ContributionCard extends StatelessWidget {
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white70,
+                color: p.textSecondary,
                 fontSize: 12.5,
                 height: 1.4,
               ),
@@ -272,7 +280,7 @@ class ContributionCard extends StatelessWidget {
     );
   }
 
-  Widget _photoStrip() {
+  Widget _photoStrip(AppPalette p) {
     final photos = contribution.photos.take(4).toList();
     final extra = contribution.photos.length - photos.length;
     return SizedBox(
@@ -296,14 +304,14 @@ class ContributionCard extends StatelessWidget {
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: Colors.white12,
+                color: p.surface,
                 borderRadius: BorderRadius.circular(10),
               ),
               alignment: Alignment.center,
               child: Text(
                 '+$extra',
                 style: GoogleFonts.notoSansKhmer(
-                  color: Colors.white70,
+                  color: p.textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -315,10 +323,10 @@ class ContributionCard extends StatelessWidget {
     );
   }
 
-  Widget _menu(AppTexts t) {
+  Widget _menu(AppPalette p, AppTexts t) {
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, color: Colors.white54, size: 20),
-      color: const Color(0xFF243456),
+      icon: Icon(Icons.more_vert, color: p.textFaint, size: 20),
+      color: p.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: EdgeInsets.zero,
       tooltip: t.options,
@@ -327,7 +335,7 @@ class ContributionCard extends StatelessWidget {
         if (value == 'remove') onRemove();
       },
       itemBuilder: (_) => [
-        _menuItem('edit', Icons.edit_outlined, t.edit, Colors.white),
+        _menuItem('edit', Icons.edit_outlined, t.edit, p.textPrimary),
         _menuItem(
           'remove',
           Icons.delete_outline_rounded,

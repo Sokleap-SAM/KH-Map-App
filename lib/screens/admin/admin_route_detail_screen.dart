@@ -11,6 +11,7 @@ import '../../services/admin_service.dart';
 import '../../utils/constants/text_strings.dart';
 import '../../services/transit_service.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 import 'admin_color_picker.dart';
 import 'admin_place_detail_screen.dart';
 import 'admin_route_create_screen.dart';
@@ -296,9 +297,9 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
                               final p = items[i];
                               return ListTile(
                                 dense: true,
-                                leading: const Icon(
+                                leading: Icon(
                                   Icons.place,
-                                  color: AppColors.primaryColor,
+                                  color: context.palette.subtitle,
                                 ),
                                 title: Text(
                                   p.localizedName(
@@ -674,9 +675,9 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
               ),
               IconButton(
                 tooltip: _t.viewDetail,
-                icon: const Icon(
+                icon: Icon(
                   Icons.visibility,
-                  color: AppColors.primaryColor,
+                  color: context.palette.subtitle,
                 ),
                 onPressed: () => _viewStopPlace(s),
               ),
@@ -685,7 +686,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
               if (_stops.indexWhere((x) => x.id == s.id) > 0)
                 IconButton(
                   tooltip: _t.editSegment,
-                  icon: const Icon(Icons.route, color: AppColors.primaryColor),
+                  icon: Icon(Icons.route, color: context.palette.subtitle),
                   onPressed: () {
                     final i = _stops.indexWhere((x) => x.id == s.id);
                     if (i > 0) _fixSegment(i);

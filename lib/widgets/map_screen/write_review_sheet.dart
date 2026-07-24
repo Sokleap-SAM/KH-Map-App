@@ -9,6 +9,7 @@ import '../../models/place.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/place_service.dart';
 import '../../utils/constants/text_strings.dart';
+import '../../utils/theme/app_palette.dart';
 
 /// Bottom-sheet form that lets a logged-in user rate a place: a 1–5 star score,
 /// an optional comment, and optional photos. Submits to the backend via
@@ -24,8 +25,6 @@ class WriteReviewSheet extends StatefulWidget {
 }
 
 class _WriteReviewSheetState extends State<WriteReviewSheet> {
-  static const _bgColor = Color(0xFF1E1E1E);
-  static const _surfaceColor = Color(0xFF2D2D2D);
   static const _accentBlue = Color(0xFF3B82F6);
   static const _starColor = Color(0xFFFFB400);
   static const _tokenKey = 'access_token';
@@ -115,12 +114,13 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
-        decoration: const BoxDecoration(
-          color: _bgColor,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: SafeArea(
           top: false,
@@ -136,8 +136,8 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                 const SizedBox(height: 18),
                 Text(
                   t.yourRating,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: p.textPrimary,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -147,8 +147,8 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                 const SizedBox(height: 18),
                 Text(
                   t.commentLabel,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: p.textPrimary,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -158,8 +158,8 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                 const SizedBox(height: 18),
                 Text(
                   t.photosCount(_photos.length),
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: p.textPrimary,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -191,13 +191,14 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
           width: 40,
           height: 4,
           decoration: BoxDecoration(
-            color: Colors.grey[600],
+            color: context.palette.divider,
             borderRadius: BorderRadius.circular(2),
           ),
         ),
       );
 
   Widget _header(AppTexts t) {
+    final p = context.palette;
     return Row(
       children: [
         Expanded(
@@ -206,8 +207,8 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
             children: [
               Text(
                 t.writeReview,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: p.textPrimary,
                   fontSize: 19,
                   fontWeight: FontWeight.w700,
                 ),
@@ -219,7 +220,7 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
+                style: TextStyle(color: p.textFaint, fontSize: 13),
               ),
             ],
           ),
@@ -227,13 +228,14 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
         IconButton(
           tooltip: t.close,
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close, color: Colors.white70),
+          icon: Icon(Icons.close, color: p.textSecondary),
         ),
       ],
     );
   }
 
   Widget _starPicker() {
+    final p = context.palette;
     return Row(
       children: [
         for (var i = 1; i <= 5; i++)
@@ -245,15 +247,15 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
               child: Icon(
                 i <= _score ? Icons.star_rounded : Icons.star_border_rounded,
                 size: 38,
-                color: i <= _score ? _starColor : Colors.white38,
+                color: i <= _score ? _starColor : p.textFaintest,
               ),
             ),
           ),
         const SizedBox(width: 8),
         Text(
           _score > 0 ? '$_score.0' : '—',
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: p.textPrimary,
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -263,16 +265,17 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
   }
 
   Widget _commentField(AppTexts t) {
+    final p = context.palette;
     return TextField(
       controller: _commentCtrl,
       maxLines: 4,
       minLines: 3,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
+      style: TextStyle(color: p.textPrimary, fontSize: 14),
       decoration: InputDecoration(
         hintText: t.reviewCommentHint,
-        hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+        hintStyle: TextStyle(color: p.textFaintest, fontSize: 13),
         filled: true,
-        fillColor: _surfaceColor,
+        fillColor: p.surfaceAlt,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -304,10 +307,10 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                   errorBuilder: (_, _, _) => Container(
                     width: 80,
                     height: 80,
-                    color: _surfaceColor,
+                    color: context.palette.surfaceAlt,
                     alignment: Alignment.center,
-                    child: const Icon(Icons.broken_image_outlined,
-                        color: Colors.white30),
+                    child: Icon(Icons.broken_image_outlined,
+                        color: context.palette.textFaintest),
                   ),
                 ),
               ),
@@ -342,7 +345,7 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
         width: 80,
         height: 80,
         decoration: BoxDecoration(
-          color: _surfaceColor,
+          color: context.palette.surfaceAlt,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: _accentBlue.withValues(alpha: 0.5)),
         ),

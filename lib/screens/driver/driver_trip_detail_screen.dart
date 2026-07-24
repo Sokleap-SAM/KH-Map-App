@@ -7,6 +7,7 @@ import '../../providers/driver_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/transit_service.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 import '../../widgets/transit/stop_timeline.dart';
 
 /// Full-screen trip detail. Shows "Start trip" / "Cancel trip" depending
@@ -78,12 +79,13 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
     }
   }
 
-  /// Dark "ALL STOPS" timeline matching the rider map sheet.
+  /// "ALL STOPS" timeline matching the rider map sheet, themed via AppPalette.
   Widget _buildStopsSection(Trip trip) {
+    final p = context.palette;
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.all(Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: const BorderRadius.all(Radius.circular(20)),
       ),
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
@@ -94,8 +96,8 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
             child: Text(
               context.watch<SettingsProvider>().t.allStopsHeader,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white70,
+              style: TextStyle(
+                color: p.textSecondary,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
               ),
@@ -112,7 +114,7 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
               child: Text(
                 context.watch<SettingsProvider>().t.noStopData,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white38),
+                style: TextStyle(color: p.textFaintest),
               ),
             )
           else

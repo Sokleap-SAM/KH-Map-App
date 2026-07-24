@@ -15,6 +15,7 @@ import '../../utils/constants/text_strings.dart';
 import '../../services/place_service.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 import '../bookmark_screen/favorite_place_card.dart';
 import 'contribution_card.dart';
 
@@ -181,7 +182,11 @@ class _ContributionFormState extends State<ContributionForm> {
   Future<void> _save() async {
     final t = context.read<SettingsProvider>().t;
     if (!_formKey.currentState!.validate()) return;
-    if (_rating <= 0) {
+    // A star rating is only meaningful when reviewing an existing place. A
+    // self-created place is a submission, not a review, so don't force a rating
+    // there — otherwise editing a place that has none (e.g. one restored from
+    // the database, which carries rating 0) is silently blocked here.
+    if (_useExistingPlace && _rating <= 0) {
       _showError(t.pleaseProvideRating);
       return;
     }
@@ -257,9 +262,9 @@ class _ContributionFormState extends State<ContributionForm> {
       expand: false,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.primaryColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          decoration: BoxDecoration(
+            color: context.palette.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
           ),
           padding: EdgeInsets.only(bottom: viewInsets.bottom),
           child: Form(
@@ -316,7 +321,7 @@ class _ContributionFormState extends State<ContributionForm> {
           width: 40,
           height: 4,
           decoration: BoxDecoration(
-            color: Colors.white24,
+            color: context.palette.divider,
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -330,7 +335,7 @@ class _ContributionFormState extends State<ContributionForm> {
           child: Text(
             isEdit ? t.editContribution : t.newContribution,
             style: GoogleFonts.notoSansKhmer(
-              color: Colors.white,
+              color: context.palette.textPrimary,
               fontSize: 20,
               fontWeight: FontWeight.w700,
             ),
@@ -339,7 +344,7 @@ class _ContributionFormState extends State<ContributionForm> {
         IconButton(
           tooltip: t.close,
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close, color: Colors.white70),
+          icon: Icon(Icons.close, color: context.palette.textSecondary),
         ),
       ],
     );
@@ -353,7 +358,7 @@ class _ContributionFormState extends State<ContributionForm> {
         Text(
           label,
           style: GoogleFonts.notoSansKhmer(
-            color: Colors.white,
+            color: context.palette.textPrimary,
             fontSize: 13.5,
             fontWeight: FontWeight.w600,
           ),
@@ -365,9 +370,9 @@ class _ContributionFormState extends State<ContributionForm> {
   Widget _placeModeToggle(AppTexts t) {
     return Container(
       decoration: BoxDecoration(
-        color: kFavSurfaceColor,
+        color: context.palette.surfaceAlt,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kFavBorderColor),
+        border: Border.all(color: context.palette.border),
       ),
       padding: const EdgeInsets.all(4),
       child: Row(
@@ -412,13 +417,13 @@ class _ContributionFormState extends State<ContributionForm> {
               Icon(
                 icon,
                 size: 16,
-                color: selected ? AppColors.primaryColor : Colors.white70,
+                color: selected ? AppColors.primaryColor : context.palette.textSecondary,
               ),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: GoogleFonts.notoSansKhmer(
-                  color: selected ? AppColors.primaryColor : Colors.white70,
+                  color: selected ? AppColors.primaryColor : context.palette.textSecondary,
                   fontSize: 13,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 ),
@@ -443,9 +448,9 @@ class _ContributionFormState extends State<ContributionForm> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             decoration: BoxDecoration(
-              color: kFavSurfaceColor,
+              color: context.palette.surfaceAlt,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: kFavBorderColor),
+              border: Border.all(color: context.palette.border),
             ),
             child: Row(
               children: [
@@ -454,7 +459,7 @@ class _ContributionFormState extends State<ContributionForm> {
                       ? Icons.search_rounded
                       : getIconForCategory(_selectedPlace!.category?.name),
                   color: _selectedPlace == null
-                      ? Colors.white54
+                      ? context.palette.textFaint
                       : getColorForCategory(_selectedPlace!.category?.name),
                 ),
                 const SizedBox(width: 12),
@@ -468,7 +473,7 @@ class _ContributionFormState extends State<ContributionForm> {
                             ) ??
                             t.selectPlace,
                         style: GoogleFonts.notoSansKhmer(
-                          color: Colors.white,
+                          color: context.palette.textPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -478,7 +483,7 @@ class _ContributionFormState extends State<ContributionForm> {
                         Text(
                           formatCategoryLabel(_selectedPlace!.category?.name),
                           style: GoogleFonts.notoSansKhmer(
-                            color: AppColors.secondaryTextColor,
+                            color: context.palette.subtitle,
                             fontSize: 12,
                           ),
                         ),
@@ -486,7 +491,7 @@ class _ContributionFormState extends State<ContributionForm> {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: Colors.white38),
+                Icon(Icons.chevron_right, color: context.palette.textFaintest),
               ],
             ),
           ),
@@ -499,7 +504,7 @@ class _ContributionFormState extends State<ContributionForm> {
     final picked = await showModalBottomSheet<Place>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.primaryColor,
+      backgroundColor: context.palette.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
@@ -627,7 +632,7 @@ class _ContributionFormState extends State<ContributionForm> {
         Text(
           t.tapOrLongPressToMove,
           style: GoogleFonts.notoSansKhmer(
-            color: AppColors.secondaryTextColor,
+            color: context.palette.subtitle,
             fontSize: 11,
           ),
         ),
@@ -645,17 +650,17 @@ class _ContributionFormState extends State<ContributionForm> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: kFavSurfaceColor,
+        color: context.palette.surfaceAlt,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kFavBorderColor),
+        border: Border.all(color: context.palette.border),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _categoryName,
           isExpanded: true,
-          dropdownColor: const Color(0xFF243456),
-          iconEnabledColor: Colors.white54,
-          style: GoogleFonts.notoSansKhmer(color: Colors.white, fontSize: 14),
+          dropdownColor: context.palette.surface,
+          iconEnabledColor: context.palette.textFaint,
+          style: GoogleFonts.notoSansKhmer(color: context.palette.textPrimary, fontSize: 14),
           items: [
             for (final name in values)
               DropdownMenuItem<String>(
@@ -671,7 +676,7 @@ class _ContributionFormState extends State<ContributionForm> {
                     Text(
                       formatCategoryLabel(name),
                       style: GoogleFonts.notoSansKhmer(
-                        color: Colors.white,
+                        color: context.palette.textPrimary,
                         fontSize: 13.5,
                       ),
                     ),
@@ -695,13 +700,13 @@ class _ContributionFormState extends State<ContributionForm> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: kFavSurfaceColor,
+        color: context.palette.surfaceAlt,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kFavBorderColor),
+        border: Border.all(color: context.palette.border),
       ),
       child: Row(
         children: [
-          const Icon(Icons.place_outlined, color: Colors.white54),
+          Icon(Icons.place_outlined, color: context.palette.textFaint),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -710,7 +715,7 @@ class _ContributionFormState extends State<ContributionForm> {
                 Text(
                   t.locationLabel,
                   style: GoogleFonts.notoSansKhmer(
-                    color: AppColors.secondaryTextColor,
+                    color: context.palette.subtitle,
                     fontSize: 12,
                   ),
                 ),
@@ -718,7 +723,7 @@ class _ContributionFormState extends State<ContributionForm> {
                 Text(
                   label,
                   style: GoogleFonts.notoSansKhmer(
-                    color: Colors.white,
+                    color: context.palette.textPrimary,
                     fontSize: 13,
                   ),
                 ),
@@ -758,7 +763,7 @@ class _ContributionFormState extends State<ContributionForm> {
                 size: 34,
                 color: i <= _rating
                     ? const Color(0xFFFFB400)
-                    : Colors.white38,
+                    : context.palette.textFaintest,
               ),
             ),
           ),
@@ -766,7 +771,7 @@ class _ContributionFormState extends State<ContributionForm> {
         Text(
           _rating > 0 ? _rating.toStringAsFixed(1) : '—',
           style: GoogleFonts.notoSansKhmer(
-            color: Colors.white,
+            color: context.palette.textPrimary,
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -831,7 +836,7 @@ class _ContributionFormState extends State<ContributionForm> {
         width: 78,
         height: 78,
         decoration: BoxDecoration(
-          color: kFavSurfaceColor,
+          color: context.palette.surfaceAlt,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: AppColors.secondaryColor.withAlpha(120),
@@ -882,31 +887,31 @@ class _ContributionFormState extends State<ContributionForm> {
       controller: controller,
       maxLines: maxLines,
       validator: validator,
-      style: GoogleFonts.notoSansKhmer(color: Colors.white, fontSize: 14),
+      style: GoogleFonts.notoSansKhmer(color: context.palette.textPrimary, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         labelStyle: GoogleFonts.notoSansKhmer(
-          color: AppColors.secondaryTextColor,
+          color: context.palette.subtitle,
           fontSize: 13,
         ),
         hintStyle: GoogleFonts.notoSansKhmer(
-          color: Colors.white38,
+          color: context.palette.textFaintest,
           fontSize: 13,
         ),
         filled: true,
-        fillColor: kFavSurfaceColor,
+        fillColor: context.palette.surfaceAlt,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 14,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Colors.white12),
+          borderSide: BorderSide(color: context.palette.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Colors.white12),
+          borderSide: BorderSide(color: context.palette.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -985,7 +990,7 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.palette.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -996,31 +1001,31 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
                   autofocus: true,
                   onChanged: (v) => setState(() => _query = v),
                   style: GoogleFonts.notoSansKhmer(
-                    color: Colors.white,
+                    color: context.palette.textPrimary,
                     fontSize: 14,
                   ),
                   decoration: InputDecoration(
                     hintText:
                         context.watch<SettingsProvider>().t.searchPlaceHint,
                     hintStyle: GoogleFonts.notoSansKhmer(
-                      color: Colors.white38,
+                      color: context.palette.textFaintest,
                       fontSize: 13,
                     ),
-                    prefixIcon: const Icon(
+                    prefixIcon: Icon(
                       Icons.search_rounded,
-                      color: Colors.white54,
+                      color: context.palette.textFaint,
                     ),
                     filled: true,
-                    fillColor: kFavSurfaceColor,
+                    fillColor: context.palette.surfaceAlt,
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 14),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Colors.white12),
+                      borderSide: BorderSide(color: context.palette.border),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Colors.white12),
+                      borderSide: BorderSide(color: context.palette.border),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -1037,7 +1042,7 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
                         child: Text(
                           context.watch<SettingsProvider>().t.placeNotFound,
                           style: GoogleFonts.notoSansKhmer(
-                            color: Colors.white54,
+                            color: context.palette.textFaint,
                           ),
                         ),
                       )
@@ -1047,8 +1052,8 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
                           horizontal: 12,
                           vertical: 8,
                         ),
-                        separatorBuilder: (_, _) => const Divider(
-                          color: Colors.white12,
+                        separatorBuilder: (_, _) => Divider(
+                          color: context.palette.divider,
                           height: 1,
                         ),
                         itemBuilder: (_, i) {
@@ -1063,14 +1068,14 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
                             title: Text(
                               p.localizedName(lang),
                               style: GoogleFonts.notoSansKhmer(
-                                color: Colors.white,
+                                color: context.palette.textPrimary,
                                 fontSize: 14,
                               ),
                             ),
                             subtitle: Text(
                               formatCategoryLabel(p.category?.name),
                               style: GoogleFonts.notoSansKhmer(
-                                color: AppColors.secondaryTextColor,
+                                color: context.palette.subtitle,
                                 fontSize: 12,
                               ),
                             ),

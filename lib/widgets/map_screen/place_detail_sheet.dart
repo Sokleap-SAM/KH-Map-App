@@ -4,6 +4,7 @@ import 'package:kh_map_app/models/place.dart';
 import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/screens/place_reviews_screen.dart';
 import 'package:kh_map_app/utils/category_icon.dart';
+import 'package:kh_map_app/utils/theme/app_palette.dart';
 
 class PlaceDetailSheet extends StatefulWidget {
   final Place place;
@@ -26,9 +27,6 @@ class PlaceDetailSheet extends StatefulWidget {
 }
 
 class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
-  static const _bgColor = Color(0xFF1E1E1E);
-  static const _surfaceColor = Color(0xFF2D2D2D);
-  static const _dividerColor = Color(0xFF333333);
   static const _accentBlue = Color(0xFF3B82F6);
 
   final PageController _photoController = PageController();
@@ -80,6 +78,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     final categoryName = place.category?.name;
     final categoryColor = getColorForCategory(categoryName);
     final categoryIcon = getIconForCategory(categoryName);
+    final p = context.palette;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.55,
@@ -88,9 +87,10 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
       expand: false,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: _bgColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: p.surface,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: ListView(
             controller: scrollController,
@@ -103,14 +103,14 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
               const SizedBox(height: 16),
               _actionRow(),
               const SizedBox(height: 20),
-              const Divider(color: _dividerColor, height: 1),
+              Divider(color: p.divider, height: 1),
               _InfoRow(
                 icon: categoryIcon,
                 iconColor: categoryColor,
                 primary: _formatCategory(categoryName),
                 secondary: 'Category',
               ),
-              const Divider(color: _dividerColor, height: 1),
+              Divider(color: p.divider, height: 1),
               _InfoRow(
                 icon: Icons.star_outline,
                 primary: place.averageRating != null
@@ -119,13 +119,13 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
                     : 'No ratings yet',
                 secondary: 'Rating · Tap to read reviews',
                 onTap: _openReviews,
-                trailing: const Icon(
+                trailing: Icon(
                   Icons.chevron_right,
-                  color: Colors.grey,
+                  color: p.textFaint,
                   size: 22,
                 ),
               ),
-              const Divider(color: _dividerColor, height: 1),
+              Divider(color: p.divider, height: 1),
               _InfoRow(
                 icon: Icons.location_on_outlined,
                 primary:
@@ -148,7 +148,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         width: 40,
         height: 4,
         decoration: BoxDecoration(
-          color: Colors.grey[600],
+          color: context.palette.divider,
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -178,11 +178,11 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
                             progress == null
                             ? child
                             : Container(
-                                color: _surfaceColor,
+                                color: context.palette.surfaceAlt,
                                 alignment: Alignment.center,
-                                child: const CircularProgressIndicator(
+                                child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white70,
+                                  color: context.palette.textSecondary,
                                 ),
                               ),
                         errorBuilder: (_, _, _) => _photoFallback(icon, color),
@@ -229,6 +229,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   }
 
   Widget _titleBlock(Place place, IconData icon, Color color) {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -242,10 +243,10 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
                   place.localizedName(
                     context.watch<SettingsProvider>().languageCode,
                   ),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: p.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -258,13 +259,13 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
             onPressed: _toggleFavorite,
             icon: Icon(
               _isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: _isFavorite ? Colors.redAccent : Colors.white,
+              color: _isFavorite ? Colors.redAccent : p.textPrimary,
             ),
           ),
           IconButton(
             tooltip: 'Close',
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close, color: Colors.white),
+            icon: Icon(Icons.close, color: p.textPrimary),
           ),
         ],
       ),
@@ -272,13 +273,14 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   }
 
   Widget _metaRow(Place place, IconData icon, Color color) {
+    final p = context.palette;
     final children = <Widget>[];
     if (place.averageRating != null) {
       children.addAll([
         Text(
           place.averageRating!.toStringAsFixed(1),
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: p.textPrimary,
             fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
@@ -289,10 +291,10 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
           const SizedBox(width: 6),
           Text(
             '(${place.ratingCount})',
-            style: const TextStyle(color: Colors.grey, fontSize: 13),
+            style: TextStyle(color: p.textFaint, fontSize: 13),
           ),
         ],
-        const Text('  ·  ', style: TextStyle(color: Colors.grey)),
+        Text('  ·  ', style: TextStyle(color: p.textFaint)),
       ]);
     }
     children.addAll([
@@ -301,7 +303,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
       Flexible(
         child: Text(
           _formatCategory(place.category?.name),
-          style: const TextStyle(color: Colors.grey, fontSize: 13),
+          style: TextStyle(color: p.textFaint, fontSize: 13),
           overflow: TextOverflow.ellipsis,
         ),
       ),
@@ -310,6 +312,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   }
 
   Widget _actionRow() {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -325,16 +328,16 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
           _ActionChip(
             icon: _isFavorite ? Icons.favorite : Icons.favorite_border,
             label: _isFavorite ? 'Saved' : 'Save',
-            background: _surfaceColor,
-            foreground: _isFavorite ? Colors.redAccent : Colors.white,
+            background: p.surfaceAlt,
+            foreground: _isFavorite ? Colors.redAccent : p.textPrimary,
             onTap: _toggleFavorite,
           ),
           const SizedBox(width: 10),
           _ActionChip(
             icon: Icons.share_outlined,
             label: 'Share',
-            background: _surfaceColor,
-            foreground: Colors.white,
+            background: p.surfaceAlt,
+            foreground: p.textPrimary,
             onTap: widget.onShare ?? () {},
           ),
         ],
@@ -442,12 +445,13 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final row = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: iconColor ?? Colors.grey),
+          Icon(icon, size: 20, color: iconColor ?? p.textFaint),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -455,13 +459,13 @@ class _InfoRow extends StatelessWidget {
               children: [
                 Text(
                   primary,
-                  style: const TextStyle(fontSize: 14, color: Colors.white),
+                  style: TextStyle(fontSize: 14, color: p.textPrimary),
                 ),
                 if (secondary != null) ...[
                   const SizedBox(height: 2),
                   Text(
                     secondary!,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: p.textFaint),
                   ),
                 ],
               ],

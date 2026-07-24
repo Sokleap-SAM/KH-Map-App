@@ -9,6 +9,7 @@ import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/constants/text_strings.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 import 'admin_color_picker.dart';
 import 'admin_map_size_button.dart';
 
@@ -546,8 +547,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           t.directionPairingNote,
-                          style: const TextStyle(
-                              fontSize: 11, color: Colors.grey),
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: context.palette.textFaint),
                         ),
                       ),
                     ],
@@ -563,7 +565,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                   decoration: BoxDecoration(
                     color: routeColorFromHex(_color) ?? Colors.blue,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.black26),
+                    border: Border.all(color: context.palette.border),
                   ),
                 ),
                 onTap: () async {
@@ -588,7 +590,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
     required String label,
   }) {
     final selected = _direction == value;
-    final fg = selected ? Colors.white : AppColors.primaryColor;
+    final fg = selected ? Colors.white : context.palette.textPrimary;
     return Material(
       color: selected ? AppColors.secondaryColor : Colors.transparent,
       borderRadius: BorderRadius.circular(12),
@@ -600,7 +602,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? AppColors.secondaryColor : Colors.grey.shade400,
+              color: selected
+                  ? AppColors.secondaryColor
+                  : context.palette.border,
               width: selected ? 2 : 1,
             ),
           ),
@@ -1242,7 +1246,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
-      color: Colors.black12,
+      color: context.palette.surfaceAlt,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

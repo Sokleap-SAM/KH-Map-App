@@ -12,6 +12,8 @@ import '../../utils/constants/text_strings.dart';
 import 'admin_map_size_button.dart';
 import 'admin_place_detail_screen.dart';
 import 'admin_place_edit_screen.dart';
+import 'admin_place_request_history_screen.dart';
+import 'admin_place_requests_screen.dart';
 
 /// Places tab — CRUD over /places (all categories). Overview map shows every
 /// place; filter by category chips + search by name; the list carries coords
@@ -34,6 +36,7 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
 
   List<Place> _places = const [];
   List<PlaceCategory> _categories = const [];
+  int _pendingCount = 0;
   bool _loading = true;
   String? _error;
   String _filter = '';
@@ -61,6 +64,7 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
 
   Future<void> _load() async {
     if (mounted) setState(() => _loading = true);
+    _loadPendingCount(); // fire-and-forget: badge only, must not block the list
     try {
       final results = await Future.wait([
         _service.fetchAllPlaces(),
@@ -95,6 +99,24 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
 
   Future<StopUsage> _usage(String placeId) =>
       _usageCache[placeId] ??= _service.fetchStopRoutes(placeId);
+
+  /// Best-effort badge count of user requests awaiting review; a failure just
+  /// leaves the badge hidden rather than erroring the whole screen.
+  Future<void> _loadPendingCount() async {
+    try {
+      final pending = await _service.fetchPendingPlaceRequests();
+      if (mounted) setState(() => _pendingCount = pending.length);
+    } catch (_) {/* keep last known count */}
+  }
+
+  /// Opens the review queue; reloads on return since approving a request
+  /// publishes a new place into this list.
+  Future<void> _openRequests() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AdminPlaceRequestsScreen()),
+    );
+    if (mounted) _load();
+  }
 
   List<Place> get _filtered {
     final q = _filter.toLowerCase();
@@ -239,6 +261,24 @@ class _AdminPlacesScreenState extends State<AdminPlacesScreen> {
         foregroundColor: Colors.white,
         title: Text(t.managePlaces),
         actions: [
+          IconButton(
+            icon: Badge(
+              isLabelVisible: _pendingCount > 0,
+              label: Text('$_pendingCount'),
+              child: const Icon(Icons.inbox_outlined),
+            ),
+            tooltip: t.placeRequestsTitle,
+            onPressed: _openRequests,
+          ),
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: t.history,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const AdminPlaceRequestHistoryScreen(),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _load,

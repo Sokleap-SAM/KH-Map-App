@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/theme/app_palette.dart';
+
 /// Pulsing "you are here" indicator used at the active stop in a route
 /// stop timeline. Shared by the rider map sheet and the driver trip detail.
 class BusPulseIndicator extends StatefulWidget {
@@ -155,7 +157,7 @@ class _FlowingLineConnectorState extends State<FlowingLineConnector>
     }
 
     // 3. If it's a future segment, show a dim grey line
-    return Container(width: 2, color: Colors.white10);
+    return Container(width: 2, color: context.palette.divider);
   }
 }
 
@@ -204,7 +206,7 @@ class StopTimelineTile extends StatelessWidget {
                               shape: BoxShape.circle,
                               color: isPassed
                                   ? const Color(0xFF1976D2)
-                                  : Colors.white10,
+                                  : context.palette.divider,
                             ),
                           ),
                   ),
@@ -229,8 +231,10 @@ class StopTimelineTile extends StatelessWidget {
                 stopName,
                 style: TextStyle(
                   color: isTarget
-                      ? Colors.white
-                      : (isPassed ? Colors.white70 : Colors.white24),
+                      ? context.palette.textPrimary
+                      : (isPassed
+                          ? context.palette.textSecondary
+                          : context.palette.textFaintest),
                   fontSize: 16,
                   height: 1.4,
                   fontWeight: isTarget ? FontWeight.bold : FontWeight.normal,

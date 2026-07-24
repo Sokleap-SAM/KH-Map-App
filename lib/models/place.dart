@@ -88,10 +88,13 @@ class Place {
       id: json['_id'] as String,
       // Backend renamed `name` → `nameInKhmer`; fall back to the legacy key so
       // an older/mixed response still parses.
-      nameInKhmer: (json['nameInKhmer'] ?? json['name']) as String,
-      // Required by the backend; fall back to the Khmer name so a legacy
-      // record that predates the field still parses instead of throwing.
-      nameInLatin: (json['nameInLatin'] ?? json['nameInKhmer']) as String,
+      nameInKhmer: (json['nameInKhmer'] ?? json['name'] ?? '') as String,
+      // Required by the backend; fall back to the Khmer name (and then the
+      // legacy `name` key) so a record that predates the field still parses
+      // instead of throwing.
+      nameInLatin:
+          (json['nameInLatin'] ?? json['nameInKhmer'] ?? json['name'] ?? '')
+              as String,
       // `category` is a populated object on list/detail responses, but only a
       // raw id string on the create response — guard for both.
       category: json['category'] is Map<String, dynamic>

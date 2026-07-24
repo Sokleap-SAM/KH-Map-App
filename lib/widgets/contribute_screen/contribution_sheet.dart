@@ -10,6 +10,7 @@ import '../../providers/settings_provider.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/text_strings.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 import '../bookmark_screen/favorite_place_card.dart';
 import 'contribution_card.dart';
 
@@ -27,13 +28,19 @@ class ContributionSheet extends StatelessWidget {
     this.distanceLabel,
   });
 
-  static const Color _divider = Colors.white12;
-
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     final color = getColorForCategory(contribution.categoryName);
     final icon = getIconForCategory(contribution.categoryName);
+
+    Widget divider() => Divider(
+      color: p.divider,
+      height: 1,
+      indent: 16,
+      endIndent: 16,
+    );
 
     return DraggableScrollableSheet(
       initialChildSize: 0.68,
@@ -42,16 +49,16 @@ class ContributionSheet extends StatelessWidget {
       expand: false,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.primaryColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          decoration: BoxDecoration(
+            color: p.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
           ),
           child: ListView(
             controller: scrollController,
             padding: EdgeInsets.zero,
             children: [
-              _dragHandle(),
-              _miniMap(color, icon),
+              _dragHandle(p),
+              _miniMap(p, color, icon),
               const SizedBox(height: 16),
               _titleBlock(context, t, color, icon),
               const SizedBox(height: 16),
@@ -62,10 +69,10 @@ class ContributionSheet extends StatelessWidget {
                 const SizedBox(height: 12),
               ],
               if (contribution.comment.trim().isNotEmpty) ...[
-                _commentBlock(),
+                _commentBlock(p),
                 const SizedBox(height: 8),
               ],
-              const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
+              divider(),
               _InfoRow(
                 icon: Icons.star_rounded,
                 iconColor: const Color(0xFFFFB400),
@@ -75,7 +82,7 @@ class ContributionSheet extends StatelessWidget {
                     : t.noRatingsYet,
                 label: t.yourRating,
               ),
-              const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
+              divider(),
               _InfoRow(
                 icon: icon,
                 iconColor: color,
@@ -84,7 +91,7 @@ class ContributionSheet extends StatelessWidget {
                     ? t.categoryNewPlaceByYou
                     : t.category,
               ),
-              const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
+              divider(),
               _InfoRow(
                 icon: Icons.place_outlined,
                 primary:
@@ -94,7 +101,7 @@ class ContributionSheet extends StatelessWidget {
                     ? t.coordinates
                     : t.coordinatesFromYou(distanceLabel!),
               ),
-              const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
+              divider(),
               _InfoRow(
                 icon: Icons.edit_outlined,
                 primary: t.addedAgo(contribution.createdAt),
@@ -113,21 +120,21 @@ class ContributionSheet extends StatelessWidget {
     return '★' * r + '☆' * (5 - r);
   }
 
-  Widget _dragHandle() {
+  Widget _dragHandle(AppPalette p) {
     return Center(
       child: Container(
         margin: const EdgeInsets.only(top: 10, bottom: 12),
         width: 40,
         height: 4,
         decoration: BoxDecoration(
-          color: Colors.white24,
+          color: p.divider,
           borderRadius: BorderRadius.circular(2),
         ),
       ),
     );
   }
 
-  Widget _miniMap(Color color, IconData icon) {
+  Widget _miniMap(AppPalette p, Color color, IconData icon) {
     final point = LatLng(contribution.latitude, contribution.longitude);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -167,7 +174,7 @@ class ContributionSheet extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white12),
+                    border: Border.all(color: p.border),
                   ),
                 ),
               ),
@@ -213,6 +220,7 @@ class ContributionSheet extends StatelessWidget {
     Color color,
     IconData icon,
   ) {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -230,7 +238,7 @@ class ContributionSheet extends StatelessWidget {
                           context.watch<SettingsProvider>().languageCode,
                         ),
                         style: GoogleFonts.notoSansKhmer(
-                          color: Colors.white,
+                          color: p.textPrimary,
                           fontSize: 21,
                           fontWeight: FontWeight.w600,
                         ),
@@ -247,7 +255,7 @@ class ContributionSheet extends StatelessWidget {
                           ? contribution.rating.toStringAsFixed(1)
                           : '—',
                       style: GoogleFonts.notoSansKhmer(
-                        color: Colors.white,
+                        color: p.textPrimary,
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
@@ -258,7 +266,7 @@ class ContributionSheet extends StatelessWidget {
                     Text(
                       '·',
                       style: GoogleFonts.notoSansKhmer(
-                        color: AppColors.secondaryTextColor,
+                        color: p.subtitle,
                         fontSize: 13,
                       ),
                     ),
@@ -270,7 +278,7 @@ class ContributionSheet extends StatelessWidget {
                         formatCategoryLabel(contribution.categoryName),
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.notoSansKhmer(
-                          color: AppColors.secondaryTextColor,
+                          color: p.subtitle,
                           fontSize: 13,
                         ),
                       ),
@@ -283,7 +291,7 @@ class ContributionSheet extends StatelessWidget {
           IconButton(
             tooltip: t.close,
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close, color: Colors.white70),
+            icon: Icon(Icons.close, color: p.textSecondary),
           ),
         ],
       ),
@@ -326,15 +334,15 @@ class ContributionSheet extends StatelessWidget {
           _SheetButton(
             icon: Icons.copy_rounded,
             label: t.copyLocation,
-            background: kFavSurfaceColor,
-            foreground: Colors.white,
+            background: context.palette.surfaceAlt,
+            foreground: context.palette.textPrimary,
             onTap: () => _copyCoordinates(context, t),
           ),
           const SizedBox(width: 10),
           _SheetButton(
             icon: Icons.delete_outline_rounded,
             label: t.delete,
-            background: kFavSurfaceColor,
+            background: context.palette.surfaceAlt,
             foreground: AppColors.alertBorderColor,
             onTap: () => Navigator.of(context).pop(kContribSheetRemove),
           ),
@@ -363,30 +371,30 @@ class ContributionSheet extends StatelessWidget {
     );
   }
 
-  Widget _commentBlock() {
+  Widget _commentBlock(AppPalette p) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: kFavSurfaceColor,
+          color: p.surfaceAlt,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: kFavBorderColor),
+          border: Border.all(color: p.border),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(
+            Icon(
               Icons.format_quote_rounded,
               size: 18,
-              color: Colors.white38,
+              color: p.textFaintest,
             ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 contribution.comment,
                 style: GoogleFonts.notoSansKhmer(
-                  color: Colors.white,
+                  color: p.textPrimary,
                   fontSize: 13.5,
                   height: 1.5,
                 ),
@@ -499,12 +507,13 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: iconColor ?? Colors.white54),
+          Icon(icon, size: 20, color: iconColor ?? p.textFaint),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -514,7 +523,7 @@ class _InfoRow extends StatelessWidget {
                   primary,
                   style: GoogleFonts.notoSansKhmer(
                     fontSize: 14,
-                    color: Colors.white,
+                    color: p.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -522,7 +531,7 @@ class _InfoRow extends StatelessWidget {
                   label,
                   style: GoogleFonts.notoSansKhmer(
                     fontSize: 12,
-                    color: AppColors.secondaryTextColor,
+                    color: p.subtitle,
                   ),
                 ),
               ],
