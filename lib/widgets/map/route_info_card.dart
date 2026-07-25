@@ -5,6 +5,7 @@ import '../../models/route_plan.dart';
 import '../../providers/map_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/constants/text_strings.dart';
+import '../../utils/theme/app_palette.dart';
 
 // Snap stops: collapsed (header only) · mid (summary) · fully expanded.
 const _kSnapSizes = [0.2, 0.5, 0.88];
@@ -37,20 +38,21 @@ class _RoutePlanErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
       child: Column(
         children: [
-          const Icon(
+          Icon(
             Icons.wifi_tethering_error_rounded,
-            color: Colors.white38,
+            color: p.textFaintest,
             size: 40,
           ),
           const SizedBox(height: 12),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
+            style: TextStyle(color: p.textSecondary, fontSize: 14),
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
@@ -167,6 +169,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
       snapSizes: _kSnapSizes,
       builder: (context, scrollController) {
         final t = context.watch<SettingsProvider>().t;
+        final p = context.palette;
         return Consumer<MapProvider>(
           builder: (context, provider, _) {
             final routePlan = provider.routePlan;
@@ -199,10 +202,11 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
             final isSaved = localSaved || providerFavoriteId != null;
 
             return Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: [
+              decoration: BoxDecoration(
+                color: p.surface,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
+                boxShadow: const [
                   BoxShadow(
                     color: Colors.black45,
                     blurRadius: 16,
@@ -221,7 +225,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.grey[600],
+                        color: p.divider,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -236,15 +240,15 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                           planType == 'walk'
                               ? Icons.directions_walk
                               : Icons.directions_bus,
-                          color: Colors.white70,
+                          color: p.textSecondary,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             t.busShort,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: p.textPrimary,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
@@ -260,12 +264,12 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                                     providerFavoriteId,
                                   ),
                             icon: _busy
-                                ? const SizedBox(
+                                ? SizedBox(
                                     width: 20,
                                     height: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white54,
+                                      color: p.textFaint,
                                     ),
                                   )
                                 : Icon(
@@ -274,7 +278,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                                         : Icons.bookmark_add_outlined,
                                     color: isSaved
                                         ? const Color(0xFFD5AC79)
-                                        : Colors.white70,
+                                        : p.textSecondary,
                                     size: 20,
                                   ),
                             tooltip: isSaved
@@ -286,9 +290,9 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                         if (canSave) const SizedBox(width: 12),
                         IconButton(
                           onPressed: widget.onClear,
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.close,
-                            color: Colors.white70,
+                            color: p.textSecondary,
                             size: 20,
                           ),
                           tooltip: 'Clear route',
@@ -322,7 +326,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                     ),
                   ),
 
-                  const Divider(color: Color(0xFF2A2A2A), height: 1),
+                  Divider(color: p.divider, height: 1),
 
                   // ── Loading / error / no-route states ───────────────────
                   if (isLoading)
@@ -331,19 +335,19 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const SizedBox(
+                          SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white54,
+                              color: p.textFaint,
                             ),
                           ),
                           const SizedBox(width: 12),
                           Text(
                             t.findingRoute,
-                            style: const TextStyle(
-                              color: Colors.white54,
+                            style: TextStyle(
+                              color: p.textFaint,
                               fontSize: 14,
                             ),
                           ),
@@ -361,8 +365,8 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                       child: Text(
                         routePlan.message ?? t.noRouteTryLater,
-                        style: const TextStyle(
-                          color: Colors.white54,
+                        style: TextStyle(
+                          color: p.textFaint,
                           fontSize: 14,
                         ),
                       ),
@@ -378,7 +382,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       onTap: (i) => provider.setActiveOptionIndex(i),
                     ),
 
-                    const Divider(color: Color(0xFF333333), height: 1),
+                    Divider(color: p.divider, height: 1),
 
                     // ── Active option details ──────────────────────────────
                     RouteOptionDetails(
@@ -579,7 +583,7 @@ class RouteOptionDetails extends StatelessWidget {
             ),
           ),
 
-        const Divider(color: Color(0xFF2A2A2A), height: 1),
+        Divider(color: context.palette.divider, height: 1),
 
         // Segment list
         Padding(
@@ -610,14 +614,15 @@ class _SummaryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: Colors.white54),
+        Icon(icon, size: 14, color: p.textFaint),
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(color: Colors.white70, fontSize: 12),
+          style: TextStyle(color: p.textSecondary, fontSize: 12),
         ),
       ],
     );
@@ -641,13 +646,14 @@ class _PlanTypeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1565C0) : const Color(0xFF2A2A2A),
+          color: selected ? const Color(0xFF1565C0) : p.surfaceAlt,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -656,13 +662,13 @@ class _PlanTypeChip extends StatelessWidget {
             Icon(
               icon,
               size: 14,
-              color: selected ? Colors.white : Colors.white54,
+              color: selected ? Colors.white : p.textFaint,
             ),
             const SizedBox(width: 5),
             Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.white : Colors.white54,
+                color: selected ? Colors.white : p.textFaint,
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
               ),
@@ -694,12 +700,13 @@ class _WalkSegmentTile extends StatelessWidget {
     ].join(' · ');
 
     final isTransfer = seg.isTransfer;
+    final p = context.palette;
 
     return ListTile(
       dense: true,
       leading: Icon(
         isTransfer ? Icons.transfer_within_a_station : Icons.directions_walk,
-        color: isTransfer ? Colors.orangeAccent : Colors.white54,
+        color: isTransfer ? Colors.orangeAccent : p.textFaint,
         size: 20,
       ),
       title: Row(
@@ -724,14 +731,14 @@ class _WalkSegmentTile extends StatelessWidget {
           ],
           Text(
             t.walkSegment(label),
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+            style: TextStyle(color: p.textPrimary, fontSize: 14),
           ),
         ],
       ),
       subtitle: seg.from != null && seg.to != null
           ? Text(
               '${seg.from!.localizedName(lang)} → ${seg.to!.localizedName(lang)}',
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: p.textFaint, fontSize: 12),
             )
           : null,
       isThreeLine: false,
@@ -768,12 +775,13 @@ class _BusSegmentTile extends StatelessWidget {
 
     final tripId = seg.tripId;
     final canViewDetail = tripId != null && onShowBusDetail != null;
+    final p = context.palette;
 
     return ListTile(
       dense: true,
-      leading: const Icon(
+      leading: Icon(
         Icons.directions_bus,
-        color: Colors.white70,
+        color: p.textSecondary,
         size: 20,
       ),
       trailing: canViewDetail
@@ -831,8 +839,8 @@ class _BusSegmentTile extends StatelessWidget {
           Flexible(
             child: Text(
               routeName,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: p.textPrimary,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -864,17 +872,17 @@ class _BusSegmentTile extends StatelessWidget {
           if (seg.boardAt != null)
             Text(
               t.boardAtStop(seg.boardAt!.localizedName(lang)),
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: p.textFaint, fontSize: 12),
             ),
           if (seg.alightAt != null)
             Text(
               t.alightAtStop(seg.alightAt!.localizedName(lang)),
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: p.textFaint, fontSize: 12),
             ),
           if (wait != null)
             Text(
               live ? t.waitLive(wait) : t.waitEstimated(wait),
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: p.textFaint, fontSize: 12),
             ),
           if (seg.rideMinutes != null || seg.distanceMeters != null)
             Text(
@@ -883,12 +891,12 @@ class _BusSegmentTile extends StatelessWidget {
                 if (seg.distanceMeters != null)
                   _formatDistance(seg.distanceMeters!),
               ].join(' · '),
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: p.textFaint, fontSize: 12),
             ),
           if (seg.totalLegMinutes != null)
             Text(
               t.totalLegMinutes(seg.totalLegMinutes!),
-              style: const TextStyle(color: Colors.white38, fontSize: 11),
+              style: TextStyle(color: p.textFaintest, fontSize: 11),
             ),
         ],
       ),

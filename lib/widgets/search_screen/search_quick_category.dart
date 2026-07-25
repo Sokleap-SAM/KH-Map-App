@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/settings_provider.dart';
+import '../../utils/theme/app_palette.dart';
 
 class SearchQuickCategoryRow extends StatelessWidget {
   const SearchQuickCategoryRow({super.key, required this.onCategorySelected});
@@ -71,17 +72,17 @@ class _QuickCategory extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: const Color(0xFF243350),
+                color: context.palette.surfaceAlt,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white24, width: 1),
+                border: Border.all(color: context.palette.border, width: 1),
               ),
-              child: Icon(icon, color: Colors.white, size: 24),
+              child: Icon(icon, color: context.palette.textPrimary, size: 24),
             ),
             const SizedBox(height: 6),
             Text(
               label,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white,
+                color: context.palette.textPrimary,
                 fontSize: 11,
               ),
             ),

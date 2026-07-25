@@ -5,6 +5,7 @@ import '../../models/place.dart';
 import '../../providers/settings_provider.dart';
 import '../../screens/search_screen.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 
 /// A category shown under the search bar. Tapping it filters the map to the
 /// nearby places whose category name contains any of [keywords].
@@ -101,8 +102,9 @@ class _MapSearchBarState extends State<MapSearchBar> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Container(
-      color: AppColors.primaryColor,
+      color: p.scaffold,
       padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 4),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -113,7 +115,7 @@ class _MapSearchBarState extends State<MapSearchBar> {
             child: Container(
               height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFF243350),
+                color: p.surfaceAlt,
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(color: AppColors.secondaryColor, width: 1.5),
               ),
@@ -130,7 +132,7 @@ class _MapSearchBarState extends State<MapSearchBar> {
                     child: Text(
                       t.searchPlacesHint,
                       style: GoogleFonts.notoSansKhmer(
-                        color: Colors.white70,
+                        color: p.textSecondary,
                         fontSize: 14,
                       ),
                     ),
@@ -174,7 +176,7 @@ class _MapSearchBarState extends State<MapSearchBar> {
                 _showCategories
                     ? Icons.keyboard_arrow_up
                     : Icons.keyboard_arrow_down,
-                color: Colors.white70,
+                color: p.textSecondary,
                 size: 14,
               ),
             ),
@@ -202,6 +204,7 @@ class _CategoryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
@@ -217,7 +220,7 @@ class _CategoryButton extends StatelessWidget {
                 color: selected ? color : color.withAlpha(50),
                 borderRadius: BorderRadius.circular(10),
                 border: selected
-                    ? Border.all(color: Colors.white, width: 1.5)
+                    ? Border.all(color: p.textPrimary, width: 1.5)
                     : null,
               ),
               child: Icon(
@@ -230,7 +233,7 @@ class _CategoryButton extends StatelessWidget {
             Text(
               label,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white,
+                color: p.textPrimary,
                 fontSize: 10,
                 fontWeight: selected ? FontWeight.bold : FontWeight.normal,
               ),

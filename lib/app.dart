@@ -27,12 +27,14 @@ class App extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TransitProvider()),
         ChangeNotifierProvider(create: (_) => DriverProvider()),
       ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.system,
-        home: const _RoleAwareShell(),
+      child: Consumer<SettingsProvider>(
+        builder: (context, settings, _) => MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: settings.themeMode,
+          home: const _RoleAwareShell(),
+        ),
       ),
     );
   }

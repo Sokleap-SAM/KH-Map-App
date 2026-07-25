@@ -6,6 +6,8 @@ import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
+import '../../utils/theme/app_palette.dart';
+import 'admin_place_request_history_screen.dart';
 
 /// Admin home: live/simulation mode badge + aggregate counts from
 /// GET /transit/admin/dashboard. Day/Week/Month/Year tabs re-query the
@@ -66,6 +68,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         foregroundColor: Colors.white,
         title: Text(t.adminDashboardTitle),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: t.history,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const AdminPlaceRequestHistoryScreen(),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _load,
@@ -167,15 +178,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _sectionHeader(String title, String? subtitle) {
+    final p = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            color: p.textPrimary,
           ),
         ),
         if (subtitle != null)
@@ -183,7 +195,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             padding: const EdgeInsets.only(top: 2),
             child: Text(
               subtitle,
-              style: const TextStyle(fontSize: 11, color: Colors.black45),
+              style: TextStyle(fontSize: 11, color: p.textFaint),
             ),
           ),
       ],
@@ -242,7 +254,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 Text(
                   t.systemMode,
-                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                  style: TextStyle(
+                    color: context.palette.textSecondary,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -265,8 +280,9 @@ class _PeriodTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Material(
-      color: selected ? AppColors.primaryColor : Colors.white,
+      color: selected ? p.accent : p.surfaceAlt,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -277,13 +293,13 @@ class _PeriodTab extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? AppColors.primaryColor : Colors.black26,
+              color: selected ? p.accent : p.border,
             ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? Colors.white : Colors.black87,
+              color: selected ? p.onAccent : p.textPrimary,
               fontWeight: selected ? FontWeight.bold : FontWeight.w500,
               fontSize: 13,
             ),
@@ -308,12 +324,13 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: p.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: p.border),
         boxShadow: const [
           BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
@@ -323,12 +340,12 @@ class _MetricCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(metric.icon, color: AppColors.primaryColor, size: 20),
+              Icon(metric.icon, color: p.subtitle, size: 20),
               const Spacer(),
               Text(
                 '${metric.value}',
-                style: const TextStyle(
-                  color: AppColors.primaryColor,
+                style: TextStyle(
+                  color: p.textPrimary,
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
                 ),
@@ -342,10 +359,10 @@ class _MetricCard extends StatelessWidget {
                 : metric.labelKm,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: p.textPrimary,
             ),
           ),
         ],

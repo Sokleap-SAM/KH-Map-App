@@ -13,6 +13,7 @@ import '../services/favorite_routes_service.dart';
 import '../services/favorites_service.dart';
 import '../utils/constants/colors.dart';
 import '../utils/constants/text_strings.dart';
+import '../utils/theme/app_palette.dart';
 import '../widgets/bookmark_screen/favorite_place_card.dart';
 import '../widgets/bookmark_screen/favorite_place_sheet.dart';
 import '../widgets/bookmark_screen/favorite_route_card.dart';
@@ -232,28 +233,29 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
   Future<void> _confirmClearAll() async {
     final t = context.read<SettingsProvider>().t;
+    final p = context.palette;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF243456),
+        backgroundColor: p.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           t.clearAllBookmarksTitle,
           style: GoogleFonts.notoSansKhmer(
-            color: Colors.white,
+            color: p.textPrimary,
             fontWeight: FontWeight.w600,
           ),
         ),
         content: Text(
           t.clearAllBookmarksBody(_favorites.length),
-          style: GoogleFonts.notoSansKhmer(color: Colors.white70, fontSize: 13),
+          style: GoogleFonts.notoSansKhmer(color: p.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               t.cancel,
-              style: GoogleFonts.notoSansKhmer(color: Colors.white70),
+              style: GoogleFonts.notoSansKhmer(color: p.textSecondary),
             ),
           ),
           TextButton(
@@ -375,7 +377,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     final visible = _visibleFavorites(user);
 
     return Scaffold(
-      backgroundColor: AppColors.primaryColor,
+      backgroundColor: context.palette.scaffold,
       body: SafeArea(
         child: Column(
           children: [
@@ -434,9 +436,10 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     required bool selected,
     required VoidCallback onTap,
   }) {
+    final p = context.palette;
     return Expanded(
       child: Material(
-        color: selected ? AppColors.secondaryColor : kFavSurfaceColor,
+        color: selected ? AppColors.secondaryColor : p.surfaceAlt,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           onTap: onTap,
@@ -447,7 +450,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: selected ? AppColors.secondaryColor : kFavBorderColor,
+                color: selected ? AppColors.secondaryColor : p.border,
               ),
             ),
             child: Row(
@@ -456,13 +459,13 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 Icon(
                   icon,
                   size: 16,
-                  color: selected ? AppColors.primaryColor : Colors.white70,
+                  color: selected ? AppColors.primaryColor : p.textSecondary,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   label,
                   style: GoogleFonts.notoSansKhmer(
-                    color: selected ? AppColors.primaryColor : Colors.white70,
+                    color: selected ? AppColors.primaryColor : p.textSecondary,
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),
@@ -501,7 +504,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     }
     return RefreshIndicator(
       color: AppColors.secondaryColor,
-      backgroundColor: const Color(0xFF243456),
+      backgroundColor: context.palette.surface,
       onRefresh: _loadRoutes,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -554,7 +557,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 Text(
                   isPlaces ? t.favoritePlaces : t.favoriteRoutes,
                   style: GoogleFonts.notoSansKhmer(
-                    color: Colors.white,
+                    color: context.palette.textPrimary,
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
                   ),
@@ -567,7 +570,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                       ? t.savedPlacesCount(count)
                       : t.savedRoutesCount(count),
                   style: GoogleFonts.notoSansKhmer(
-                    color: AppColors.secondaryTextColor,
+                    color: context.palette.subtitle,
                     fontSize: 12.5,
                   ),
                 ),
@@ -581,9 +584,10 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   }
 
   Widget _sortMenu(bool hasLocation, AppTexts t) {
+    final p = context.palette;
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.tune_rounded, color: Colors.white),
-      color: const Color(0xFF243456),
+      icon: Icon(Icons.tune_rounded, color: p.textPrimary),
+      color: p.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       tooltip: t.sort,
       onSelected: (value) {
@@ -608,7 +612,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 Icons.delete_sweep_outlined,
                 size: 18,
                 color: _favorites.isEmpty
-                    ? Colors.white24
+                    ? p.textFaintest
                     : AppColors.alertBorderColor,
               ),
               const SizedBox(width: 10),
@@ -616,7 +620,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 t.deleteAll,
                 style: GoogleFonts.notoSansKhmer(
                   color: _favorites.isEmpty
-                      ? Colors.white24
+                      ? p.textFaintest
                       : AppColors.alertBorderColor,
                   fontSize: 13,
                 ),
@@ -630,6 +634,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
   PopupMenuItem<String> _sortItem(String value, String label) {
     final selected = _sort == value;
+    final p = context.palette;
     return PopupMenuItem<String>(
       value: value,
       child: Row(
@@ -637,13 +642,13 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
           Icon(
             selected ? Icons.radio_button_checked : Icons.radio_button_off,
             size: 18,
-            color: selected ? AppColors.secondaryColor : Colors.white38,
+            color: selected ? AppColors.secondaryColor : p.textFaintest,
           ),
           const SizedBox(width: 10),
           Text(
             label,
             style: GoogleFonts.notoSansKhmer(
-              color: selected ? Colors.white : Colors.white70,
+              color: selected ? p.textPrimary : p.textSecondary,
               fontSize: 13,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             ),
@@ -655,17 +660,18 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
   /// Google-Maps-style "list" header card sitting above the entries.
   Widget _listBanner(AppTexts t) {
+    final p = context.palette;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF243456), Color(0xFF1A2A4C)],
+        gradient: LinearGradient(
+          colors: [p.surface, p.surfaceAlt],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: kFavBorderColor),
+        border: Border.all(color: p.border),
       ),
       child: Row(
         children: [
@@ -694,7 +700,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 Text(
                   t.myFavoritesList,
                   style: GoogleFonts.notoSansKhmer(
-                    color: Colors.white,
+                    color: p.textPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
@@ -702,16 +708,16 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.lock_outline,
                       size: 13,
-                      color: Colors.white54,
+                      color: p.textFaint,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       t.privateListCount(_favorites.length),
                       style: GoogleFonts.notoSansKhmer(
-                        color: Colors.white54,
+                        color: p.textFaint,
                         fontSize: 12,
                       ),
                     ),
@@ -720,7 +726,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: Colors.white38),
+          Icon(Icons.chevron_right, color: p.textFaintest),
         ],
       ),
     );
@@ -757,10 +763,11 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     required bool selected,
     required VoidCallback onTap,
   }) {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: Material(
-        color: selected ? AppColors.secondaryColor : kFavSurfaceColor,
+        color: selected ? AppColors.secondaryColor : p.surfaceAlt,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           onTap: onTap,
@@ -771,13 +778,13 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: selected ? AppColors.secondaryColor : kFavBorderColor,
+                color: selected ? AppColors.secondaryColor : p.border,
               ),
             ),
             child: Text(
               label,
               style: GoogleFonts.notoSansKhmer(
-                color: selected ? AppColors.primaryColor : Colors.white70,
+                color: selected ? AppColors.primaryColor : p.textSecondary,
                 fontSize: 12.5,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               ),
@@ -823,7 +830,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
     return RefreshIndicator(
       color: AppColors.secondaryColor,
-      backgroundColor: const Color(0xFF243456),
+      backgroundColor: context.palette.surface,
       onRefresh: _load,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -869,6 +876,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     String? actionLabel,
     VoidCallback? onAction,
   }) {
+    final p = context.palette;
     return Center(
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -890,7 +898,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
               title,
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white,
+                color: p.textPrimary,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -901,7 +909,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 subtitle,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.notoSansKhmer(
-                  color: AppColors.secondaryTextColor,
+                  color: p.subtitle,
                   fontSize: 13,
                   height: 1.5,
                 ),

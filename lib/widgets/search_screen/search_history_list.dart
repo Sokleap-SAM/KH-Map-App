@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/search_history_service.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 
 class SearchHistoryList extends StatefulWidget {
   final List<SearchHistoryEntry> items;
@@ -41,9 +42,9 @@ class _SearchHistoryListState extends State<SearchHistoryList> {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2A4C),
+        color: context.palette.surfaceAlt,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12, width: 1),
+        border: Border.all(color: context.palette.border, width: 1),
       ),
       clipBehavior: Clip.antiAlias,
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -58,19 +59,19 @@ class _SearchHistoryListState extends State<SearchHistoryList> {
               onDismissed: () => widget.onDismiss?.call(visible[i]),
             ),
             if (i != visible.length - 1)
-              const Divider(
+              Divider(
                 height: 1,
                 thickness: 1,
-                color: Colors.white12,
+                color: context.palette.divider,
                 indent: 16,
                 endIndent: 16,
               ),
           ],
           if (widget.items.length > widget.initialVisible) ...[
-            const Divider(
+            Divider(
               height: 1,
               thickness: 1,
-              color: Colors.white12,
+              color: context.palette.divider,
               indent: 16,
               endIndent: 16,
             ),
@@ -149,8 +150,9 @@ class _HistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Material(
-      color: const Color(0xFF1A2A4C),
+      color: p.surfaceAlt,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -158,9 +160,9 @@ class _HistoryRow extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.access_time,
-                color: Colors.white70,
+                color: p.textFaint,
                 size: 22,
               ),
               const SizedBox(width: 12),
@@ -175,7 +177,7 @@ class _HistoryRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.notoSansKhmer(
-                        color: Colors.white,
+                        color: p.textPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -186,16 +188,16 @@ class _HistoryRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.notoSansKhmer(
-                        color: AppColors.secondaryTextColor,
+                        color: p.subtitle,
                         fontSize: 12,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.north_west,
-                color: Colors.white38,
+                color: p.textFaintest,
                 size: 18,
               ),
             ],

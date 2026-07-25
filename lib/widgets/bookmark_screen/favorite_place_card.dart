@@ -7,10 +7,7 @@ import '../../services/favorites_service.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
-
-/// Surface colour shared by the saved-places cards, banner and sheet.
-const Color kFavSurfaceColor = Color(0xFF1A2A4C);
-const Color kFavBorderColor = Colors.white12;
+import '../../utils/theme/app_palette.dart';
 
 /// Turns a raw category slug (`coffee_shop`) into a readable label.
 String formatCategoryLabel(String? name) {
@@ -45,11 +42,12 @@ class FavoritePlaceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     final color = getColorForCategory(favorite.categoryName);
     final icon = getIconForCategory(favorite.categoryName);
 
     return Material(
-      color: kFavSurfaceColor,
+      color: p.surfaceAlt,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -57,7 +55,7 @@ class FavoritePlaceCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: kFavBorderColor),
+            border: Border.all(color: p.border),
           ),
           padding: const EdgeInsets.all(10),
           child: Row(
@@ -107,6 +105,7 @@ class FavoritePlaceCard extends StatelessWidget {
     IconData icon,
     Color color,
   ) {
+    final p = context.palette;
     final coords =
         '${favorite.latitude.toStringAsFixed(4)}, '
         '${favorite.longitude.toStringAsFixed(4)}';
@@ -123,22 +122,22 @@ class FavoritePlaceCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.notoSansKhmer(
-            color: Colors.white,
+            color: p.textPrimary,
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 4),
-        _ratingLine(icon, color),
+        _ratingLine(p, icon, color),
         const SizedBox(height: 5),
-        _metaLine(Icons.place_outlined, locationLine),
+        _metaLine(p, Icons.place_outlined, locationLine),
         const SizedBox(height: 3),
-        _metaLine(Icons.bookmark, t.savedAgo(favorite.favoritedAt)),
+        _metaLine(p, Icons.bookmark, t.savedAgo(favorite.favoritedAt)),
       ],
     );
   }
 
-  Widget _ratingLine(IconData icon, Color color) {
+  Widget _ratingLine(AppPalette p, IconData icon, Color color) {
     final rating = favorite.averageRating;
     final category = formatCategoryLabel(favorite.categoryName);
 
@@ -150,7 +149,7 @@ class FavoritePlaceCard extends StatelessWidget {
           Text(
             rating.toStringAsFixed(1),
             style: GoogleFonts.notoSansKhmer(
-              color: Colors.white,
+              color: p.textPrimary,
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
             ),
@@ -160,7 +159,7 @@ class FavoritePlaceCard extends StatelessWidget {
             Text(
               '(${favorite.ratingCount})',
               style: GoogleFonts.notoSansKhmer(
-                color: AppColors.secondaryTextColor,
+                color: p.subtitle,
                 fontSize: 12,
               ),
             ),
@@ -168,7 +167,7 @@ class FavoritePlaceCard extends StatelessWidget {
           Text(
             '  ·  ',
             style: GoogleFonts.notoSansKhmer(
-              color: AppColors.secondaryTextColor,
+              color: p.subtitle,
               fontSize: 12,
             ),
           ),
@@ -181,7 +180,7 @@ class FavoritePlaceCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.notoSansKhmer(
-              color: AppColors.secondaryTextColor,
+              color: p.subtitle,
               fontSize: 12.5,
             ),
           ),
@@ -190,10 +189,10 @@ class FavoritePlaceCard extends StatelessWidget {
     );
   }
 
-  Widget _metaLine(IconData icon, String text) {
+  Widget _metaLine(AppPalette p, IconData icon, String text) {
     return Row(
       children: [
-        Icon(icon, size: 13, color: Colors.white38),
+        Icon(icon, size: 13, color: p.textFaintest),
         const SizedBox(width: 5),
         Flexible(
           child: Text(
@@ -201,7 +200,7 @@ class FavoritePlaceCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.notoSansKhmer(
-              color: Colors.white54,
+              color: p.textFaint,
               fontSize: 11.5,
             ),
           ),
@@ -211,9 +210,10 @@ class FavoritePlaceCard extends StatelessWidget {
   }
 
   Widget _menu(BuildContext context, AppTexts t) {
+    final p = context.palette;
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, color: Colors.white54, size: 20),
-      color: const Color(0xFF243456),
+      icon: Icon(Icons.more_vert, color: p.textFaint, size: 20),
+      color: p.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: EdgeInsets.zero,
       tooltip: t.options,
@@ -222,7 +222,7 @@ class FavoritePlaceCard extends StatelessWidget {
         if (value == 'remove') onRemove();
       },
       itemBuilder: (_) => [
-        _menuItem('copy', Icons.copy_rounded, t.copyLocation, Colors.white),
+        _menuItem('copy', Icons.copy_rounded, t.copyLocation, p.textPrimary),
         _menuItem(
           'remove',
           Icons.bookmark_remove_outlined,

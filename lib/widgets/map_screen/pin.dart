@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/theme/app_palette.dart';
+
 class DroppedPin extends StatelessWidget {
   const DroppedPin({super.key});
 
@@ -52,6 +54,7 @@ class PinInfoSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return DraggableScrollableSheet(
       initialChildSize: 0.35,
       minChildSize: 0.2,
@@ -59,9 +62,10 @@ class PinInfoSheet extends StatelessWidget {
       expand: false,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          decoration: BoxDecoration(
+            color: p.surface,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: ListView(
             controller: scrollController,
@@ -74,7 +78,7 @@ class PinInfoSheet extends StatelessWidget {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey[600],
+                    color: p.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -94,27 +98,27 @@ class PinInfoSheet extends StatelessWidget {
                             placeName != null && !isLoading
                                 ? extractPinTitle(placeName!)
                                 : 'Dropped Pin',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w500,
-                              color: Colors.white,
+                              color: p.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 4),
                           if (isLoading)
-                            const Text(
+                            Text(
                               'Looking up location...',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.grey,
+                                color: p.textFaint,
                               ),
                             )
                           else if (road != null)
                             Text(
                               road!,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.grey,
+                                color: p.textFaint,
                               ),
                             ),
                         ],
@@ -123,21 +127,21 @@ class PinInfoSheet extends StatelessWidget {
                     // Action icons
                     IconButton(
                       onPressed: () {},
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.bookmark_border,
-                        color: Colors.white,
+                        color: p.textPrimary,
                       ),
                     ),
                     IconButton(
                       onPressed: () {},
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.share_outlined,
-                        color: Colors.white,
+                        color: p.textPrimary,
                       ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close, color: Colors.white),
+                      icon: Icon(Icons.close, color: p.textPrimary),
                     ),
                   ],
                 ),
@@ -171,21 +175,23 @@ class PinInfoSheet extends StatelessWidget {
                     _ActionChip(
                       icon: Icons.bookmark_border,
                       label: 'Save',
-                      color: const Color(0xFF2D2D2D),
+                      color: p.surfaceAlt,
+                      foreground: p.textPrimary,
                       onTap: () {},
                     ),
                     const SizedBox(width: 10),
                     _ActionChip(
                       icon: Icons.share_outlined,
                       label: 'Share',
-                      color: const Color(0xFF2D2D2D),
+                      color: p.surfaceAlt,
+                      foreground: p.textPrimary,
                       onTap: () {},
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-              const Divider(color: Color(0xFF333333), height: 1),
+              Divider(color: p.divider, height: 1),
               // Coordinate info row
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -194,25 +200,25 @@ class PinInfoSheet extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.location_on_outlined,
                       size: 20,
-                      color: Colors.grey,
+                      color: p.textFaint,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: Colors.white,
+                          color: p.textPrimary,
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const Divider(color: Color(0xFF333333), height: 1),
+              Divider(color: p.divider, height: 1),
               // Full address
               if (placeName != null && !isLoading)
                 Padding(
@@ -223,18 +229,18 @@ class PinInfoSheet extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.map_outlined,
                         size: 20,
-                        color: Colors.grey,
+                        color: p.textFaint,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           placeName!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: Colors.white,
+                            color: p.textPrimary,
                           ),
                         ),
                       ),
@@ -242,7 +248,7 @@ class PinInfoSheet extends StatelessWidget {
                   ),
                 ),
               if (placeName != null && !isLoading)
-                const Divider(color: Color(0xFF333333), height: 1),
+                Divider(color: p.divider, height: 1),
               // Road info
               if (road != null && !isLoading)
                 Padding(
@@ -252,18 +258,18 @@ class PinInfoSheet extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.route_outlined,
                         size: 20,
-                        color: Colors.grey,
+                        color: p.textFaint,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           road!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: Colors.white,
+                            color: p.textPrimary,
                           ),
                         ),
                       ),
@@ -271,11 +277,12 @@ class PinInfoSheet extends StatelessWidget {
                   ),
                 ),
               if (road != null && !isLoading)
-                const Divider(color: Color(0xFF333333), height: 1),
+                Divider(color: p.divider, height: 1),
               // Loading indicator
               if (isLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
                   child: Row(
                     children: [
                       SizedBox(
@@ -283,13 +290,13 @@ class PinInfoSheet extends StatelessWidget {
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.grey,
+                          color: p.textFaint,
                         ),
                       ),
-                      SizedBox(width: 12),
+                      const SizedBox(width: 12),
                       Text(
                         'Looking up location...',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                        style: TextStyle(fontSize: 14, color: p.textFaint),
                       ),
                     ],
                   ),
@@ -306,6 +313,7 @@ class _ActionChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
+  final Color foreground;
   final VoidCallback onTap;
 
   const _ActionChip({
@@ -313,6 +321,7 @@ class _ActionChip extends StatelessWidget {
     required this.label,
     required this.color,
     required this.onTap,
+    this.foreground = Colors.white,
   });
 
   @override
@@ -329,14 +338,14 @@ class _ActionChip extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: Colors.white),
+              Icon(icon, size: 18, color: foreground),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
-                    color: Colors.white,
+                    color: foreground,
                     fontWeight: FontWeight.w500,
                   ),
                   overflow: TextOverflow.ellipsis,

@@ -6,6 +6,7 @@ import 'package:kh_map_app/screens/login_screen.dart';
 import 'package:kh_map_app/services/auth_service.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
 import 'package:kh_map_app/utils/constants/text_strings.dart';
+import 'package:kh_map_app/utils/theme/app_palette.dart';
 import 'package:provider/provider.dart';
 import 'package:kh_map_app/utils/jwt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -95,43 +96,26 @@ class _AccountScreenState extends State<AccountScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
-    final Color textColor = settings.isDarkMode ? Colors.white : Colors.black87;
-    final Color subTextColor = settings.isDarkMode
-        ? Colors.white70
-        : Colors.black54;
-    final Color containerColor = settings.isDarkMode
-        ? Colors.white.withAlpha(13)
-        : Colors.black.withAlpha(13);
+    final p = context.palette;
+    final Color textColor = p.textPrimary;
+    final Color subTextColor = p.textSecondary;
+    final Color containerColor = p.surfaceAlt;
     return Scaffold(
-      backgroundColor: settings.isDarkMode
-          ? AppColors.primaryColor
-          : Colors.white,
+      backgroundColor: p.scaffold,
       body: Container(
         decoration: BoxDecoration(
-          gradient: settings.isDarkMode
-              ? null
-              : LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: const [
-                    0.0,
-                    1.0,
-                  ], // Smooth transition from top to bottom
-                  colors: [
-                    Colors.white, // Start with pure white
-                    const Color(
-                      0xFFF0F4F8,
-                    ), // End with a very subtle, light blue-grey
-                  ],
-                ),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: const [0.0, 1.0],
+            colors: [p.scaffold, p.gradientEnd],
+          ),
         ),
         child: SafeArea(
           child: isLoading
               ? Center(
                   child: CircularProgressIndicator(
-                    color: settings.isDarkMode
-                        ? const Color(0xFFE8B67D)
-                        : AppColors.primaryColor,
+                    color: AppColors.secondaryColor,
                   ),
                 )
               : Column(
@@ -260,11 +244,11 @@ class _AccountScreenState extends State<AccountScreen> {
                 ),
                 trailing: Switch(
                   value: settings.isDarkMode,
-                  activeColor: const Color(0xFFE8B67D),
+                  activeThumbColor: const Color(0xFFE8B67D),
                   onChanged: (val) => settings.toggleTheme(val),
                 ),
               ),
-              const Divider(height: 1, indent: 0, color: Colors.white24),
+              Divider(height: 1, indent: 0, color: context.palette.divider),
               // Language Switcher
               ListTile(
                 leading: Icon(Icons.language, color: Colors.blueAccent),
@@ -274,9 +258,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 ),
                 trailing: DropdownButton<String>(
                   value: settings.locale.languageCode,
-                  dropdownColor: settings.isDarkMode
-                      ? Color(0xFF1E1E1E)
-                      : Colors.white,
+                  dropdownColor: context.palette.surface,
                   underline: const SizedBox(),
                   items: const [
                     DropdownMenuItem(
@@ -312,8 +294,8 @@ class _AccountScreenState extends State<AccountScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white24),
-        color: Colors.white.withAlpha(13),
+        border: Border.all(color: context.palette.border),
+        color: context.palette.surfaceAlt,
       ),
       child: Text(
         t.accountPrompt,

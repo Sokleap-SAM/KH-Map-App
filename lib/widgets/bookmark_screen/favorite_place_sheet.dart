@@ -10,6 +10,7 @@ import '../../services/favorites_service.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
+import '../../utils/theme/app_palette.dart';
 import 'favorite_place_card.dart';
 
 /// Result returned from [FavoritePlaceSheet] via [Navigator.pop].
@@ -28,13 +29,19 @@ class FavoritePlaceSheet extends StatelessWidget {
     this.distanceLabel,
   });
 
-  static const Color _divider = Colors.white12;
-
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     final color = getColorForCategory(favorite.categoryName);
     final icon = getIconForCategory(favorite.categoryName);
+
+    Widget divider() => Divider(
+      color: p.divider,
+      height: 1,
+      indent: 16,
+      endIndent: 16,
+    );
 
     return DraggableScrollableSheet(
       initialChildSize: 0.64,
@@ -43,29 +50,29 @@ class FavoritePlaceSheet extends StatelessWidget {
       expand: false,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.primaryColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          decoration: BoxDecoration(
+            color: p.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
           ),
           child: ListView(
             controller: scrollController,
             padding: EdgeInsets.zero,
             children: [
-              _dragHandle(),
-              _miniMap(color, icon),
+              _dragHandle(p),
+              _miniMap(p, color, icon),
               const SizedBox(height: 16),
               _titleBlock(context, t, color, icon),
               const SizedBox(height: 16),
               _actionRow(context, t),
               const SizedBox(height: 8),
-              const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
+              divider(),
               _InfoRow(
                 icon: icon,
                 iconColor: color,
                 primary: formatCategoryLabel(favorite.categoryName),
                 label: t.category,
               ),
-              const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
+              divider(),
               _InfoRow(
                 icon: Icons.star_rounded,
                 iconColor: const Color(0xFFFFB400),
@@ -75,7 +82,7 @@ class FavoritePlaceSheet extends StatelessWidget {
                     : t.noRatingsYet,
                 label: t.rating,
               ),
-              const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
+              divider(),
               _InfoRow(
                 icon: Icons.place_outlined,
                 primary:
@@ -85,7 +92,7 @@ class FavoritePlaceSheet extends StatelessWidget {
                     ? t.coordinates
                     : t.coordinatesFromYou(distanceLabel!),
               ),
-              const Divider(color: _divider, height: 1, indent: 16, endIndent: 16),
+              divider(),
               _InfoRow(
                 icon: Icons.bookmark_outline,
                 primary: t.savedAgo(favorite.favoritedAt),
@@ -99,21 +106,21 @@ class FavoritePlaceSheet extends StatelessWidget {
     );
   }
 
-  Widget _dragHandle() {
+  Widget _dragHandle(AppPalette p) {
     return Center(
       child: Container(
         margin: const EdgeInsets.only(top: 10, bottom: 12),
         width: 40,
         height: 4,
         decoration: BoxDecoration(
-          color: Colors.white24,
+          color: p.divider,
           borderRadius: BorderRadius.circular(2),
         ),
       ),
     );
   }
 
-  Widget _miniMap(Color color, IconData icon) {
+  Widget _miniMap(AppPalette p, Color color, IconData icon) {
     final point = LatLng(favorite.latitude, favorite.longitude);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -154,7 +161,7 @@ class FavoritePlaceSheet extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white12),
+                    border: Border.all(color: p.border),
                   ),
                 ),
               ),
@@ -196,6 +203,7 @@ class FavoritePlaceSheet extends StatelessWidget {
     Color color,
     IconData icon,
   ) {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -210,7 +218,7 @@ class FavoritePlaceSheet extends StatelessWidget {
                     context.watch<SettingsProvider>().languageCode,
                   ),
                   style: GoogleFonts.notoSansKhmer(
-                    color: Colors.white,
+                    color: p.textPrimary,
                     fontSize: 21,
                     fontWeight: FontWeight.w600,
                   ),
@@ -222,7 +230,7 @@ class FavoritePlaceSheet extends StatelessWidget {
                       Text(
                         favorite.averageRating!.toStringAsFixed(1),
                         style: GoogleFonts.notoSansKhmer(
-                          color: Colors.white,
+                          color: p.textPrimary,
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -233,7 +241,7 @@ class FavoritePlaceSheet extends StatelessWidget {
                       Text(
                         '·',
                         style: GoogleFonts.notoSansKhmer(
-                          color: AppColors.secondaryTextColor,
+                          color: p.subtitle,
                           fontSize: 13,
                         ),
                       ),
@@ -246,7 +254,7 @@ class FavoritePlaceSheet extends StatelessWidget {
                         formatCategoryLabel(favorite.categoryName),
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.notoSansKhmer(
-                          color: AppColors.secondaryTextColor,
+                          color: p.subtitle,
                           fontSize: 13,
                         ),
                       ),
@@ -259,7 +267,7 @@ class FavoritePlaceSheet extends StatelessWidget {
           IconButton(
             tooltip: t.close,
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close, color: Colors.white70),
+            icon: Icon(Icons.close, color: p.textSecondary),
           ),
         ],
       ),
@@ -282,7 +290,7 @@ class FavoritePlaceSheet extends StatelessWidget {
           _SheetButton(
             icon: Icons.bookmark_remove_outlined,
             label: t.remove,
-            background: kFavSurfaceColor,
+            background: context.palette.surfaceAlt,
             foreground: AppColors.alertBorderColor,
             onTap: () => Navigator.of(context).pop(kFavSheetRemove),
           ),
@@ -392,12 +400,13 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: iconColor ?? Colors.white54),
+          Icon(icon, size: 20, color: iconColor ?? p.textFaint),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -407,7 +416,7 @@ class _InfoRow extends StatelessWidget {
                   primary,
                   style: GoogleFonts.notoSansKhmer(
                     fontSize: 14,
-                    color: Colors.white,
+                    color: p.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -415,7 +424,7 @@ class _InfoRow extends StatelessWidget {
                   label,
                   style: GoogleFonts.notoSansKhmer(
                     fontSize: 12,
-                    color: AppColors.secondaryTextColor,
+                    color: p.subtitle,
                   ),
                 ),
               ],

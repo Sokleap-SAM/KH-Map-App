@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 
 class SearchField extends StatelessWidget {
   final TextEditingController controller;
@@ -22,7 +23,7 @@ class SearchField extends StatelessWidget {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFF243350),
+        color: context.palette.surfaceAlt,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.secondaryColor, width: 1.5),
       ),
@@ -49,7 +50,7 @@ class SearchField extends StatelessWidget {
               autocorrect: false,
               enableSuggestions: false,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white,
+                color: context.palette.textPrimary,
                 fontSize: 14,
               ),
               decoration: InputDecoration(
@@ -57,7 +58,7 @@ class SearchField extends StatelessWidget {
                 border: InputBorder.none,
                 hintText: hint,
                 hintStyle: GoogleFonts.notoSansKhmer(
-                  color: Colors.white70,
+                  color: context.palette.textSecondary,
                   fontSize: 14,
                 ),
               ),

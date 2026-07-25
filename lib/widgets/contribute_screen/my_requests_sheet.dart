@@ -8,6 +8,7 @@ import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
 import '../../utils/place_request_status.dart';
+import '../../utils/theme/app_palette.dart';
 import '../bookmark_screen/favorite_place_card.dart';
 
 /// Read-only notifications sheet listing the user's submitted place requests
@@ -26,15 +27,15 @@ class MyRequestsSheet extends StatelessWidget {
       expand: false,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.primaryColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          decoration: BoxDecoration(
+            color: context.palette.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
           ),
           child: Column(
             children: [
-              _handle(),
+              _handle(context),
               _header(context),
-              const Divider(color: Colors.white12, height: 1),
+              Divider(color: context.palette.divider, height: 1),
               Expanded(
                 child: requests.isEmpty
                     ? _empty(context)
@@ -54,13 +55,13 @@ class MyRequestsSheet extends StatelessWidget {
     );
   }
 
-  Widget _handle() => Center(
+  Widget _handle(BuildContext context) => Center(
         child: Container(
           margin: const EdgeInsets.only(top: 10, bottom: 12),
           width: 40,
           height: 4,
           decoration: BoxDecoration(
-            color: Colors.white24,
+            color: context.palette.divider,
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -84,7 +85,7 @@ class MyRequestsSheet extends StatelessWidget {
                 Text(
                   t.myPlaceRequests,
                   style: GoogleFonts.notoSansKhmer(
-                    color: Colors.white,
+                    color: context.palette.textPrimary,
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                   ),
@@ -92,7 +93,7 @@ class MyRequestsSheet extends StatelessWidget {
                 Text(
                   t.newPlaceRequestStatus,
                   style: GoogleFonts.notoSansKhmer(
-                    color: AppColors.secondaryTextColor,
+                    color: context.palette.subtitle,
                     fontSize: 12,
                   ),
                 ),
@@ -102,7 +103,7 @@ class MyRequestsSheet extends StatelessWidget {
           IconButton(
             tooltip: t.close,
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close, color: Colors.white70),
+            icon: Icon(Icons.close, color: context.palette.textSecondary),
           ),
         ],
       ),
@@ -123,7 +124,7 @@ class MyRequestsSheet extends StatelessWidget {
           Text(
             context.watch<SettingsProvider>().t.noRequestsYet,
             style: GoogleFonts.notoSansKhmer(
-              color: Colors.white70,
+              color: context.palette.textSecondary,
               fontSize: 14,
             ),
           ),
@@ -141,9 +142,9 @@ class MyRequestsSheet extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: kFavSurfaceColor,
+        color: context.palette.surfaceAlt,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kFavBorderColor),
+        border: Border.all(color: context.palette.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -172,7 +173,7 @@ class MyRequestsSheet extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.notoSansKhmer(
-                    color: Colors.white,
+                    color: context.palette.textPrimary,
                     fontSize: 14.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -188,7 +189,7 @@ class MyRequestsSheet extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.notoSansKhmer(
-                          color: AppColors.secondaryTextColor,
+                          color: context.palette.subtitle,
                           fontSize: 12,
                         ),
                       ),
@@ -207,7 +208,7 @@ class MyRequestsSheet extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.notoSansKhmer(
-                            color: Colors.white38,
+                            color: context.palette.textFaintest,
                             fontSize: 11,
                           ),
                         ),
@@ -217,7 +218,7 @@ class MyRequestsSheet extends StatelessWidget {
                 ),
                 if (p.isRejected && p.rejectionReason != null) ...[
                   const SizedBox(height: 8),
-                  _rejectionReason(t, p.rejectionReason!),
+                  _rejectionReason(context, t, p.rejectionReason!),
                 ],
               ],
             ),
@@ -227,7 +228,7 @@ class MyRequestsSheet extends StatelessWidget {
     );
   }
 
-  Widget _rejectionReason(AppTexts t, String reason) {
+  Widget _rejectionReason(BuildContext context, AppTexts t, String reason) {
     const color = AppColors.alertBorderColor;
     return Container(
       width: double.infinity,
@@ -262,7 +263,7 @@ class MyRequestsSheet extends StatelessWidget {
           Text(
             reason,
             style: GoogleFonts.notoSansKhmer(
-              color: Colors.white70,
+              color: context.palette.textSecondary,
               fontSize: 12,
               height: 1.4,
             ),

@@ -3,6 +3,7 @@ import 'package:kh_map_app/models/place.dart';
 import 'package:kh_map_app/models/route_search_selection.dart';
 import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/screens/search_screen.dart';
+import 'package:kh_map_app/utils/theme/app_palette.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -159,8 +160,9 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Material(
-      color: const Color(0xFF102038),
+      color: p.scaffold,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -172,13 +174,13 @@ class _RouteSearchOverlayState extends State<RouteSearchOverlay> {
                 children: [
                   IconButton(
                     onPressed: widget.onClose,
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    icon: Icon(Icons.arrow_back, color: p.textPrimary),
                   ),
                   Expanded(
                     child: Text(
                       t.routePlanner,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: p.textPrimary,
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
@@ -241,25 +243,26 @@ class _SearchFieldTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     final actions = <Widget>[
       if (onUseCurrentLocation != null)
         IconButton(
           onPressed: onUseCurrentLocation,
-          icon: const Icon(Icons.my_location, color: Colors.white54),
+          icon: Icon(Icons.my_location, color: p.textFaint),
           tooltip: t.useCurrentLocation,
           visualDensity: VisualDensity.compact,
         ),
       if (onPickFromMap != null)
         IconButton(
           onPressed: onPickFromMap,
-          icon: const Icon(Icons.pin_drop_outlined, color: Colors.white54),
+          icon: Icon(Icons.pin_drop_outlined, color: p.textFaint),
           tooltip: t.pickFromMap,
           visualDensity: VisualDensity.compact,
         ),
     ];
 
     final Widget suffix = actions.isEmpty
-        ? const Icon(Icons.expand_more, color: Colors.white54)
+        ? Icon(Icons.expand_more, color: p.textFaint)
         : Row(mainAxisSize: MainAxisSize.min, children: actions);
 
     return InkWell(
@@ -267,14 +270,14 @@ class _SearchFieldTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: Ink(
         decoration: BoxDecoration(
-          color: const Color(0xFF233149),
+          color: p.surfaceAlt,
           borderRadius: BorderRadius.circular(14),
         ),
         child: TextField(
           controller: controller,
           readOnly: true,
           onTap: onTap,
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: p.textPrimary),
           decoration: InputDecoration(
             border: InputBorder.none,
             contentPadding: const EdgeInsets.symmetric(
