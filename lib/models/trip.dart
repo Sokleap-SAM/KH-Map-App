@@ -99,28 +99,33 @@ class Trip {
   bool get isCancelled => status == 'cancelled';
 
   factory Trip.fromJson(Map<String, dynamic> json) {
-    // route can be a populated object or a bare string ID
+    // route can be a populated object or a bare string ID. It can also be
+    // null when the referenced doc was deleted — `null as String` throws, and
+    // because the whole list is parsed in one map() a single orphan used to
+    // blank every bus on the map. Degrade to '' instead: such a trip simply
+    // fails the route filter rather than taking the other trips down with it.
     final routeRaw = json['route'];
     String routeId;
     String? routeName;
     String? routeCode;
     if (routeRaw is Map) {
-      routeId = routeRaw['_id'] as String;
+      routeId = routeRaw['_id'] as String? ?? '';
       routeName = routeRaw['name'] as String?;
       routeCode = routeRaw['code'] as String?;
     } else {
-      routeId = routeRaw as String;
+      routeId = routeRaw as String? ?? '';
     }
 
-    // bus can be a populated object or a bare string ID
+    // bus can be a populated object, a bare string ID, or null — a scheduled
+    // trip with no bus assigned yet is a normal state, not corrupt data.
     final busRaw = json['bus'];
     String busId;
     String? busNumberFromObj;
     if (busRaw is Map) {
-      busId = busRaw['_id'] as String;
+      busId = busRaw['_id'] as String? ?? '';
       busNumberFromObj = busRaw['busNumber'] as String?;
     } else {
-      busId = busRaw as String;
+      busId = busRaw as String? ?? '';
     }
 
     LatLng? currentLocation;

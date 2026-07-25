@@ -12,6 +12,7 @@ import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
 import 'admin_color_picker.dart';
 import 'admin_map_size_button.dart';
+import 'admin_place_request_history_screen.dart';
 import 'admin_route_create_screen.dart';
 import 'admin_route_detail_screen.dart';
 
@@ -208,6 +209,15 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
         foregroundColor: Colors.white,
         title: Text(t.manageRoutes),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: t.history,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const AdminPlaceRequestHistoryScreen(),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _load,

@@ -28,6 +28,7 @@ import '../providers/map_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/auth_service.dart';
 import '../utils/constants/colors.dart';
+import '../utils/theme/app_palette.dart';
 import '../services/favorite_routes_service.dart';
 import '../services/favorites_service.dart';
 import '../widgets/map/locate_me_button.dart';
@@ -508,6 +509,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           builder: (context, scrollController) {
             final transit = context.watch<TransitProvider>();
             final settings = context.watch<SettingsProvider>();
+            final p = context.palette;
             // Named `tx` — `t` is used for Trip in the builders below.
             final tx = settings.t;
             final stopName = _normalizeKhmer(stop.name);
@@ -550,9 +552,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 .toList();
 
             return Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              decoration: BoxDecoration(
+                color: p.surface,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(32)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -615,8 +618,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                               const SizedBox(height: 20),
                               Text(
                                 tx.routeItineraryHeader,
-                                style: const TextStyle(
-                                  color: Colors.white38,
+                                style: TextStyle(
+                                  color: p.textFaint,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -628,8 +631,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 const SizedBox(height: 24),
                                 Text(
                                   tx.otherBusLinesHeader,
-                                  style: const TextStyle(
-                                    color: Colors.white38,
+                                  style: TextStyle(
+                                    color: p.textFaint,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -646,8 +649,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                               if (otherTrips.isNotEmpty) ...[
                                 Text(
                                   tx.otherBusLinesHeader,
-                                  style: const TextStyle(
-                                    color: Colors.white38,
+                                  style: TextStyle(
+                                    color: p.textFaint,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -655,13 +658,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 const SizedBox(height: 12),
                                 ...otherTrips.map((t) => _buildStopTripItem(t)),
                               ] else
-                                const Center(
+                                Center(
                                   child: Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 40),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 40),
                                     child: Text(
                                       "No active buses at this stop",
                                       style: TextStyle(
-                                        color: Colors.white24,
+                                        color: p.textFaintest,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -727,20 +731,21 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildStopTripItem(Trip trip) {
+    final p = context.palette;
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Container(
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: Colors.white10,
+          color: p.surfaceAlt,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Center(
           child: Text(
             trip.routeNumber ?? '?',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: p.textPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -748,15 +753,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       ),
       title: Text(
         trip.routeName ?? 'Bus Route',
-        style: const TextStyle(color: Colors.white, fontSize: 14),
+        style: TextStyle(color: p.textPrimary, fontSize: 14),
       ),
       subtitle: Text(
         "To: ${trip.direction}",
-        style: const TextStyle(color: Colors.white38, fontSize: 11),
+        style: TextStyle(color: p.textFaint, fontSize: 11),
       ),
-      trailing: const Icon(
+      trailing: Icon(
         Icons.arrow_forward_ios,
-        color: Colors.white12,
+        color: p.textFaintest,
         size: 14,
       ),
       onTap: () {
@@ -773,10 +778,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       isScrollControlled: true,
       builder: (context) {
         final tx = context.watch<SettingsProvider>().t;
+        final p = context.palette;
         return Container(
           margin: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E),
+            color: p.surface,
             borderRadius: BorderRadius.circular(28),
           ),
           child: Column(
@@ -877,18 +883,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         Expanded(
                           child: _InfoBox(
                             label: tx.statusLabel,
-                            content: const Row(
+                            content: Row(
                               children: [
-                                Icon(
+                                const Icon(
                                   Icons.circle,
                                   color: Colors.green,
                                   size: 10,
                                 ),
-                                SizedBox(width: 5),
+                                const SizedBox(width: 5),
                                 Text(
                                   "In service",
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: p.textPrimary,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -904,9 +910,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     Container(
                       padding: const EdgeInsets.all(15),
                       decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(13),
+                        color: p.surfaceAlt,
                         borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: Colors.white12),
+                        border: Border.all(color: p.border),
                       ),
                       child: Row(
                         children: [
@@ -928,15 +934,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                               children: [
                                 Text(
                                   tx.nextStopHeader,
-                                  style: const TextStyle(
-                                    color: Colors.white38,
+                                  style: TextStyle(
+                                    color: p.textFaint,
                                     fontSize: 10,
                                   ),
                                 ),
                                 Text(
                                   trip.nextStopName,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: p.textPrimary,
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -988,12 +994,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: context.palette.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
       ),
       builder: (context) {
         final tx = context.watch<SettingsProvider>().t;
+        final p = context.palette;
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Padding(
@@ -1003,8 +1010,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 children: [
                   Text(
                     tx.selectRoutesHeader,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: p.textPrimary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -1012,7 +1019,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   CheckboxListTile(
                     title: Text(
                       tx.showAll,
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: p.textPrimary),
                     ),
                     value:
                         lineRoutes.isNotEmpty &&
@@ -1032,7 +1039,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       setModalState(() {});
                     },
                   ),
-                  const Divider(color: Colors.white10),
+                  Divider(color: p.divider),
                   Flexible(
                     child: ListView.builder(
                       shrinkWrap: true,
@@ -1047,12 +1054,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           secondary: Icon(Icons.directions_bus, color: color),
                           title: Text(
                             tx.routeCodeLabel(route.code ?? '??'),
-                            style: const TextStyle(color: Colors.white),
+                            style: TextStyle(color: p.textPrimary),
                           ),
                           subtitle: Text(
                             route.name ?? '',
-                            style: const TextStyle(
-                              color: Colors.white38,
+                            style: TextStyle(
+                              color: p.textFaint,
                               fontSize: 11,
                             ),
                           ),
@@ -1105,10 +1112,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 );
               }
             });
+            final p = context.palette;
             return Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              decoration: BoxDecoration(
+                color: p.surface,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(28)),
               ),
               child: Column(
                 children: [
@@ -1117,7 +1126,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white12,
+                      color: p.divider,
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
@@ -1125,8 +1134,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Text(
                       context.watch<SettingsProvider>().t.allStopsHeader,
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: p.textSecondary,
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1150,12 +1159,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   void _showDirectionsPanel(Trip trip) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: context.palette.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (context) {
         final tx = context.watch<SettingsProvider>().t;
+        final p = context.palette;
         return Padding(
           padding: const EdgeInsets.all(25.0),
           child: Column(
@@ -1180,13 +1190,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   const SizedBox(width: 15),
                   Text(
                     tx.startColon,
-                    style: const TextStyle(color: Colors.white54),
+                    style: TextStyle(color: p.textSecondary),
                   ),
                   Expanded(
                     child: Text(
                       trip.allStops.first,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: p.textPrimary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1197,7 +1207,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 margin: const EdgeInsets.only(left: 9),
                 height: 30,
                 width: 2,
-                color: Colors.white10,
+                color: p.divider,
               ),
               Row(
                 children: [
@@ -1205,13 +1215,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   const SizedBox(width: 15),
                   Text(
                     tx.destinationColon,
-                    style: const TextStyle(color: Colors.white54),
+                    style: TextStyle(color: p.textSecondary),
                   ),
                   Expanded(
                     child: Text(
                       trip.direction,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: p.textPrimary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1223,7 +1233,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 child: Text(
                   tx.navigationComingSoon,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white24, fontSize: 12),
+                  style: TextStyle(color: p.textFaintest, fontSize: 12),
                 ),
               ),
               const SizedBox(height: 10),
@@ -1285,14 +1295,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     String label, {
     required VoidCallback onTap,
   }) {
+    final p = context.palette;
     return Expanded(
       child: OutlinedButton.icon(
         onPressed: onTap,
-        icon: Icon(icon, size: 18, color: Colors.white),
-        label: Text(label, style: const TextStyle(color: Colors.white)),
+        icon: Icon(icon, size: 18, color: p.textPrimary),
+        label: Text(label, style: TextStyle(color: p.textPrimary)),
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          side: const BorderSide(color: Colors.white12),
+          side: BorderSide(color: p.border),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -1504,7 +1515,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      color: Colors.white,
+                      color: context.palette.scaffold,
                       height: MediaQuery.of(context).padding.top,
                     ),
                     MapSearchBar(
@@ -1925,7 +1936,7 @@ class _TripStopsListState extends State<TripStopsList> {
                                         shape: BoxShape.circle,
                                         color: isPassed
                                             ? const Color(0xFF1976D2)
-                                            : Colors.white10,
+                                            : context.palette.divider,
                                         border: isCurrentSelectedStop
                                             ? Border.all(
                                                 color: Colors.greenAccent,
@@ -1959,10 +1970,10 @@ class _TripStopsListState extends State<TripStopsList> {
                             color: isCurrentSelectedStop
                                 ? Colors.greenAccent
                                 : (isTarget
-                                      ? Colors.white
+                                      ? context.palette.textPrimary
                                       : (isPassed
-                                            ? Colors.white70
-                                            : Colors.white24)),
+                                            ? context.palette.textSecondary
+                                            : context.palette.textFaintest)),
                             fontSize: 16,
                             height: 1.4,
                             fontWeight: (isTarget || isCurrentSelectedStop)
@@ -2007,9 +2018,10 @@ class _NearbyResultsBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Container(
       width: double.infinity,
-      color: AppColors.primaryColor,
+      color: p.scaffold,
       padding: const EdgeInsets.only(left: 16, right: 8, bottom: 10),
       child: Row(
         children: [
@@ -2019,18 +2031,18 @@ class _NearbyResultsBanner extends StatelessWidget {
             child: Text(
               count == 0 ? t.notFoundShort : t.foundPlaces(count),
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white,
+                color: p.textPrimary,
                 fontSize: 12,
               ),
             ),
           ),
           TextButton.icon(
             onPressed: onClear,
-            icon: const Icon(Icons.close, size: 16, color: Colors.white70),
+            icon: Icon(Icons.close, size: 16, color: p.textSecondary),
             label: Text(
               t.clearFilter,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white70,
+                color: p.textSecondary,
                 fontSize: 12,
               ),
             ),
@@ -2200,7 +2212,7 @@ class _FlowingLineConnectorState extends State<FlowingLineConnector>
     }
 
     // 3. If it's a future segment, show a dim grey line
-    return Container(width: 2, color: Colors.white10);
+    return Container(width: 2, color: context.palette.divider);
   }
 }
 
@@ -2319,8 +2331,8 @@ class _LiveEtaBoxState extends State<_LiveEtaBox> {
       label: label,
       content: Text(
         value,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: context.palette.textPrimary,
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
@@ -2338,10 +2350,11 @@ class _InfoBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(13),
+        color: p.surfaceAlt,
         borderRadius: BorderRadius.circular(15),
       ),
       child: Column(
@@ -2349,7 +2362,7 @@ class _InfoBox extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(color: Colors.white38, fontSize: 10),
+            style: TextStyle(color: p.textFaint, fontSize: 10),
           ),
           const SizedBox(height: 5),
           content,

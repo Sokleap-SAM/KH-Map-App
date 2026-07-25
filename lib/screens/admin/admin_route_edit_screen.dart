@@ -5,6 +5,7 @@ import '../../models/admin_route.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/admin_service.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 import 'admin_color_picker.dart';
 
 /// Edit a route's metadata (name, code, color, loop/direction, status).
@@ -101,7 +102,7 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
     required String label,
   }) {
     final selected = _direction == value;
-    final fg = selected ? Colors.white : AppColors.primaryColor;
+    final fg = selected ? Colors.white : context.palette.textPrimary;
     return Material(
       color: selected ? AppColors.secondaryColor : Colors.transparent,
       borderRadius: BorderRadius.circular(12),
@@ -113,7 +114,9 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? AppColors.secondaryColor : Colors.grey.shade400,
+              color: selected
+                  ? AppColors.secondaryColor
+                  : context.palette.border,
               width: selected ? 2 : 1,
             ),
           ),
@@ -211,7 +214,7 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
               decoration: BoxDecoration(
                 color: routeColorFromHex(_color) ?? Colors.blue,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.black26),
+                border: Border.all(color: context.palette.border),
               ),
             ),
             onTap: () async {

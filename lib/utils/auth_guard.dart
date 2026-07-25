@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../screens/login_screen.dart';
 import '../services/auth_service.dart';
 import 'constants/colors.dart';
+import 'theme/app_palette.dart';
 
 /// Ensures the user is signed in before a gated action (creating a place,
 /// rating, etc.) runs. Guests otherwise fill in a form whose request never
@@ -19,28 +20,29 @@ Future<bool> ensureLoggedIn(
 }) async {
   if (AuthService.isLoggedIn) return true;
 
+  final p = context.palette;
   final proceed = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF243456),
+      backgroundColor: p.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text(
         'ត្រូវការគណនី',
         style: GoogleFonts.notoSansKhmer(
-          color: Colors.white,
+          color: p.textPrimary,
           fontWeight: FontWeight.w600,
         ),
       ),
       content: Text(
         message,
-        style: GoogleFonts.notoSansKhmer(color: Colors.white70, fontSize: 13),
+        style: GoogleFonts.notoSansKhmer(color: p.textSecondary, fontSize: 13),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),
           child: Text(
             'បោះបង់',
-            style: GoogleFonts.notoSansKhmer(color: Colors.white70),
+            style: GoogleFonts.notoSansKhmer(color: p.textSecondary),
           ),
         ),
         TextButton(

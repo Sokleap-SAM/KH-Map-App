@@ -7,6 +7,7 @@ import '../../services/admin_service.dart';
 import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
+import '../../utils/theme/app_palette.dart';
 import '../../widgets/admin/reject_reason_dialog.dart';
 import '../../widgets/bookmark_screen/favorite_place_card.dart';
 import 'admin_place_request_detail_screen.dart';
@@ -177,12 +178,19 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
         child: ListView(
           children: [
             const SizedBox(height: 120),
-            const Icon(Icons.inbox_outlined, size: 64, color: Colors.black26),
+            Icon(
+              Icons.inbox_outlined,
+              size: 64,
+              color: context.palette.textFaintest,
+            ),
             const SizedBox(height: 12),
             Center(
               child: Text(
                 t.noNewRequests,
-                style: const TextStyle(color: Colors.black54, fontSize: 15),
+                style: TextStyle(
+                  color: context.palette.textSecondary,
+                  fontSize: 15,
+                ),
               ),
             ),
           ],
@@ -259,9 +267,9 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
                               formatCategoryLabel(p.category?.name),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12.5,
-                                color: Colors.black54,
+                                color: context.palette.subtitle,
                               ),
                             ),
                           ),
@@ -271,18 +279,18 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
                       Text(
                         '${p.latitude.toStringAsFixed(5)}, '
                         '${p.longitude.toStringAsFixed(5)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11.5,
-                          color: Colors.black45,
+                          color: context.palette.textFaint,
                         ),
                       ),
                       if (p.createdAt != null) ...[
                         const SizedBox(height: 2),
                         Text(
                           t.submittedAgo(p.createdAt!),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11.5,
-                            color: Colors.black38,
+                            color: context.palette.textFaintest,
                           ),
                         ),
                       ],
@@ -309,7 +317,7 @@ class _AdminPlaceRequestsScreenState extends State<AdminPlaceRequestsScreen> {
                       errorBuilder: (_, _, _) => Container(
                         width: 56,
                         height: 56,
-                        color: Colors.black12,
+                        color: context.palette.surfaceAlt,
                       ),
                     ),
                   ),

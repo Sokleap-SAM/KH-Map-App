@@ -8,6 +8,7 @@ import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
 import '../../utils/place_request_status.dart';
+import '../../utils/theme/app_palette.dart';
 import '../../widgets/bookmark_screen/favorite_place_card.dart';
 import 'admin_place_request_detail_screen.dart';
 
@@ -142,13 +143,14 @@ class _AdminPlaceRequestHistoryScreenState
 
   Widget _filterChip(String label, _HistoryFilter value) {
     final selected = _filter == value;
+    final pal = context.palette;
     return ChoiceChip(
       label: Text(label, style: const TextStyle(fontSize: 12.5)),
       selected: selected,
       onSelected: (_) => setState(() => _filter = value),
-      selectedColor: AppColors.primaryColor,
+      selectedColor: pal.accent,
       labelStyle: TextStyle(
-        color: selected ? Colors.white : Colors.black87,
+        color: selected ? pal.onAccent : pal.textPrimary,
         fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
       ),
     );
@@ -183,12 +185,19 @@ class _AdminPlaceRequestHistoryScreenState
         child: ListView(
           children: [
             const SizedBox(height: 120),
-            const Icon(Icons.history_toggle_off, size: 64, color: Colors.black26),
+            Icon(
+              Icons.history_toggle_off,
+              size: 64,
+              color: context.palette.textFaintest,
+            ),
             const SizedBox(height: 12),
             Center(
               child: Text(
                 t.noHistoryYet,
-                style: const TextStyle(color: Colors.black54, fontSize: 15),
+                style: TextStyle(
+                  color: context.palette.textSecondary,
+                  fontSize: 15,
+                ),
               ),
             ),
           ],
@@ -270,9 +279,9 @@ class _AdminPlaceRequestHistoryScreenState
                           formatCategoryLabel(p.category?.name),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12.5,
-                            color: Colors.black54,
+                            color: context.palette.subtitle,
                           ),
                         ),
                       ),
@@ -341,7 +350,10 @@ class _AdminPlaceRequestHistoryScreenState
                 const SizedBox(height: 2),
                 Text(
                   reason,
-                  style: const TextStyle(fontSize: 12.5, color: Colors.black87),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: context.palette.textPrimary,
+                  ),
                 ),
               ],
             ),
@@ -352,16 +364,17 @@ class _AdminPlaceRequestHistoryScreenState
   }
 
   Widget _metaRow(IconData icon, String text) {
+    final pal = context.palette;
     return Row(
       children: [
-        Icon(icon, size: 13, color: Colors.black38),
+        Icon(icon, size: 13, color: pal.textFaintest),
         const SizedBox(width: 4),
         Flexible(
           child: Text(
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11.5, color: Colors.black45),
+            style: TextStyle(fontSize: 11.5, color: pal.textFaint),
           ),
         ),
       ],

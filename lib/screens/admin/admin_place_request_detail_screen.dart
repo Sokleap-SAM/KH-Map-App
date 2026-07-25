@@ -10,6 +10,7 @@ import '../../utils/category_icon.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
 import '../../utils/place_request_status.dart';
+import '../../utils/theme/app_palette.dart';
 import '../../widgets/admin/reject_reason_dialog.dart';
 import '../../widgets/bookmark_screen/favorite_place_card.dart';
 
@@ -134,9 +135,9 @@ class _AdminPlaceRequestDetailScreenState
                     const SizedBox(width: 6),
                     Text(
                       formatCategoryLabel(p.category?.name),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: Colors.black54,
+                        color: context.palette.subtitle,
                       ),
                     ),
                   ],
@@ -244,7 +245,7 @@ class _AdminPlaceRequestDetailScreenState
               loadingBuilder: (_, child, progress) => progress == null
                   ? child
                   : Container(
-                      color: Colors.black12,
+                      color: context.palette.surfaceAlt,
                       alignment: Alignment.center,
                       child: const CircularProgressIndicator(strokeWidth: 2),
                     ),
@@ -336,7 +337,10 @@ class _AdminPlaceRequestDetailScreenState
                 const SizedBox(height: 3),
                 Text(
                   reason,
-                  style: const TextStyle(fontSize: 13.5, color: Colors.black87),
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: context.palette.textPrimary,
+                  ),
                 ),
               ],
             ),
@@ -351,12 +355,13 @@ class _AdminPlaceRequestDetailScreenState
     required String label,
     required String value,
   }) {
+    final pal = context.palette;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: Colors.black45),
+          Icon(icon, size: 20, color: pal.textFaint),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -364,7 +369,7 @@ class _AdminPlaceRequestDetailScreenState
               children: [
                 Text(
                   label,
-                  style: const TextStyle(fontSize: 12, color: Colors.black45),
+                  style: TextStyle(fontSize: 12, color: pal.textFaint),
                 ),
                 const SizedBox(height: 2),
                 Text(value, style: const TextStyle(fontSize: 14)),
@@ -388,7 +393,10 @@ class _AdminPlaceRequestDetailScreenState
         children: [
           Text(
             p.isPending ? t.reviewThisRequest : t.changeStatus,
-            style: const TextStyle(fontSize: 13, color: Colors.black54),
+            style: TextStyle(
+              fontSize: 13,
+              color: context.palette.textSecondary,
+            ),
           ),
           const SizedBox(height: 10),
           Row(

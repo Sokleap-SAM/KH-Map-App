@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 
 /// Prompts the admin for a required rejection reason before rejecting a place
 /// request. Returns the trimmed reason, or null if the admin cancelled.
@@ -60,7 +61,10 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
         children: [
           Text(
             t.rejectReasonHelp,
-            style: const TextStyle(fontSize: 13, color: Colors.black54),
+            style: TextStyle(
+              fontSize: 13,
+              color: context.palette.textSecondary,
+            ),
           ),
           const SizedBox(height: 14),
           TextField(

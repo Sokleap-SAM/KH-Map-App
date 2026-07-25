@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../models/place.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
+import '../../utils/theme/app_palette.dart';
 import 'admin_place_edit_screen.dart';
 
 /// Read-only detail for a place: photos, id, name, category, location, rating.
@@ -107,10 +108,10 @@ class _AdminPlaceDetailScreenState extends State<AdminPlaceDetailScreen> {
     if (p.photos.isEmpty) {
       return Container(
         height: 160,
-        color: Colors.black12,
+        color: context.palette.surfaceAlt,
         alignment: Alignment.center,
         child: Text(context.watch<SettingsProvider>().t.noPhotos,
-            style: const TextStyle(color: Colors.grey)),
+            style: TextStyle(color: context.palette.textFaint)),
       );
     }
     return SizedBox(
@@ -130,9 +131,12 @@ class _AdminPlaceDetailScreenState extends State<AdminPlaceDetailScreen> {
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => Container(
                 width: 280,
-                color: Colors.black12,
+                color: context.palette.surfaceAlt,
                 alignment: Alignment.center,
-                child: const Icon(Icons.broken_image, color: Colors.grey),
+                child: Icon(
+                  Icons.broken_image,
+                  color: context.palette.textFaint,
+                ),
               ),
             ),
           ),
@@ -207,8 +211,9 @@ class _AdminPlaceDetailScreenState extends State<AdminPlaceDetailScreen> {
           SizedBox(
             width: 150,
             child: Text(label,
-                style: const TextStyle(
-                    color: Colors.black54, fontWeight: FontWeight.w500)),
+                style: TextStyle(
+                    color: context.palette.textSecondary,
+                    fontWeight: FontWeight.w500)),
           ),
           Expanded(child: SelectableText(value)),
         ],

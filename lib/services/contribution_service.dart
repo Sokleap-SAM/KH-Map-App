@@ -6,10 +6,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/contribution.dart';
 import '../models/place.dart';
+import '../models/place_rating.dart';
 import 'place_service.dart';
 
+/// Result of [ContributionService.syncWithBackend]: the merged contributions
+/// list plus the raw server-side place requests (which carry the
+/// pending/approved/rejected status for the badges and the bell).
+class ContributionSyncResult {
+  final List<Contribution> contributions;
+  final List<Place> requests;
+
+  const ContributionSyncResult({
+    required this.contributions,
+    required this.requests,
+  });
+}
+
 /// Local-first store for [Contribution]s. Persists to SharedPreferences,
-/// scoped per logged-in user (falls back to a "guest" bucket).
+/// scoped per logged-in user (falls back to a "guest" bucket), and merges the
+/// user's server-side contributions back in via [syncWithBackend] — matched by
+/// their account id — so the list survives lost local storage (reinstall,
+/// cleared app data, new device).
 ///
 /// Photos selected via image_picker live in the app's temp cache, which the
 /// OS may purge. To make them survive a relaunch we copy each picked file
@@ -17,11 +34,25 @@ import 'place_service.dart';
 class ContributionService {
   static const String _keyPrefix = 'contributions_';
   static const String _seenPrefix = 'seen_place_requests_';
+  static const String _removedPrefix = 'removed_sync_ids_';
   static const String _guestSuffix = 'guest';
   static const String _tokenKey = 'access_token';
   static const String _photoDir = 'contribution_photos';
 
   final PlaceService _placeService = PlaceService();
+
+  /// Serializes every local read-modify-write. Without this, two overlapping
+  /// saves both `load()` the same snapshot and the last `_persist` silently
+  /// drops the other's entry (easy to hit: `add` uploads photos to the backend
+  /// first, which takes seconds, and the form sheet can be dismissed while the
+  /// save is still running). Static so every service instance shares one queue.
+  static Future<void> _writeQueue = Future.value();
+
+  static Future<T> _locked<T>(Future<T> Function() action) {
+    final run = _writeQueue.then((_) => action());
+    _writeQueue = run.then((_) {}, onError: (_) {});
+    return run;
+  }
 
   Future<String?> _accessToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -81,21 +112,203 @@ class ContributionService {
     return _localAdd(synced ?? contribution);
   }
 
-  /// Edits are kept local-only so we don't create duplicate database rows.
-  Future<List<Contribution>> update(Contribution contribution) =>
-      _localAdd(contribution);
+  /// Saves an edit to an existing contribution. Pushes the change to the
+  /// backend so it's reflected everywhere the data is read from the database
+  /// (place reviews, the map's average rating, the place itself) — not just in
+  /// this device's local cache — then updates the local copy. Unlike [add],
+  /// this targets the existing document (PATCH) so an edit never creates a
+  /// duplicate. Falls back to a local-only save if the backend is unreachable
+  /// or the entry was never synced (guest / offline original).
+  Future<List<Contribution>> update(Contribution contribution) async {
+    final synced = await _syncEditToBackend(contribution);
+    return _localAdd(synced ?? contribution);
+  }
 
-  /// The current user's submitted place requests (all statuses), newest first.
-  /// Returns an empty list for guests or on failure. Used to surface whether a
-  /// new-place submission is still pending or has been approved / rejected.
-  Future<List<Place>> myPlaceRequests() async {
+  /// Pushes an edited contribution to the backend via the update (PATCH)
+  /// endpoints. Returns a copy reconciled with the server response, or null
+  /// when the edit can't be synced (guest, no server id yet, or a network
+  /// error) so the caller can fall back to a local-only save.
+  Future<Contribution?> _syncEditToBackend(Contribution c) async {
     final token = await _accessToken();
-    if (token == null) return const <Place>[];
+    if (token == null) return null;
+    final localPhotos = c.photos.where((p) => !_isRemote(p)).toList();
     try {
-      return await _placeService.fetchMyPlaceRequests(token);
-    } catch (e) {
-      return const <Place>[];
+      if (c.isCustomPlace) {
+        // A place that was never synced (no server id) has nothing to PATCH —
+        // treat the edit as a first-time create so it still reaches the DB.
+        if (c.placeId == null || c.placeId!.isEmpty) {
+          return _syncToBackend(c);
+        }
+        final categoryId = await _resolveCategoryId(c.categoryName);
+        final place = await _placeService.updatePlaceRequest(
+          placeId: c.placeId!,
+          nameInKhmer: c.placeNameKhmer,
+          nameInLatin: c.placeNameLatin,
+          categoryId: categoryId,
+          longitude: c.longitude,
+          latitude: c.latitude,
+          photoPaths: localPhotos,
+          token: token,
+        );
+        // When new photos were uploaded the backend replaced the place's photo
+        // set, so mirror exactly what it stored; otherwise keep what we have.
+        final photos = localPhotos.isEmpty ? c.photos : place.photos;
+        if (localPhotos.isNotEmpty) await _cleanupPhotos(localPhotos);
+        return c.copyWith(placeId: place.id, photos: photos);
+      }
+
+      // Rating edit. Needs the server ids; without a ratingId there's no row to
+      // PATCH, so fall back to the create/upsert path (which also handles a
+      // rating that was first saved offline).
+      if (c.placeId == null || c.placeId!.isEmpty) return null;
+      if (c.ratingId == null || c.ratingId!.isEmpty) {
+        return _syncToBackend(c);
+      }
+      await _placeService.updateRating(
+        placeId: c.placeId!,
+        ratingId: c.ratingId!,
+        score: c.rating.round().clamp(1, 5),
+        comment: c.comment,
+        token: token,
+      );
+      return c;
+    } catch (_) {
+      return null;
     }
+  }
+
+  /// Merges the user's server-side contributions — place requests they created
+  /// (matched by `createdBy`) and ratings they left (matched by `userId`) —
+  /// into the local list, so "My Contributions" can be rebuilt from the
+  /// database after local storage is lost. Local entries stay the source of
+  /// truth for anything they already cover: server entries are only *added*
+  /// when missing, never overwrite local edits. Entries the user deleted
+  /// locally are tombstoned (see [_removedSyncIds]) and stay hidden. The
+  /// merged list is persisted so it's available offline next launch.
+  ///
+  /// Guests (or full fetch failure) just get the local list back, with each
+  /// fetch failing independently — if only the ratings call fails, place
+  /// requests still merge.
+  Future<ContributionSyncResult> syncWithBackend() async {
+    final token = await _accessToken();
+    if (token == null) {
+      return ContributionSyncResult(
+        contributions: await load(),
+        requests: const [],
+      );
+    }
+
+    List<Place> requests = const [];
+    try {
+      requests = await _placeService.fetchMyPlaceRequests(token);
+    } catch (_) {
+      /* offline / backend down — merge whatever we do have */
+    }
+    List<Map<String, dynamic>> ratings = const [];
+    try {
+      ratings = await _placeService.fetchMyRatings(token);
+    } catch (_) {
+      /* endpoint unavailable — place requests still merge */
+    }
+
+    final contributions = await _locked(() async {
+      final entries = await load();
+      final removed = await _removedSyncIds();
+
+      final knownPlaceIds = {
+        for (final c in entries)
+          if (c.isCustomPlace && c.placeId != null) c.placeId!,
+      };
+      final knownRatingIds = {
+        for (final c in entries)
+          if (c.ratingId != null) c.ratingId!,
+      };
+      // Rated places whose local entry predates ratingId tracking — matched by
+      // placeId so restoring from the server doesn't duplicate them.
+      final ratedPlaceIds = {
+        for (final c in entries)
+          if (!c.isCustomPlace && c.placeId != null) c.placeId!,
+      };
+
+      var changed = false;
+      for (final place in requests) {
+        if (removed.contains(place.id) || knownPlaceIds.contains(place.id)) {
+          continue;
+        }
+        entries.add(_contributionFromPlace(place));
+        changed = true;
+      }
+      for (final raw in ratings) {
+        final rating = PlaceRating.fromJson(raw);
+        if (rating.id.isEmpty ||
+            removed.contains(rating.id) ||
+            knownRatingIds.contains(rating.id)) {
+          continue;
+        }
+        final placeJson = raw['placeId'];
+        if (placeJson is! Map<String, dynamic>) continue; // place deleted
+        final Place place;
+        try {
+          place = Place.fromJson(placeJson);
+        } catch (_) {
+          continue; // malformed populate — skip rather than fail the sync
+        }
+        if (ratedPlaceIds.contains(place.id)) continue;
+        entries.add(_contributionFromRating(rating, place));
+        changed = true;
+      }
+
+      if (changed) {
+        entries.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        await _persist(entries);
+      }
+      return entries;
+    });
+
+    return ContributionSyncResult(
+      contributions: contributions,
+      requests: requests,
+    );
+  }
+
+  /// A place request restored from the server. The rating/comment the user
+  /// typed alongside the original submission never left the device (only the
+  /// place itself is uploaded), so those come back empty.
+  Contribution _contributionFromPlace(Place place) {
+    return Contribution(
+      id: place.id, // server id — stable, so repeated merges can't duplicate
+      placeId: place.id,
+      placeNameKhmer: place.nameInKhmer,
+      placeNameLatin: place.nameInLatin,
+      categoryName: place.category?.name ?? 'Place',
+      latitude: place.latitude,
+      longitude: place.longitude,
+      rating: 0,
+      comment: '',
+      photos: place.photos,
+      isCustomPlace: true,
+      createdAt: place.createdAt ?? DateTime.now(),
+    );
+  }
+
+  /// A rating of an existing place restored from the server, with the place
+  /// details taken from the populated `placeId` document.
+  Contribution _contributionFromRating(PlaceRating rating, Place place) {
+    return Contribution(
+      id: rating.id,
+      placeId: place.id,
+      ratingId: rating.id,
+      placeNameKhmer: place.nameInKhmer,
+      placeNameLatin: place.nameInLatin,
+      categoryName: place.category?.name ?? 'Place',
+      latitude: place.latitude,
+      longitude: place.longitude,
+      rating: rating.score,
+      comment: rating.comment ?? '',
+      photos: rating.photos,
+      isCustomPlace: false,
+      createdAt: rating.createdAt ?? DateTime.now(),
+    );
   }
 
   // ─── Request notifications (seen / unseen tracking) ────────────────────────
@@ -125,12 +338,51 @@ class ContributionService {
     await prefs.setStringList(key, current.toList());
   }
 
-  Future<List<Contribution>> _localAdd(Contribution contribution) async {
-    final entries = await load();
-    entries.removeWhere((c) => c.id == contribution.id);
-    entries.insert(0, contribution);
-    await _persist(entries);
-    return entries;
+  // ─── Removed-entry tombstones ──────────────────────────────────────────────
+  // Server ids (placeId of a created place / ratingId of a rating) the user
+  // deleted locally. [syncWithBackend] skips these so a locally-deleted entry
+  // doesn't get restored from the database on the next sync.
+
+  Future<String> _removedKey() async {
+    final token = await _accessToken();
+    final userId = _extractUserId(token);
+    return '$_removedPrefix${userId ?? _guestSuffix}';
+  }
+
+  Future<Set<String>> _removedSyncIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _removedKey();
+    return (prefs.getStringList(key) ?? const <String>[]).toSet();
+  }
+
+  Future<void> _markRemoved(Iterable<String?> ids) async {
+    final list = ids.whereType<String>().where((id) => id.isNotEmpty).toList();
+    if (list.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _removedKey();
+    final current = (prefs.getStringList(key) ?? const <String>[]).toSet()
+      ..addAll(list);
+    await prefs.setStringList(key, current.toList());
+  }
+
+  Future<List<Contribution>> _localAdd(Contribution contribution) {
+    return _locked(() async {
+      final entries = await load();
+      entries.removeWhere(
+        (c) =>
+            c.id == contribution.id ||
+            // The backend keeps one rating per user per place (upsert on
+            // re-submit), so a new rating of the same place replaces the older
+            // local entry instead of duplicating it.
+            (!contribution.isCustomPlace &&
+                !c.isCustomPlace &&
+                contribution.placeId != null &&
+                c.placeId == contribution.placeId),
+      );
+      entries.insert(0, contribution);
+      await _persist(entries);
+      return entries;
+    });
   }
 
   // ─── Backend sync ────────────────────────────────────────────────────────
@@ -215,16 +467,25 @@ class ContributionService {
       path.startsWith('http://') || path.startsWith('https://');
 
   Future<List<Contribution>> remove(String id) async {
-    final entries = await load();
     final removed = <Contribution>[];
-    entries.removeWhere((c) {
-      if (c.id == id) {
-        removed.add(c);
-        return true;
-      }
-      return false;
+    // Local removal + tombstoning run under the write lock; the slow
+    // best-effort backend cleanup below stays outside so it can't stall other
+    // saves queued behind it.
+    final entries = await _locked(() async {
+      final list = await load();
+      list.removeWhere((c) {
+        if (c.id == id) {
+          removed.add(c);
+          return true;
+        }
+        return false;
+      });
+      await _persist(list);
+      await _markRemoved([
+        for (final c in removed) c.isCustomPlace ? c.placeId : c.ratingId,
+      ]);
+      return list;
     });
-    await _persist(entries);
     for (final c in removed) {
       await _cleanupPhotos(c.photos);
       if (!c.isCustomPlace &&
@@ -242,7 +503,8 @@ class ContributionService {
             );
           }
         } catch (_) {
-          // backend delete is best-effort; local removal still applies
+          // backend delete is best-effort; local removal still applies. If it
+          // failed, the tombstone above keeps the entry hidden regardless.
         }
       }
     }
@@ -250,10 +512,16 @@ class ContributionService {
   }
 
   Future<void> clear() async {
-    final all = await load();
-    final prefs = await SharedPreferences.getInstance();
-    final key = await _userKey();
-    await prefs.remove(key);
+    final all = await _locked(() async {
+      final list = await load();
+      final prefs = await SharedPreferences.getInstance();
+      final key = await _userKey();
+      await prefs.remove(key);
+      await _markRemoved([
+        for (final c in list) c.isCustomPlace ? c.placeId : c.ratingId,
+      ]);
+      return list;
+    });
     for (final c in all) {
       await _cleanupPhotos(c.photos);
     }

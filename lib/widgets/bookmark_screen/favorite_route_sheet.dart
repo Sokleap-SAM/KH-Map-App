@@ -8,6 +8,7 @@ import '../../providers/settings_provider.dart';
 import '../../services/transit_service.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
+import '../../utils/theme/app_palette.dart';
 import '../map/route_info_card.dart' show RouteOptionDetails;
 
 /// Results returned from [FavoriteRouteSheet] via [Navigator.pop].
@@ -71,6 +72,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return DraggableScrollableSheet(
       initialChildSize: 0.66,
       minChildSize: 0.4,
@@ -78,9 +80,9 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
       expand: false,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          decoration: BoxDecoration(
+            color: p.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
           ),
           child: ListView(
             controller: scrollController,
@@ -89,7 +91,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
               _dragHandle(),
               _header(t),
               _goButton(t),
-              const Divider(color: Color(0xFF2A2A2A), height: 1),
+              Divider(color: p.divider, height: 1),
               _content(t),
               const SizedBox(height: 28),
             ],
@@ -106,7 +108,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
         width: 40,
         height: 4,
         decoration: BoxDecoration(
-          color: Colors.white24,
+          color: context.palette.divider,
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -142,7 +144,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
                 Text(
                   fav.displayTitle,
                   style: GoogleFonts.notoSansKhmer(
-                    color: Colors.white,
+                    color: context.palette.textPrimary,
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
                   ),
@@ -153,7 +155,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.notoSansKhmer(
-                    color: Colors.white54,
+                    color: context.palette.textFaint,
                     fontSize: 12.5,
                   ),
                 ),
@@ -171,7 +173,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
           IconButton(
             tooltip: t.close,
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close, color: Colors.white70),
+            icon: Icon(Icons.close, color: context.palette.textSecondary),
           ),
         ],
       ),
@@ -251,7 +253,7 @@ class _FavoriteRouteSheetState extends State<FavoriteRouteSheet> {
             title,
             textAlign: TextAlign.center,
             style: GoogleFonts.notoSansKhmer(
-              color: Colors.white,
+              color: context.palette.textPrimary,
               fontSize: 15,
               fontWeight: FontWeight.w600,
             ),

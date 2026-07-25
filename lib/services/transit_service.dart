@@ -68,7 +68,19 @@ class TransitService {
       throw Exception('Failed to load active trips');
     }
     final List data = jsonDecode(response.body) as List;
-    return data.map((e) => Trip.fromJson(e as Map<String, dynamic>)).toList();
+    final trips = <Trip>[];
+    for (final e in data) {
+      if (e is! Map<String, dynamic>) continue;
+      try {
+        trips.add(Trip.fromJson(e));
+      } catch (err) {
+        // Same rule as route stops: one unparseable trip must not empty the
+        // whole map. `_trips` gates MQTT rendering, so throwing here used to
+        // mean every live bus was silently dropped.
+        debugPrint('Skipping corrupt trip ${e['_id']}: $err');
+      }
+    }
+    return trips;
   }
 
   /// One-shot ETA snapshot. Returns `null` when the trip has no live

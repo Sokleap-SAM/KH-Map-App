@@ -4,6 +4,7 @@ import 'package:kh_map_app/models/place_rating.dart';
 import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/services/place_service.dart';
 import 'package:kh_map_app/utils/auth_guard.dart';
+import 'package:kh_map_app/utils/theme/app_palette.dart';
 import 'package:kh_map_app/widgets/map_screen/write_review_sheet.dart';
 import 'package:provider/provider.dart';
 
@@ -19,10 +20,6 @@ class PlaceReviewsScreen extends StatefulWidget {
 }
 
 class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
-  static const _bgColor = Color(0xFF1E1E1E);
-  static const _surfaceColor = Color(0xFF2D2D2D);
-  static const _dividerColor = Color(0xFF333333);
-
   final PlaceService _service = PlaceService();
   late Future<List<PlaceRating>> _future;
 
@@ -62,28 +59,29 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
     final t = settings.t;
+    final p = context.palette;
     return Scaffold(
-      backgroundColor: _bgColor,
+      backgroundColor: p.scaffold,
       appBar: AppBar(
-        backgroundColor: _bgColor,
+        backgroundColor: p.scaffold,
         elevation: 0,
-        foregroundColor: Colors.white,
+        foregroundColor: p.textPrimary,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               t.reviews,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: p.textPrimary,
               ),
             ),
             Text(
               widget.place.localizedName(settings.languageCode),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: p.textSecondary),
             ),
           ],
         ),
@@ -99,8 +97,8 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: Colors.white70),
+            return Center(
+              child: CircularProgressIndicator(color: p.textSecondary),
             );
           }
           if (snapshot.hasError) {
@@ -111,15 +109,15 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
             return _emptyState();
           }
           return RefreshIndicator(
-            color: Colors.white,
-            backgroundColor: _surfaceColor,
+            color: p.textPrimary,
+            backgroundColor: p.surface,
             onRefresh: () async => _reload(),
             child: ListView.separated(
               padding: const EdgeInsets.only(bottom: 24),
               itemCount: reviews.length + 1,
               separatorBuilder: (_, i) => i == 0
                   ? const SizedBox.shrink()
-                  : const Divider(color: _dividerColor, height: 1, indent: 16, endIndent: 16),
+                  : Divider(color: p.divider, height: 1, indent: 16, endIndent: 16),
               itemBuilder: (_, i) {
                 if (i == 0) return _summaryHeader(reviews);
                 return _ReviewTile(review: reviews[i - 1]);
@@ -138,11 +136,12 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
         ? 0.0
         : reviews.map((r) => r.score).reduce((a, b) => a + b) / reviews.length;
     final count = reviews.length;
+    final p = context.palette;
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surfaceColor,
+        color: p.surface,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -152,10 +151,10 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
             children: [
               Text(
                 avg.toStringAsFixed(1),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  color: p.textPrimary,
                 ),
               ),
               const SizedBox(height: 2),
@@ -169,16 +168,16 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
               children: [
                 Text(
                   context.watch<SettingsProvider>().t.reviewsCount(count),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: p.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   context.watch<SettingsProvider>().t.whatPeopleSaying,
-                  style: const TextStyle(fontSize: 12.5, color: Colors.grey),
+                  style: TextStyle(fontSize: 12.5, color: p.textSecondary),
                 ),
               ],
             ),
@@ -190,24 +189,25 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
 
   Widget _emptyState() {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.rate_review_outlined, size: 56, color: Colors.white24),
+          Icon(Icons.rate_review_outlined, size: 56, color: p.textFaintest),
           const SizedBox(height: 14),
           Text(
             t.noReviewsYet,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: p.textPrimary,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             t.beFirstToReview,
-            style: const TextStyle(fontSize: 13, color: Colors.grey),
+            style: TextStyle(fontSize: 13, color: p.textSecondary),
           ),
         ],
       ),
@@ -216,18 +216,19 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
 
   Widget _errorState() {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.cloud_off_rounded, size: 56, color: Colors.white24),
+          Icon(Icons.cloud_off_rounded, size: 56, color: p.textFaintest),
           const SizedBox(height: 14),
           Text(
             t.couldNotLoadReviews,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: p.textPrimary,
             ),
           ),
           const SizedBox(height: 12),
@@ -235,8 +236,8 @@ class _PlaceReviewsScreenState extends State<PlaceReviewsScreen> {
             onPressed: _reload,
             icon: const Icon(Icons.refresh, size: 18),
             style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.white30),
+              foregroundColor: p.textPrimary,
+              side: BorderSide(color: p.border),
             ),
             label: Text(t.tryAgain),
           ),
@@ -253,6 +254,7 @@ class _ReviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Column(
@@ -269,10 +271,10 @@ class _ReviewTile extends StatelessWidget {
                   children: [
                     Text(
                       review.userName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14.5,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        color: p.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -287,9 +289,9 @@ class _ReviewTile extends StatelessWidget {
                                   .watch<SettingsProvider>()
                                   .t
                                   .timeAgo(review.createdAt!),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey,
+                            color: p.textSecondary,
                           ),
                         ),
                       ],
@@ -303,10 +305,10 @@ class _ReviewTile extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               review.comment!,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13.5,
                 height: 1.45,
-                color: Colors.white70,
+                color: p.textSecondary,
               ),
             ),
           ],

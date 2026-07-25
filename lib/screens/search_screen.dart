@@ -11,6 +11,7 @@ import '../services/place_service.dart';
 import '../utils/constants/text_strings.dart';
 import '../services/search_history_service.dart';
 import '../utils/constants/colors.dart';
+import '../utils/theme/app_palette.dart';
 import '../widgets/search_screen/search_field.dart';
 import '../widgets/search_screen/search_history_list.dart';
 import '../widgets/search_screen/search_quick_category.dart';
@@ -206,7 +207,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final t = context.watch<SettingsProvider>().t;
 
     return Scaffold(
-      backgroundColor: AppColors.primaryColor,
+      backgroundColor: context.palette.scaffold,
       body: SafeArea(
         child: Column(
           children: [
@@ -225,8 +226,8 @@ class _SearchScreenState extends State<SearchScreen> {
                   onCategorySelected: _onQuickCategorySelected,
                 ),
               ),
-              const Divider(
-                color: Colors.white12,
+              Divider(
+                color: context.palette.divider,
                 thickness: 1,
                 height: 24,
                 indent: 16,
@@ -257,7 +258,7 @@ class _SearchScreenState extends State<SearchScreen> {
               t.couldNotLoadPlaces,
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white70,
+                color: context.palette.textSecondary,
                 fontSize: 14,
               ),
             ),
@@ -287,7 +288,7 @@ class _SearchScreenState extends State<SearchScreen> {
               t.searchEmptyPrompt,
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white70,
+                color: context.palette.textSecondary,
                 fontSize: 14,
               ),
             ),
@@ -305,7 +306,7 @@ class _SearchScreenState extends State<SearchScreen> {
               child: Text(
                 t.searchHistory,
                 style: GoogleFonts.notoSansKhmer(
-                  color: Colors.white,
+                  color: context.palette.textPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -331,7 +332,7 @@ class _SearchScreenState extends State<SearchScreen> {
             child: Text(
               _results.isEmpty ? t.results : t.resultsCount(_results.length),
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white,
+                color: context.palette.textPrimary,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),

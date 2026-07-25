@@ -6,7 +6,7 @@ import '../../models/favorite_route.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/text_strings.dart';
-import 'favorite_place_card.dart' show kFavSurfaceColor, kFavBorderColor;
+import '../../utils/theme/app_palette.dart';
 
 /// A saved transit route row in the bookmark screen, styled to match
 /// [FavoritePlaceCard]: a leading route badge, the origin → destination line,
@@ -26,8 +26,9 @@ class FavoriteRouteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Material(
-      color: kFavSurfaceColor,
+      color: p.surfaceAlt,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -35,7 +36,7 @@ class FavoriteRouteCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: kFavBorderColor),
+            border: Border.all(color: p.border),
           ),
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -43,7 +44,7 @@ class FavoriteRouteCard extends StatelessWidget {
             children: [
               _badge(),
               const SizedBox(width: 12),
-              Expanded(child: _details(t)),
+              Expanded(child: _details(p, t)),
               _menu(context, t),
             ],
           ),
@@ -69,7 +70,7 @@ class FavoriteRouteCard extends StatelessWidget {
     );
   }
 
-  Widget _details(AppTexts t) {
+  Widget _details(AppPalette p, AppTexts t) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -78,19 +79,21 @@ class FavoriteRouteCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.notoSansKhmer(
-            color: Colors.white,
+            color: p.textPrimary,
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 6),
         _endpointLine(
+          p,
           Icons.trip_origin,
           Colors.greenAccent,
           favorite.origin.name,
         ),
         const SizedBox(height: 3),
         _endpointLine(
+          p,
           Icons.location_on,
           const Color(0xFFF97316),
           favorite.destination.name,
@@ -98,14 +101,14 @@ class FavoriteRouteCard extends StatelessWidget {
         const SizedBox(height: 5),
         Row(
           children: [
-            const Icon(Icons.bookmark, size: 13, color: Colors.white38),
+            Icon(Icons.bookmark, size: 13, color: p.textFaintest),
             const SizedBox(width: 5),
             Text(
               t.savedAgo(favorite.savedAt),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.notoSansKhmer(
-                color: Colors.white54,
+                color: p.textFaint,
                 fontSize: 11.5,
               ),
             ),
@@ -115,7 +118,7 @@ class FavoriteRouteCard extends StatelessWidget {
     );
   }
 
-  Widget _endpointLine(IconData icon, Color color, String text) {
+  Widget _endpointLine(AppPalette p, IconData icon, Color color, String text) {
     return Row(
       children: [
         Icon(icon, size: 13, color: color),
@@ -126,7 +129,7 @@ class FavoriteRouteCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.notoSansKhmer(
-              color: Colors.white70,
+              color: p.textSecondary,
               fontSize: 12.5,
             ),
           ),
@@ -136,9 +139,10 @@ class FavoriteRouteCard extends StatelessWidget {
   }
 
   Widget _menu(BuildContext context, AppTexts t) {
+    final p = context.palette;
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, color: Colors.white54, size: 20),
-      color: const Color(0xFF243456),
+      icon: Icon(Icons.more_vert, color: p.textFaint, size: 20),
+      color: p.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: EdgeInsets.zero,
       tooltip: t.options,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/settings_provider.dart';
+import '../../utils/theme/app_palette.dart';
 
 /// Parse a backend route `color` string (`#RRGGBB`, `RRGGBB`, or `#AARRGGBB`)
 /// into a [Color]. Returns null when absent/invalid so callers can fall back.
@@ -185,7 +186,7 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
                 decoration: BoxDecoration(
                   color: _color,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.black26),
+                  border: Border.all(color: context.palette.border),
                 ),
               ),
               const SizedBox(width: 12),
