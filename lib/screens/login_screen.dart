@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/providers/settings_provider.dart';
-import 'package:kh_map_app/utils/constants/colors.dart';
+import 'package:kh_map_app/utils/theme/app_palette.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import 'package:kh_map_app/screens/forgot_password_screen.dart';
+import 'package:kh_map_app/screens/verification_screen.dart';
+import 'package:kh_map_app/utils/constants/image_strings.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,18 +33,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       if (isLoginMode) {
-        bool success = await _authService.login(
+        final result = await _authService.login(
           emailController.text,
           passwordController.text,
         );
+        if (!mounted) return;
 
-        if (success) {
-          if (!mounted) return;
+        if (result == LoginResult.success) {
           Navigator.pop(context, true);
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text(t.loginSuccess)));
+        } else if (result == LoginResult.unverified) {
+          // Account exists but the email was never verified — route to the OTP
+          // screen, then finish signing in once verified.
+          final ok = await _verifyThenLogin();
+          if (!mounted) return;
+          if (ok) _finishAuth();
         } else {
+          // No account (or wrong credentials) — fall back to registering.
           final response = await _authService.register(
             nameController.text,
             emailController.text,
@@ -51,10 +60,16 @@ class _LoginScreenState extends State<LoginScreen> {
           if (!mounted) return;
 
           if (response.statusCode == 201) {
-            setState(() => isLoginMode = true);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(t.registerSuccess)),
-            );
+            final ok = await _verifyThenLogin();
+            if (!mounted) return;
+            if (ok) {
+              _finishAuth();
+            } else {
+              setState(() => isLoginMode = true);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(t.registerSuccess)),
+              );
+            }
           } else {
             _showError(t.registerFailedEmailExists);
           }
@@ -65,18 +80,14 @@ class _LoginScreenState extends State<LoginScreen> {
           emailController.text,
           passwordController.text,
         );
-        if (response.statusCode == 201) {
-          bool loginSuccess = await _authService.login(
-            emailController.text,
-            passwordController.text,
-          );
-          if (!mounted) return;
+        if (!mounted) return;
 
-          if (loginSuccess) {
-            _finishAuth();
-          }
-        } else {
+        if (response.statusCode == 201) {
+          // New account created — make them verify the email (OTP) before login.
+          final ok = await _verifyThenLogin();
           if (!mounted) return;
+          if (ok) _finishAuth();
+        } else {
           _showError(t.registerFailed);
         }
       }
@@ -98,8 +109,51 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // After a successful email/password register, make the user verify the email
+  // via the OTP screen, then sign them in. Returns true only when the email was
+  // verified AND the subsequent login succeeded.
+  Future<bool> _verifyThenLogin() async {
+    if (!mounted) return false;
+    final verified = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VerificationScreen(email: emailController.text),
+      ),
+    );
+    if (verified != true || !mounted) return false;
+    final result = await _authService.login(
+      emailController.text,
+      passwordController.text,
+    );
+    return result == LoginResult.success;
+  }
+
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  // Google 1-click: Firebase sign-in → exchange for app JWT. Same success path
+  // as email/password login (pop back to AccountScreen with `true`).
+  void _handleGoogleSignIn() async {
+    final t = context.read<SettingsProvider>().t;
+    setState(() => _isLoading = true);
+    try {
+      final outcome = await _authService.loginWithGoogle();
+      if (!mounted) return;
+      switch (outcome) {
+        case GoogleAuthOutcome.success:
+          Navigator.pop(context, true);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(t.loginSuccess)));
+        case GoogleAuthOutcome.cancelled:
+          break; // User backed out — stay on the screen, say nothing.
+        case GoogleAuthOutcome.failed:
+          _showError(t.googleSignInFailed);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   // Controllers to get the text from inputs
@@ -110,13 +164,14 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Scaffold(
-      backgroundColor: AppColors.primaryColor,
+      backgroundColor: p.scaffold,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          icon: Icon(Icons.arrow_back_ios, color: p.textPrimary),
           onPressed: () => Navigator.pop(context), // Go back to Account Screen
         ),
       ),
@@ -127,8 +182,8 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Text(
               isLoginMode ? t.login : t.createAccount,
-              style: const TextStyle(
-                color: Color(0xFFE8B67D),
+              style: TextStyle(
+                color: p.accent,
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
               ),
@@ -136,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 10),
             Text(
               isLoginMode ? t.loginSubtitle : t.registerSubtitle,
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              style: TextStyle(color: p.textSecondary, fontSize: 14),
             ),
             const SizedBox(height: 40),
 
@@ -189,7 +244,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                   child: Text(
                     t.forgotPasswordLink,
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: p.textFaint, fontSize: 12),
                   ),
                 ),
               ),
@@ -222,7 +277,56 @@ class _LoginScreenState extends State<LoginScreen> {
 
             const SizedBox(height: 20),
 
-            // 5. Toggle Switch
+            // 5. "or" divider
+            Row(
+              children: [
+                Expanded(child: Divider(color: p.divider)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    t.orDivider,
+                    style: TextStyle(color: p.textFaint),
+                  ),
+                ),
+                Expanded(child: Divider(color: p.divider)),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // 6. Continue with Google (Firebase 1-click)
+            SizedBox(
+              width: double.infinity,
+              height: 55,
+              child: OutlinedButton.icon(
+                onPressed: _isLoading ? null : _handleGoogleSignIn,
+                icon: Image.asset(
+                  AppImages.googleIcon,
+                  width: 22,
+                  height: 22,
+                  errorBuilder: (context, error, stackTrace) =>
+                      Icon(Icons.login, color: p.textPrimary),
+                ),
+                label: Text(
+                  t.continueWithGoogle,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: p.textPrimary,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: p.surfaceAlt,
+                  side: BorderSide(color: p.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // 7. Toggle Switch
             Center(
               child: TextButton(
                 onPressed: () {
@@ -232,7 +336,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
                 child: Text(
                   isLoginMode ? t.noAccountSignUp : t.haveAccountSignIn,
-                  style: const TextStyle(color: Color(0xFFE8B67D)),
+                  style: TextStyle(color: p.accent),
                 ),
               ),
             ),
@@ -250,25 +354,26 @@ class _LoginScreenState extends State<LoginScreen> {
     bool isPassword = false,
     TextInputType keyboardType = TextInputType.text,
   }) {
+    final p = context.palette;
     return TextField(
       controller: controller,
       obscureText: isPassword,
       keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: p.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white54),
-        prefixIcon: Icon(icon, color: Colors.white54),
+        labelStyle: TextStyle(color: p.textFaint),
+        prefixIcon: Icon(icon, color: p.textFaint),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: Colors.white24),
+          borderSide: BorderSide(color: p.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: Color(0xFFE8B67D)),
+          borderSide: BorderSide(color: p.accent),
         ),
         filled: true,
-        fillColor: Colors.white.withAlpha(13),
+        fillColor: p.surfaceAlt,
       ),
     );
   }

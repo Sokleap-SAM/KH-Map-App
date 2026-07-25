@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/services/auth_service.dart';
-import 'package:kh_map_app/utils/constants/colors.dart';
+import 'package:kh_map_app/utils/theme/app_palette.dart';
 import 'package:provider/provider.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -63,12 +63,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Scaffold(
-      backgroundColor: AppColors.primaryColor,
+      backgroundColor: p.scaffold,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: p.textPrimary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(30),
@@ -77,8 +78,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           children: [
             Text(
               t.forgotPasswordTitle,
-              style: const TextStyle(
-                color: Color(0xFFE8B67D),
+              style: TextStyle(
+                color: p.accent,
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
               ),
@@ -86,7 +87,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             const SizedBox(height: 10),
             Text(
               _isCodeSent ? t.enterCodeSubtitle : t.enterEmailSubtitle,
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              style: TextStyle(color: p.textSecondary, fontSize: 14),
             ),
             const SizedBox(height: 40),
 
@@ -155,18 +156,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     bool enabled = true,
     TextInputType keyboardType = TextInputType.text,
   }) {
+    final p = context.palette;
     return TextField(
       controller: controller,
       enabled: enabled,
       obscureText: isPassword,
       keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: p.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white54),
-        prefixIcon: Icon(icon, color: Colors.white54),
+        labelStyle: TextStyle(color: p.textFaint),
+        prefixIcon: Icon(icon, color: p.textFaint),
         filled: true,
-        fillColor: Colors.white.withAlpha(13),
+        fillColor: p.surfaceAlt,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
           borderSide: BorderSide.none,

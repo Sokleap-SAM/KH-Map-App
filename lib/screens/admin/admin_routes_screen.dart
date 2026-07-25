@@ -399,7 +399,8 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
             selected: r.id == _selectedId,
             selectedTileColor: _colorFor(r.id).withValues(alpha: 0.08),
             leading: Icon(
-              r.isLine ? Icons.loop : Icons.linear_scale,
+              // isLine: true = directional line, false = circular loop.
+              r.isLine ? Icons.linear_scale : Icons.loop,
               color: _colorFor(r.id),
             ),
             title: Text(title),

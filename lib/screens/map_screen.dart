@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -57,26 +58,68 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   double _currentZoom = 13.0;
+  /// While true, the next map tap sets a simulated "current location" for
+  /// testing the route planner instead of dropping a pin.
+  bool _simulatePickMode = false;
   final Set<String> _selectedRouteIds = {};
   bool _seededFilterFromRoutes = false;
   final Set<String> _favoritePlaceIds = {};
+
+  // Cached provider refs + memoized MQTT route set for the live-tracking wiring:
+  // TransitProvider positions feed MapProvider's co-location riding detection,
+  // and the active trip's routes stay subscribed even if unchecked in the filter.
+  MapProvider? _mapProvider;
+  TransitProvider? _transitProvider;
+  Set<String> _lastMqttRoutes = {};
 
   /// Pushes the current filter to TransitProvider, which opens/closes the
   /// matching MQTT topic subscriptions. Safe to call repeatedly; the provider
   /// only acts on the diff.
   void _syncMqttSubscriptions() {
-    context.read<TransitProvider>().setSubscribedRoutes(
-      Set<String>.from(_selectedRouteIds),
-    );
+    final routes = Set<String>.from(_selectedRouteIds);
+    // During a trip, always track the committed journey's bus-leg routes — even
+    // if the user unchecked them in the filter — so live tracking never breaks.
+    final map = _mapProvider;
+    if (map != null && map.isRoutingActive) {
+      final opt = map.activeOption;
+      if (opt != null) {
+        for (final seg in opt.segments) {
+          final id = seg.route?.id;
+          if (seg.isBus && id != null) routes.add(id);
+        }
+      }
+    }
+    if (routes.length == _lastMqttRoutes.length &&
+        routes.containsAll(_lastMqttRoutes)) {
+      return;
+    }
+    _lastMqttRoutes = routes;
+    (_transitProvider ?? context.read<TransitProvider>())
+        .setSubscribedRoutes(routes);
   }
+
+  // Feed live bus positions into MapProvider on every MQTT tick (co-location
+  // riding detection).
+  void _onTransitTrips() {
+    _mapProvider?.updateLiveTrips(_transitProvider?.trips ?? const []);
+  }
+
+  // Re-sync subscriptions when routing starts/stops or the active option
+  // changes, so the trip's routes get added/removed. Memoized, so the frequent
+  // progress-tick notifications are cheap no-ops.
+  void _onRoutingChanged() => _syncMqttSubscriptions();
 
   @override
   void initState() {
     super.initState();
-    context.read<MapProvider>().init();
-    context.read<TransitProvider>().init();
+    _mapProvider = context.read<MapProvider>();
+    _transitProvider = context.read<TransitProvider>();
+    _mapProvider!.init();
+    _transitProvider!.init();
     _loadFavorites();
     AuthService.tokenNotifier.addListener(_onAuthChanged);
+    _transitProvider!.addListener(_onTransitTrips);
+    _mapProvider!.addListener(_onRoutingChanged);
   }
 
   void _onAuthChanged() {
@@ -131,6 +174,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     AuthService.tokenNotifier.removeListener(_onAuthChanged);
+    _transitProvider?.removeListener(_onTransitTrips);
+    _mapProvider?.removeListener(_onRoutingChanged);
     _mapController.dispose();
     super.dispose();
   }
@@ -277,6 +322,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   void _onMapTap(TapPosition tapPosition, LatLng latLng) {
     final mapProvider = context.read<MapProvider>();
+    // Location-simulation mode: set a fake "current location" for testing the
+    // route planner, then let the provider re-plan from it.
+    if (_simulatePickMode) {
+      setState(() => _simulatePickMode = false);
+      mapProvider.setSimulatedPosition(latLng);
+      _snack(context.read<SettingsProvider>().t.simulatedLocationSet);
+      return;
+    }
     // Map-pick mode: provider reverse-geocodes and fires the pending callback.
     if (mapProvider.isMapPickMode) {
       mapProvider.handleMapPickTap(latLng);
@@ -413,11 +466,25 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _viewBusByTripId(String tripId) {
-    final trips = context.read<TransitProvider>().trips;
-    final match = trips.where((t) => t.id == tripId).firstOrNull;
-    if (match != null) {
-      _showBusDetails(match);
+  Future<void> _viewBusByTripId(String tripId) async {
+    final transit = context.read<TransitProvider>();
+    final local = transit.trips.where((t) => t.id == tripId).firstOrNull;
+    if (local != null) {
+      _showBusDetails(local);
+      return;
+    }
+    // Not in the active-trips list — diagnose, then fall back to a by-id fetch
+    // (the trip may be broadcasting over MQTT without being in that feed).
+    if (kDebugMode) {
+      debugPrint(
+        'View bus: tripId="$tripId" not in active trips '
+        '[${transit.trips.map((t) => t.id).join(", ")}] — fetching by id',
+      );
+    }
+    final fetched = await transit.loadTripById(tripId);
+    if (!mounted) return;
+    if (fetched != null) {
+      _showBusDetails(fetched);
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1251,6 +1318,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final provider = context.watch<MapProvider>();
     final transitProvider = context.watch<TransitProvider>();
+    final t = context.watch<SettingsProvider>().t;
 
     final List<Place> displayPlaces;
     if (provider.hasCategoryFilter) {
@@ -1314,6 +1382,25 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _mapController.move(camTarget, 14);
         provider.consumeCameraMoveTarget();
+      });
+    }
+
+    // One-shot notice when a missed bus triggers a re-plan for the next one.
+    final missedBus = provider.missedBusNotice;
+    if (missedBus != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _snack(t.missedBusReplanning(missedBus));
+        provider.clearMissedBusNotice();
+      });
+    }
+
+    // One-shot notice when the user rode past their stop and we re-route.
+    if (provider.passedStopReroute) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _snack(t.passedStopRerouting);
+        provider.clearPassedStopReroute();
       });
     }
 
@@ -1403,6 +1490,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   onClose: () {
                     // Close the overlay and clear any active routing so the
                     // `RouteInfoCard` is removed when the user taps back.
+                    if (_simulatePickMode) {
+                      setState(() => _simulatePickMode = false);
+                    }
                     provider.closeRouteSearch();
                     provider.clearRouting();
                     provider.removePin();
@@ -1463,6 +1553,90 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           ),
         ),
 
+        // ── Location-simulation button (route-planner testing) ──────────
+        // While routing, drop a fake "current location" on the map to watch
+        // the planner re-route and ETAs refresh as if the user were moving.
+        if (provider.isRoutingActive)
+          Positioned(
+            right: 16,
+            bottom: 176,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (provider.isSimulatingLocation)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: FloatingActionButton(
+                      heroTag: 'sim_stop',
+                      mini: true,
+                      backgroundColor: Colors.white,
+                      tooltip: t.stopSimulating,
+                      onPressed: () {
+                        provider.stopSimulatingLocation();
+                        _snack(t.liveLocationRestored);
+                      },
+                      child: const Icon(
+                        Icons.gps_fixed,
+                        color: Colors.blue,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                // One-tap auto-drive: walk 5 km/h → ride 25 km/h along the plan.
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: FloatingActionButton(
+                    heroTag: 'sim_auto',
+                    mini: true,
+                    backgroundColor: provider.isRouteSimulating
+                        ? const Color(0xFF22C55E)
+                        : const Color(0xFF1A2B4C),
+                    tooltip: t.autoSimulate,
+                    onPressed: () {
+                      if (provider.isRouteSimulating) {
+                        provider.stopRouteSimulation();
+                        _snack(t.liveLocationRestored);
+                      } else {
+                        provider.startRouteSimulation();
+                        _snack(t.autoSimulateStarted);
+                      }
+                    },
+                    child: Icon(
+                      provider.isRouteSimulating
+                          ? Icons.stop
+                          : Icons.play_arrow,
+                      color: provider.isRouteSimulating
+                          ? Colors.white
+                          : const Color(0xFFE8B67D),
+                      size: 20,
+                    ),
+                  ),
+                ),
+                FloatingActionButton(
+                  heroTag: 'sim_pick',
+                  mini: true,
+                  backgroundColor: _simulatePickMode
+                      ? const Color(0xFFF97316)
+                      : const Color(0xFF1A2B4C),
+                  tooltip: t.simulateLocation,
+                  onPressed: () {
+                    setState(() => _simulatePickMode = !_simulatePickMode);
+                    if (_simulatePickMode) _snack(t.simulateLocationHint);
+                  },
+                  child: Icon(
+                    _simulatePickMode
+                        ? Icons.touch_app
+                        : Icons.edit_location_alt,
+                    color: _simulatePickMode
+                        ? Colors.white
+                        : const Color(0xFFE8B67D),
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         // ── Locate-me button ─────────────────────────────────────────────
         LocateMeButton(
           isLoading: provider.placesLoading,
@@ -1477,6 +1651,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         if (provider.isRoutingActive)
           RouteInfoCard(
             onClear: () {
+              if (_simulatePickMode) {
+                setState(() => _simulatePickMode = false);
+              }
               provider.clearRouting();
               provider.removePin();
             },
@@ -1632,6 +1809,38 @@ class _TripStopsListState extends State<TripStopsList> {
     super.dispose();
   }
 
+  double _calculateSegmentProgress(Trip trip, List<String> allStops) {
+    if (trip.currentLocation == null || trip.nextStopIndex <= 0) return 0.0;
+
+    // We need the coordinates of the previous stop and the next stop
+    // Since we only have names in 'allStops', we should look at the
+    // 'routeStops' from the provider to get LatLngs.
+    final provider = context.read<TransitProvider>();
+    final stops = provider.routeStops[trip.routeId] ?? [];
+
+    if (stops.length <= trip.nextStopIndex) return 0.0;
+
+    final LatLng prevStopLoc = stops[trip.nextStopIndex - 1].location;
+    final LatLng nextStopLoc = stops[trip.nextStopIndex].location;
+    final LatLng busLoc = trip.currentLocation!;
+
+    final Distance distance = const Distance();
+
+    double totalSegmentDist = distance.as(
+      LengthUnit.Meter,
+      prevStopLoc,
+      nextStopLoc,
+    );
+    double busDistFromStart = distance.as(
+      LengthUnit.Meter,
+      prevStopLoc,
+      busLoc,
+    );
+
+    if (totalSegmentDist == 0) return 0.0;
+    return (busDistFromStart / totalSegmentDist).clamp(0.0, 1.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     // Determine if the scroll button should be shown
@@ -1741,7 +1950,7 @@ class _TripStopsListState extends State<TripStopsList> {
                           if (!isLast)
                             Expanded(
                               child: Center(
-                                child: FlowingLineConnector(
+                                child: DrivingBusConnector(
                                   isPassed: isLinePassed,
                                   isLoading: isLineLoading,
                                 ),
@@ -2159,6 +2368,186 @@ class _InfoBox extends StatelessWidget {
           content,
         ],
       ),
+    );
+  }
+}
+
+class DrivingBusConnector extends StatefulWidget {
+  final bool isPassed;
+  final bool isLoading;
+
+  const DrivingBusConnector({
+    super.key,
+    required this.isPassed,
+    required this.isLoading,
+  });
+
+  @override
+  State<DrivingBusConnector> createState() => _DrivingBusConnectorState();
+}
+
+class _DrivingBusConnectorState extends State<DrivingBusConnector>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _positionAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3), // Speed of the driving bus
+    );
+
+    _positionAnimation = Tween<double>(
+      begin: -1.0,
+      end: 1.0,
+    ).animate(_controller);
+
+    if (widget.isLoading) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(DrivingBusConnector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isLoading && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.isLoading) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 1. If passed, show solid blue line
+    if (widget.isPassed) {
+      return Container(width: 2.5, color: const Color(0xFF1976D2));
+    }
+
+    // 2. If currently driving on this segment
+    if (widget.isLoading) {
+      return AnimatedBuilder(
+        animation: _positionAnimation,
+        builder: (context, child) {
+          return Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              // The Track (Static Blue Line)
+              Container(
+                width: 2.5,
+                color: const Color(0xFF1976D2).withOpacity(0.3),
+              ),
+
+              // The Moving Bus
+              Align(
+                alignment: Alignment(0, _positionAnimation.value),
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.directions_bus,
+                    size: 12,
+                    color: Color(0xFF1976D2),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    // 3. Future segment
+    return Container(width: 2, color: Colors.white10);
+  }
+}
+
+class LiveSimulationConnector extends StatefulWidget {
+  final bool isPassed;
+  final bool isLoading;
+  final double progress; // 0.0 (at prev stop) to 1.0 (at target stop)
+
+  const LiveSimulationConnector({
+    super.key,
+    required this.isPassed,
+    required this.isLoading,
+    required this.progress,
+  });
+
+  @override
+  State<LiveSimulationConnector> createState() => _LiveSimulationConnectorState();
+}
+
+class _LiveSimulationConnectorState extends State<LiveSimulationConnector>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.isPassed) return Container(width: 2.5, color: const Color(0xFF1976D2));
+    if (!widget.isLoading) return Container(width: 2, color: Colors.white10);
+
+    return Stack(
+      alignment: Alignment.topCenter,
+      clipBehavior: Clip.none,
+      children: [
+        // 1. THE FLOWING LINE (Background)
+        const FlowingLineConnector(isPassed: false, isLoading: true),
+
+        // 2. THE PULSING BUS ICON
+        AnimatedBuilder(
+          animation: _pulseController,
+          builder: (context, child) {
+            return Positioned(
+              // Position the bus based on real-world progress
+              top: widget.progress * 60, // Adjust 60 based on your row height
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1976D2),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.4 * _pulseController.value),
+                      blurRadius: 8 * _pulseController.value,
+                      spreadRadius: 4 * _pulseController.value,
+                    )
+                  ],
+                ),
+                child: const Icon(Icons.directions_bus, size: 10, color: Colors.white),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/settings_provider.dart';
 import '../screens/login_screen.dart';
 import '../services/auth_service.dart';
 import 'constants/colors.dart';
@@ -15,11 +17,12 @@ import 'theme/app_palette.dart';
 /// prompt or leave the login screen without authenticating.
 Future<bool> ensureLoggedIn(
   BuildContext context, {
-  String message =
-      'អ្នកត្រូវចូលគណនីជាមុនសិន ដើម្បីរួមចំណែក។', // "Please sign in first to contribute."
+  String? message,
 }) async {
   if (AuthService.isLoggedIn) return true;
 
+  final t = context.read<SettingsProvider>().t;
+  final msg = message ?? t.signInToContribute;
   final p = context.palette;
   final proceed = await showDialog<bool>(
     context: context,
@@ -27,28 +30,28 @@ Future<bool> ensureLoggedIn(
       backgroundColor: p.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text(
-        'ត្រូវការគណនី',
+        t.signInRequiredTitle,
         style: GoogleFonts.notoSansKhmer(
           color: p.textPrimary,
           fontWeight: FontWeight.w600,
         ),
       ),
       content: Text(
-        message,
+        msg,
         style: GoogleFonts.notoSansKhmer(color: p.textSecondary, fontSize: 13),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),
           child: Text(
-            'បោះបង់',
+            t.cancel,
             style: GoogleFonts.notoSansKhmer(color: p.textSecondary),
           ),
         ),
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(true),
           child: Text(
-            'ចូលគណនី',
+            t.login,
             style: GoogleFonts.notoSansKhmer(
               color: AppColors.secondaryColor,
               fontWeight: FontWeight.w600,

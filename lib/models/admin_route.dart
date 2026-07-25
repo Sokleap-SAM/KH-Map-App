@@ -8,15 +8,15 @@ class AdminRoute {
   final String? name;
   final String? code;
 
-  /// true = loop / circular route (departure stop === terminal). A directional
-  /// line is `isLine == false` and carries a [direction].
+  /// true = directional line (outbound/inbound); false = loop / circular route
+  /// (departure stop === terminal). A directional line carries a [direction].
   final bool isLine;
   final String status;
   final int? stopCount;
   final String? color;
 
   /// 'outbound' | 'inbound' for a bidirectional line; null for a loop
-  /// (`isLine == true`) or a legacy single-direction line.
+  /// (`isLine == false`) or a legacy single-direction line.
   final String? direction;
 
   const AdminRoute({
@@ -30,17 +30,8 @@ class AdminRoute {
     required this.direction,
   });
 
-  /// Human label for the route's type.
-  /// loop → "Loop"; directional → "Line · outbound/inbound"; legacy → "Line".
-  String get typeLabel {
-    if (isLine) return 'រង្វិលជុំ';
-    if (direction == 'inbound') {
-      return 'ទិសដៅ · ចូល';
-    } else if (direction == 'outbound') {
-      return 'ទិសដៅ · ចេញ';
-    }
-    return 'ទិសដៅ';
-  }
+  // The route's human type label is localized in the UI via
+  // `AppTexts.adminRouteType(isLine, direction)` — this model stays language-free.
 
   factory AdminRoute.fromJson(Map<String, dynamic> json) {
     int? count;

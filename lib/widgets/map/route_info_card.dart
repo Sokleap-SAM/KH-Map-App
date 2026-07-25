@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/route_plan.dart';
+import '../../models/route_progress.dart';
+import '../../models/trip.dart';
 import '../../providers/map_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../providers/transit_provider.dart';
 import '../../utils/constants/text_strings.dart';
 import '../../utils/theme/app_palette.dart';
 
@@ -113,7 +116,27 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
   bool _busy = false;
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_reportSheetVisibility);
+    // The sheet opens expanded — report visible now so the 60 s alternative
+    // refresh runs from the start of the trip.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<MapProvider>().setRouteSheetVisible(true);
+    });
+  }
+
+  /// Tells the provider whether the tabs are on screen (sheet not collapsed),
+  /// so the 60 s refresh of the alternative tabs only runs when they're visible.
+  void _reportSheetVisibility() {
+    if (!mounted) return;
+    final visible = _controller.isAttached && _controller.size > 0.3;
+    context.read<MapProvider>().setRouteSheetVisible(visible);
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_reportSheetVisibility);
     _controller.dispose();
     super.dispose();
   }
@@ -204,8 +227,9 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
             return Container(
               decoration: BoxDecoration(
                 color: p.surface,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
                 boxShadow: const [
                   BoxShadow(
                     color: Colors.black45,
@@ -225,7 +249,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: p.divider,
+                        color: p.textFaint,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -254,6 +278,12 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                             ),
                           ),
                         ),
+                        // Live "arrive in ~X min" countdown, recomputed locally
+                        // from GPS progress — no re-plan.
+                        if (provider.routeProgress != null) ...[
+                          _LiveEtaPill(progress: provider.routeProgress!, t: t),
+                          const SizedBox(width: 8),
+                        ],
                         if (canSave)
                           IconButton(
                             onPressed: _busy
@@ -304,6 +334,14 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                     ),
                   ),
 
+                  // ── Faster-route suggestion (non-disruptive) ─────────────
+                  if (provider.fasterSuggestion != null)
+                    _FasterRouteBanner(
+                      savingMinutes: provider.fasterSavingMinutes ?? 0,
+                      onSwitch: provider.switchToFasterRoute,
+                      onDismiss: provider.dismissFasterSuggestion,
+                    ),
+
                   // ── Walk / Transit toggle ────────────────────────────────
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -346,10 +384,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                           const SizedBox(width: 12),
                           Text(
                             t.findingRoute,
-                            style: TextStyle(
-                              color: p.textFaint,
-                              fontSize: 14,
-                            ),
+                            style: TextStyle(color: p.textFaint, fontSize: 14),
                           ),
                         ],
                       ),
@@ -365,10 +400,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                       child: Text(
                         routePlan.message ?? t.noRouteTryLater,
-                        style: TextStyle(
-                          color: p.textFaint,
-                          fontSize: 14,
-                        ),
+                        style: TextStyle(color: p.textFaint, fontSize: 14),
                       ),
                     )
                   else if (routePlan != null && routePlan.found) ...[
@@ -388,6 +420,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                     RouteOptionDetails(
                       option: routePlan.options[clampedIndex],
                       onShowBusDetail: widget.onShowBusDetail,
+                      showLiveProgress: true,
                     ),
                   ],
 
@@ -398,6 +431,125 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
           },
         );
       },
+    );
+  }
+}
+
+/// Header pill showing the live "arrive in ~X min" countdown and current phase
+/// (walking / waiting / riding / arrived). Fed by [MapProvider.routeProgress],
+/// which is recomputed locally each second — no network, no re-plan.
+class _LiveEtaPill extends StatelessWidget {
+  const _LiveEtaPill({required this.progress, required this.t});
+
+  final RouteProgress progress;
+  final AppTexts t;
+
+  @override
+  Widget build(BuildContext context) {
+    final arrived = progress.isArrived;
+    final icon = switch (progress.phase) {
+      RoutePhase.walking => Icons.directions_walk,
+      RoutePhase.waiting => Icons.schedule,
+      RoutePhase.riding => Icons.directions_bus,
+      RoutePhase.arrived => Icons.check_circle,
+    };
+    final color = arrived ? Colors.greenAccent : const Color(0xFF64B5F6);
+    final label = arrived
+        ? t.arrivedLabel
+        : t.arriveInApprox(progress.minutesRemaining);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withAlpha(30),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withAlpha(90)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Dismissible banner offering a faster route found by the background shadow
+/// re-plan. Purely a suggestion — tapping "Switch" adopts it, the ✕ dismisses
+/// it; neither happens automatically.
+class _FasterRouteBanner extends StatelessWidget {
+  const _FasterRouteBanner({
+    required this.savingMinutes,
+    required this.onSwitch,
+    required this.onDismiss,
+  });
+
+  final int savingMinutes;
+  final VoidCallback onSwitch;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF22C55E).withAlpha(30),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF22C55E).withAlpha(120)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.bolt, color: Color(0xFF4ADE80), size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              t.fasterRouteSave(savingMinutes),
+              style: const TextStyle(
+                color: Color(0xFF86EFAC),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onSwitch,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              backgroundColor: const Color(0xFF22C55E),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              t.switchRoute,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+          IconButton(
+            onPressed: onDismiss,
+            icon: Icon(Icons.close, size: 16, color: p.textFaint),
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(),
+            tooltip: t.close,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -515,14 +667,25 @@ class RouteOptionDetails extends StatelessWidget {
     super.key,
     required this.option,
     this.onShowBusDetail,
+    this.showLiveProgress = false,
   });
 
   final RouteOption option;
   final void Function(String tripId)? onShowBusDetail;
 
+  /// When true (the live routing flow), the bus leg the user is currently on
+  /// gets a live "reach your stop in N min" row from `GET /transit/eta`. The
+  /// saved favorite-route sheet leaves this false — there's no live trip.
+  final bool showLiveProgress;
+
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
+    // Which leg the user is on now, so only the active bus leg shows live ETA.
+    final progress = showLiveProgress
+        ? context.watch<MapProvider>().routeProgress
+        : null;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,9 +707,7 @@ class RouteOptionDetails extends StatelessWidget {
               ),
               _SummaryChip(
                 icon: Icons.directions_walk,
-                label: t.walkDistance(
-                  _formatDistance(option.totalWalkMeters),
-                ),
+                label: t.walkDistance(_formatDistance(option.totalWalkMeters)),
               ),
               _SummaryChip(
                 icon: Icons.swap_horiz,
@@ -583,22 +744,279 @@ class RouteOptionDetails extends StatelessWidget {
             ),
           ),
 
-        Divider(color: context.palette.divider, height: 1),
+        Divider(color: p.divider, height: 1),
 
-        // Segment list
+        // Segment list with a vertical progress spine + live "you are here" dot.
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Column(
-            children: option.segments.map((seg) {
-              if (seg.isWalk) return _WalkSegmentTile(seg: seg);
-              if (seg.isBus) {
-                return _BusSegmentTile(
-                  seg: seg,
-                  onShowBusDetail: onShowBusDetail,
-                );
-              }
-              return const SizedBox.shrink();
-            }).toList(),
+            children: [
+              for (var i = 0; i < option.segments.length; i++)
+                _buildSegment(
+                  option.segments[i],
+                  i,
+                  option.segments.length,
+                  progress,
+                ),
+              _DestinationRow(
+                label: t.destinationLabel,
+                arrived: progress?.isArrived ?? false,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSegment(
+    RouteSegment seg,
+    int index,
+    int total,
+    RouteProgress? progress,
+  ) {
+    final activeIdx = progress?.activeSegmentIndex;
+    final isDone = activeIdx != null && index < activeIdx;
+    final isActive = activeIdx != null && index == activeIdx;
+    final state = isDone
+        ? _RailState.done
+        : isActive
+        ? _RailState.active
+        : _RailState.upcoming;
+
+    // The active walk leg shrinks to what's left as the user advances along it.
+    final Widget base;
+    if (seg.isWalk) {
+      base = _WalkSegmentTile(
+        seg: seg,
+        remainingFraction: isActive
+            ? (1 - (progress?.fractionAlongSegment ?? 0))
+            : null,
+      );
+    } else if (seg.isBus) {
+      // The next bus leg (which may still be ahead while walking to it) carries
+      // live ETA: the real wait before boarding, then the ride once aboard.
+      final isLiveBusLeg = progress?.busLegIndex == index;
+      final riding = progress?.phase == RoutePhase.riding;
+      base = _BusSegmentTile(
+        seg: seg,
+        onShowBusDetail: onShowBusDetail,
+        liveBoardSeconds: isLiveBusLeg && !riding
+            ? progress?.busBoardSeconds
+            : null,
+        liveAlightSeconds: isLiveBusLeg && riding
+            ? progress?.busAlightSeconds
+            : null,
+      );
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    // Completed legs dim; the spine rail stays bright to show the travelled path.
+    final tile = isDone ? Opacity(opacity: 0.5, child: base) : base;
+
+    // The tile sets the row height; the spine rail is painted beside it in a
+    // Stack. (IntrinsicHeight mis-measures ListTile/AnimatedCrossFade heights,
+    // which overflows tall bus tiles.)
+    return Stack(
+      children: [
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          child: _SpineRail(
+            state: state,
+            isFirst: index == 0,
+            isLast: false, // the destination row terminates the spine
+            isBus: seg.isBus,
+            // The origin node (leg 0's start) reads green.
+            endpointColor: index == 0 ? const Color(0xFF22C55E) : null,
+            youAreHereFraction: isActive
+                ? (progress?.fractionAlongSegment ?? 0)
+                : null,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 30),
+          child: tile,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Progress spine (vertical timeline + live "you are here" dot) ───────────────
+
+enum _RailState { done, active, upcoming }
+
+/// The left-gutter rail for one itinerary row: the connecting line (solid =
+/// travelled, grey/dashed = still ahead), the node dot, and — on the active
+/// leg — the live "you are here" marker positioned by `youAreHereFraction`.
+class _SpineRail extends StatelessWidget {
+  const _SpineRail({
+    required this.state,
+    required this.isFirst,
+    required this.isLast,
+    required this.isBus,
+    this.endpointColor,
+    this.youAreHereFraction,
+  });
+
+  final _RailState state;
+  final bool isFirst;
+  final bool isLast;
+  final bool isBus;
+  final Color? endpointColor;
+  final double? youAreHereFraction;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return SizedBox(
+      width: 30,
+      child: CustomPaint(
+        painter: _SpinePainter(
+          state: state,
+          isFirst: isFirst,
+          isLast: isLast,
+          isBus: isBus,
+          endpointColor: endpointColor,
+          youAreHereFraction: youAreHereFraction,
+          aheadColor: p.textFaintest,
+        ),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+class _SpinePainter extends CustomPainter {
+  _SpinePainter({
+    required this.state,
+    required this.isFirst,
+    required this.isLast,
+    required this.isBus,
+    required this.aheadColor,
+    this.endpointColor,
+    this.youAreHereFraction,
+  });
+
+  final _RailState state;
+  final bool isFirst;
+  final bool isLast;
+  final bool isBus;
+  final Color aheadColor;
+  final Color? endpointColor;
+  final double? youAreHereFraction;
+
+  static const _travelled = Color(0xFF64B5F6);
+  static const _busColor = Color(0xFF1565C0);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    const nodeY = 20.0;
+    const nodeR = 5.0;
+
+    final aboveTravelled = state != _RailState.upcoming;
+    final belowTravelled = state == _RailState.done;
+
+    void line(double y1, double y2, Color color, {bool dashed = false}) {
+      final p = Paint()
+        ..color = color
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round;
+      if (!dashed) {
+        canvas.drawLine(Offset(cx, y1), Offset(cx, y2), p);
+        return;
+      }
+      const dash = 4.0, gap = 4.0;
+      var y = y1;
+      while (y < y2) {
+        canvas.drawLine(Offset(cx, y), Offset(cx, (y + dash).clamp(y1, y2)), p);
+        y += dash + gap;
+      }
+    }
+
+    if (!isFirst) {
+      line(0, nodeY, aboveTravelled ? _travelled : aheadColor);
+    }
+    if (!isLast) {
+      final color = belowTravelled ? (isBus ? _busColor : _travelled) : aheadColor;
+      line(nodeY, size.height, color, dashed: !isBus && !belowTravelled);
+    }
+
+    final nodeColor =
+        endpointColor ?? (state == _RailState.upcoming ? aheadColor : _travelled);
+    canvas.drawCircle(Offset(cx, nodeY), nodeR, Paint()..color = nodeColor);
+
+    final f = youAreHereFraction;
+    if (f != null) {
+      final y = nodeY + (size.height - nodeY) * f.clamp(0.0, 1.0);
+      canvas.drawCircle(Offset(cx, y), 7, Paint()..color = Colors.white);
+      canvas.drawCircle(
+        Offset(cx, y),
+        4.5,
+        Paint()..color = const Color(0xFF22C55E),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpinePainter old) =>
+      old.state != state ||
+      old.isFirst != isFirst ||
+      old.isLast != isLast ||
+      old.isBus != isBus ||
+      old.aheadColor != aheadColor ||
+      old.endpointColor != endpointColor ||
+      old.youAreHereFraction != youAreHereFraction;
+}
+
+/// The terminating node of the spine — the destination marker + label.
+class _DestinationRow extends StatelessWidget {
+  const _DestinationRow({required this.label, required this.arrived});
+
+  final String label;
+  final bool arrived;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Stack(
+      children: [
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          child: _SpineRail(
+            state: arrived ? _RailState.done : _RailState.upcoming,
+            isFirst: false,
+            isLast: true,
+            isBus: false,
+            endpointColor: const Color(0xFFEF4444),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 30),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              children: [
+                const Icon(Icons.place, color: Color(0xFFEF4444), size: 18),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: arrived ? p.textPrimary : p.textSecondary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -683,24 +1101,37 @@ class _PlanTypeChip extends StatelessWidget {
 // ── Walk segment tile ─────────────────────────────────────────────────────────
 
 class _WalkSegmentTile extends StatelessWidget {
-  const _WalkSegmentTile({required this.seg});
+  const _WalkSegmentTile({required this.seg, this.remainingFraction});
 
   final RouteSegment seg;
+
+  /// 0..1 of the walk still ahead when this is the leg the user is on. When set
+  /// (< 1), the tile shows the remaining distance/time instead of the full leg.
+  final double? remainingFraction;
 
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
     final lang = settings.languageCode;
     final t = settings.t;
+    final p = context.palette;
+    final frac = remainingFraction;
+    final showRemaining = frac != null && frac < 0.999;
     final dist = seg.distanceMeters;
     final mins = seg.estimatedMinutes;
+    final effDist = showRemaining && dist != null
+        ? (dist * frac).round()
+        : dist;
+    final effMins = showRemaining && mins != null ? (mins * frac).ceil() : mins;
     final label = [
-      if (dist != null) _formatDistance(dist),
-      if (mins != null) t.minutesApprox(mins),
+      if (effDist != null) _formatDistance(effDist),
+      if (effMins != null) t.minutesApprox(effMins),
     ].join(' · ');
+    final titleText = showRemaining
+        ? t.walkRemaining(label)
+        : t.walkSegment(label);
 
     final isTransfer = seg.isTransfer;
-    final p = context.palette;
 
     return ListTile(
       dense: true,
@@ -730,7 +1161,7 @@ class _WalkSegmentTile extends StatelessWidget {
             const SizedBox(width: 6),
           ],
           Text(
-            t.walkSegment(label),
+            titleText,
             style: TextStyle(color: p.textPrimary, fontSize: 14),
           ),
         ],
@@ -748,159 +1179,494 @@ class _WalkSegmentTile extends StatelessWidget {
 
 // ── Bus segment tile ──────────────────────────────────────────────────────────
 
-class _BusSegmentTile extends StatelessWidget {
-  const _BusSegmentTile({required this.seg, this.onShowBusDetail});
+class _BusSegmentTile extends StatefulWidget {
+  const _BusSegmentTile({
+    required this.seg,
+    this.onShowBusDetail,
+    this.liveBoardSeconds,
+    this.liveAlightSeconds,
+  });
 
   final RouteSegment seg;
   final void Function(String tripId)? onShowBusDetail;
 
+  /// Live ETA (seconds) of the bus to the board stop — "arrives in N", shown in
+  /// place of the plan's static estimate while approaching/waiting. Null when
+  /// unavailable.
+  final int? liveBoardSeconds;
+
+  /// Live ETA (seconds) to the alight stop, shown once aboard. Null otherwise.
+  final int? liveAlightSeconds;
+
+  @override
+  State<_BusSegmentTile> createState() => _BusSegmentTileState();
+}
+
+class _BusSegmentTileState extends State<_BusSegmentTile> {
+  /// Whether the full ride stop-list (Phase 1) is expanded.
+  bool _stopsExpanded = false;
+
   @override
   Widget build(BuildContext context) {
+    final seg = widget.seg;
+    final onShowBusDetail = widget.onShowBusDetail;
+    final liveBoardSeconds = widget.liveBoardSeconds;
+    final liveAlightSeconds = widget.liveAlightSeconds;
     final settings = context.watch<SettingsProvider>();
     final lang = settings.languageCode;
     final t = settings.t;
+    final p = context.palette;
     final routeCode = seg.route?.code;
     final routeName = seg.route?.name ?? routeCode ?? 'Bus';
     final wait = seg.waitMinutes;
     final live = seg.hasLiveEta ?? false;
+
+    // Phase 2: upcoming arrivals at the board stop. With a genuine "next bus"
+    // (2+), a dedicated block below owns the arrival lines, so the single
+    // wait/live subtitle row is suppressed to avoid showing the ETA twice.
+    final upcoming = seg.busEtas;
+    final showUpcoming = upcoming.length >= 2;
 
     // Only mark three-line when there really are 3+ subtitle rows; otherwise
     // ListTile wastes vertical space.
     final subtitleLineCount = [
       seg.boardAt != null,
       seg.alightAt != null,
-      wait != null,
+      !showUpcoming && (liveBoardSeconds != null || wait != null),
       seg.rideMinutes != null || seg.distanceMeters != null,
     ].where((v) => v).length;
 
     final tripId = seg.tripId;
     final canViewDetail = tripId != null && onShowBusDetail != null;
-    final p = context.palette;
 
-    return ListTile(
-      dense: true,
-      leading: Icon(
-        Icons.directions_bus,
-        color: p.textSecondary,
-        size: 20,
-      ),
-      trailing: canViewDetail
-          ? TextButton(
-              onPressed: () => onShowBusDetail!(tripId),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF1565C0),
-                backgroundColor: const Color(0xFF1565C0).withAlpha(38),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    t.view,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          dense: true,
+          leading: Icon(
+            Icons.directions_bus,
+            color: p.textSecondary,
+            size: 20,
+          ),
+          trailing: canViewDetail
+              ? TextButton(
+                  onPressed: () => onShowBusDetail(tripId),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF1565C0),
+                    backgroundColor: const Color(0xFF1565C0).withAlpha(38),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  const Icon(Icons.chevron_right, size: 16),
-                ],
-              ),
-            )
-          : null,
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (routeCode != null) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1565C0),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                routeCode,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        t.view,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, size: 16),
+                    ],
+                  ),
+                )
+              : null,
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (routeCode != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1565C0),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    routeCode,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Flexible(
+                child: Text(
+                  routeName,
+                  style: TextStyle(
+                    color: p.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
-            const SizedBox(width: 6),
-          ],
-          Flexible(
-            child: Text(
-              routeName,
-              style: TextStyle(
-                color: p.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-              overflow: TextOverflow.ellipsis,
+              const SizedBox(width: 8),
+              if (live)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade700,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'Live',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (seg.boardAt != null)
+                Text(
+                  t.boardAtStop(seg.boardAt!.localizedName(lang)),
+                  style: TextStyle(color: p.textFaint, fontSize: 12),
+                ),
+              if (seg.alightAt != null)
+                Text(
+                  t.alightAtStop(seg.alightAt!.localizedName(lang)),
+                  style: TextStyle(color: p.textFaint, fontSize: 12),
+                ),
+              // Live "bus arrives in N" (bus → board stop) wins over the static
+              // estimate — the deadline to reach the stop, so the user can hurry.
+              // Suppressed when the upcoming-buses block below owns the arrivals.
+              if (!showUpcoming)
+                if (liveBoardSeconds != null)
+                  Text(
+                    liveBoardSeconds <= 0
+                        ? t.busArrivingNow
+                        : t.busArrivesIn((liveBoardSeconds / 60).round()),
+                    style: const TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                else if (wait != null)
+                  Text(
+                    live ? t.busArrivesIn(wait) : t.busArrivesInEstimated(wait),
+                    style: TextStyle(color: p.textFaint, fontSize: 12),
+                  ),
+              if (seg.rideMinutes != null || seg.distanceMeters != null)
+                Text(
+                  [
+                    if (seg.rideMinutes != null)
+                      t.rideMinutes(seg.rideMinutes!),
+                    if (seg.distanceMeters != null)
+                      _formatDistance(seg.distanceMeters!),
+                  ].join(' · '),
+                  style: TextStyle(color: p.textFaint, fontSize: 12),
+                ),
+              // Once aboard: live "reach your stop in N min".
+              if (liveAlightSeconds != null)
+                Text(
+                  liveAlightSeconds <= 0
+                      ? t.atYourStop
+                      : t.reachYourStopIn((liveAlightSeconds / 60).round()),
+                  style: const TextStyle(
+                    color: Colors.greenAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              if (seg.totalLegMinutes != null)
+                Text(
+                  t.totalLegMinutes(seg.totalLegMinutes!),
+                  style: TextStyle(color: p.textFaintest, fontSize: 11),
+                ),
+            ],
+          ),
+          isThreeLine: subtitleLineCount >= 3,
+        ),
+
+        // Phase 2 — current + next bus at the board stop.
+        if (showUpcoming)
+          _UpcomingBuses(
+            etas: upcoming,
+            tripId: seg.tripId,
+            boardStopIndex: seg.boardAt?.stopIndex,
+            liveLeadSeconds: liveBoardSeconds,
+            live: live,
+            t: t,
+          ),
+
+        // Phase 1 — expandable full ride stop-list.
+        if (seg.intermediateStops.isNotEmpty)
+          _RideStopList(
+            seg: seg,
+            expanded: _stopsExpanded,
+            onToggle: () => setState(() => _stopsExpanded = !_stopsExpanded),
+            lang: lang,
+            t: t,
+          ),
+      ],
+    );
+  }
+}
+
+// ── Phase 2: upcoming buses (current + next) ─────────────────────────────────
+
+/// Compact "current + next vehicle" panel for a bus leg, from
+/// [RouteSegment.busEtas]. The lead row prefers the live MQTT ETA and shows how
+/// many stops away the recommended bus is (from the live trip's
+/// `currentStopIndex`); later rows come from the planned arrival list.
+class _UpcomingBuses extends StatelessWidget {
+  const _UpcomingBuses({
+    required this.etas,
+    required this.tripId,
+    required this.boardStopIndex,
+    required this.liveLeadSeconds,
+    required this.live,
+    required this.t,
+  });
+
+  final List<int> etas;
+  final String? tripId;
+  final int? boardStopIndex;
+  final int? liveLeadSeconds;
+  final bool live;
+  final AppTexts t;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    // Lead-bus "N stops away" from the live trip position (MQTT).
+    int? stopsAway;
+    final boardIdx = boardStopIndex;
+    final leadTripId = tripId;
+    if (leadTripId != null && boardIdx != null) {
+      for (final Trip tr in context.watch<TransitProvider>().trips) {
+        if (tr.id == leadTripId) {
+          final away = boardIdx - tr.currentStopIndex;
+          if (away >= 0) stopsAway = away;
+          break;
+        }
+      }
+    }
+
+    final lead = liveLeadSeconds;
+    final leadMinutes = lead != null ? (lead / 60).round() : etas.first;
+
+    final rows = <Widget>[
+      _busRow(
+        index: 1,
+        minutes: leadMinutes,
+        stopsAway: stopsAway,
+        isLead: true,
+        p: p,
+      ),
+    ];
+    for (var i = 1; i < etas.length && i < 3; i++) {
+      rows.add(
+        _busRow(
+          index: i + 1,
+          minutes: etas[i],
+          stopsAway: null,
+          isLead: false,
+          p: p,
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(56, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: p.surfaceAlt,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(children: rows),
+    );
+  }
+
+  Widget _busRow({
+    required int index,
+    required int minutes,
+    required int? stopsAway,
+    required bool isLead,
+    required AppPalette p,
+  }) {
+    final urgent = isLead && minutes <= 3;
+    final Color color = isLead
+        ? (urgent ? Colors.greenAccent : const Color(0xFF4ADE80))
+        : p.textFaint;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Icon(Icons.directions_bus, size: 14, color: color),
+          const SizedBox(width: 8),
+          Text(
+            t.busNumber(index),
+            style: TextStyle(color: p.textSecondary, fontSize: 12),
+          ),
+          const Spacer(),
+          Text(
+            urgent ? t.busArrivingNow : t.minutesApprox(minutes),
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(width: 8),
-          if (live)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.green.shade700,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text(
-                'Live',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+          if (stopsAway != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              t.stopsAway(stopsAway),
+              style: TextStyle(color: color.withAlpha(200), fontSize: 12),
             ),
+          ],
         ],
       ),
-      subtitle: Column(
+    );
+  }
+}
+
+// ── Phase 1: expandable ride stop-list ───────────────────────────────────────
+
+/// Collapsible full stop-list for a bus leg — the ridden sequence
+/// board → intermediate stops → alight, each intermediate with its cumulative
+/// ETA from the board stop.
+class _RideStopList extends StatelessWidget {
+  const _RideStopList({
+    required this.seg,
+    required this.expanded,
+    required this.onToggle,
+    required this.lang,
+    required this.t,
+  });
+
+  final RouteSegment seg;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final String lang;
+  final AppTexts t;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = seg.intermediateStops.length;
+    final rideMin = seg.rideMinutes;
+    final headerLabel = [
+      t.stopsCount(count),
+      if (rideMin != null) t.minutesApprox(rideMin),
+    ].join(' · ');
+    final p = context.palette;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: onToggle,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(56, 0, 16, 8),
+            child: Row(
+              children: [
+                Icon(
+                  expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: const Color(0xFF64B5F6),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  headerLabel,
+                  style: const TextStyle(
+                    color: Color(0xFF64B5F6),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedCrossFade(
+          firstChild: const SizedBox(width: double.infinity),
+          secondChild: _stopColumn(p),
+          crossFadeState: expanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 200),
+        ),
+      ],
+    );
+  }
+
+  Widget _stopColumn(AppPalette p) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 56, right: 16, bottom: 8),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (seg.boardAt != null)
-            Text(
-              t.boardAtStop(seg.boardAt!.localizedName(lang)),
-              style: TextStyle(color: p.textFaint, fontSize: 12),
+          if (seg.boardAt != null) _stopRow(seg.boardAt!, anchor: true, p: p),
+          for (final s in seg.intermediateStops)
+            _stopRow(s, anchor: false, p: p),
+          if (seg.alightAt != null) _stopRow(seg.alightAt!, anchor: true, p: p),
+        ],
+      ),
+    );
+  }
+
+  Widget _stopRow(
+    SegmentStop s, {
+    required bool anchor,
+    required AppPalette p,
+  }) {
+    final eta = anchor ? null : s.cumulativeMinutesFromBoard;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: anchor ? 10 : 7,
+            height: anchor ? 10 : 7,
+            decoration: BoxDecoration(
+              color: anchor ? const Color(0xFF64B5F6) : p.textFaintest,
+              shape: BoxShape.circle,
             ),
-          if (seg.alightAt != null)
-            Text(
-              t.alightAtStop(seg.alightAt!.localizedName(lang)),
-              style: TextStyle(color: p.textFaint, fontSize: 12),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              s.localizedName(lang),
+              style: TextStyle(
+                color: anchor ? p.textPrimary : p.textFaint,
+                fontSize: 13,
+                fontWeight: anchor ? FontWeight.w700 : FontWeight.w400,
+              ),
             ),
-          if (wait != null)
+          ),
+          if (eta != null)
             Text(
-              live ? t.waitLive(wait) : t.waitEstimated(wait),
-              style: TextStyle(color: p.textFaint, fontSize: 12),
-            ),
-          if (seg.rideMinutes != null || seg.distanceMeters != null)
-            Text(
-              [
-                if (seg.rideMinutes != null) t.rideMinutes(seg.rideMinutes!),
-                if (seg.distanceMeters != null)
-                  _formatDistance(seg.distanceMeters!),
-              ].join(' · '),
-              style: TextStyle(color: p.textFaint, fontSize: 12),
-            ),
-          if (seg.totalLegMinutes != null)
-            Text(
-              t.totalLegMinutes(seg.totalLegMinutes!),
-              style: TextStyle(color: p.textFaintest, fontSize: 11),
+              t.minutesApprox(eta),
+              style: TextStyle(color: p.textFaintest, fontSize: 12),
             ),
         ],
       ),
-      isThreeLine: subtitleLineCount >= 3,
     );
   }
 }

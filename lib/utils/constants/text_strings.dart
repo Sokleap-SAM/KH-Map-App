@@ -48,6 +48,51 @@ class AppTexts {
   String get yes => _km ? 'យល់ព្រម' : 'Yes';
   String get tryAgain => _km ? 'ព្យាយាមម្តងទៀត' : 'Try again';
 
+  // ─── Live route progress ───────────────────────────────────────────────
+  String arriveInApprox(int minutes) =>
+      _km ? 'ដល់ក្នុង ~$minutes នាទី' : 'Arrive in ~$minutes min';
+  String get arrivedLabel => _km ? 'បានមកដល់' : 'Arrived';
+  String walkRemaining(String distTime) =>
+      _km ? 'ដើរ $distTime នៅសល់' : 'Walk $distTime left';
+  String reachYourStopIn(int minutes) => _km
+      ? 'ដល់ចំណតរបស់អ្នកក្នុង $minutes នាទី'
+      : 'Reach your stop in $minutes min';
+  String busArrivesIn(int minutes) =>
+      _km ? 'ឡានក្រុងមកដល់ ~$minutes នាទី 🟢' : 'Bus arrives in ~$minutes min 🟢';
+  String busArrivesInEstimated(int minutes) => _km
+      ? 'ឡានក្រុងមកដល់ ~$minutes នាទី (ការប៉ាន់ស្មាន)'
+      : 'Bus arrives in ~$minutes min (estimated)';
+  String get busArrivingNow =>
+      _km ? 'ឡានក្រុងកំពុងមកដល់' : 'Bus arriving now';
+  String get atYourStop => _km ? 'ដល់ចំណតរបស់អ្នក' : 'At your stop';
+  String missedBusReplanning(String route) => _km
+      ? 'អ្នកខកខានឡានក្រុង $route — កំពុងរកឡានបន្ទាប់'
+      : 'Missed bus $route — finding the next one';
+  String get passedStopRerouting => _km
+      ? 'អ្នកបានឡើងហួសចំណត — កំពុងគណនាផ្លូវថ្មី'
+      : 'You passed your stop — re-routing';
+  String fasterRouteSave(int minutes) => _km
+      ? 'ផ្លូវលឿនជាង · សន្សំ $minutes នាទី'
+      : 'Faster route · save $minutes min';
+  String get switchRoute => _km ? 'ប្តូរ' : 'Switch';
+
+  // ─── Location simulation (route-planner testing) ───────────────────────
+  String get simulateLocation =>
+      _km ? 'ក្លែងធ្វើទីតាំង' : 'Simulate location';
+  String get simulateLocationHint => _km
+      ? 'ចុចលើផែនទីដើម្បីកំណត់ទីតាំងក្លែងធ្វើ'
+      : 'Tap the map to set a simulated location';
+  String get simulatedLocationSet =>
+      _km ? 'បានកំណត់ទីតាំងក្លែងធ្វើ' : 'Simulated location set';
+  String get stopSimulating =>
+      _km ? 'ឈប់ក្លែងធ្វើទីតាំង' : 'Stop simulating';
+  String get autoSimulate =>
+      _km ? 'ក្លែងធ្វើដំណើរស្វ័យប្រវត្តិ' : 'Auto-simulate trip';
+  String get autoSimulateStarted =>
+      _km ? 'កំពុងក្លែងធ្វើដំណើរ…' : 'Simulating the trip…';
+  String get liveLocationRestored =>
+      _km ? 'បានប្រើទីតាំងពិតវិញ' : 'Live location restored';
+
   // ─── Search ────────────────────────────────────────────────────────────
   String get searchPlacesHint => _km ? 'ស្វែងរកទីកន្លែង . . .' : 'Search places . . .';
   String get searchHereHint => _km ? 'ស្វែងរកនៅទីនេះ' : 'Search here';
@@ -265,9 +310,10 @@ class AppTexts {
   String get showOnMap => _km ? 'បង្ហាញលើផែនទី' : 'Show on map';
   String statusArrow(String next) => _km ? 'ស្ថានភាព → $next' : 'Status → $next';
 
-  // Route type (mirrors AdminRoute.typeLabel).
+  // Localized route-type label (the AdminRoute model stays language-free).
   String adminRouteType(bool isLine, String? direction) {
-    if (isLine) return _km ? 'រង្វិលជុំ' : 'Loop';
+    // Backend `isLine`: true = directional line, false = circular loop.
+    if (!isLine) return _km ? 'រង្វិលជុំ' : 'Loop';
     if (direction == 'inbound') return _km ? 'ទិសដៅ · ចូល' : 'Line · inbound';
     if (direction == 'outbound') return _km ? 'ទិសដៅ · ចេញ' : 'Line · outbound';
     return _km ? 'ទិសដៅ' : 'Line';
@@ -557,6 +603,14 @@ class AppTexts {
       _km ? 'ភ្លេចលេខសម្ងាត់?' : 'Forgot password?';
   String get signIn => _km ? 'ចូល' : 'Sign in';
   String get signUp => _km ? 'ចុះឈ្មោះ' : 'Sign up';
+  String get continueWithGoogle =>
+      _km ? 'បន្តជាមួយ Google' : 'Continue with Google';
+  String get orDivider => _km ? 'ឬ' : 'or';
+  String get googleSignInFailed => _km
+      ? 'ការចូលជាមួយ Google បរាជ័យ — សូមព្យាយាមម្ដងទៀត'
+      : 'Google sign-in failed — please try again';
+  String get googleSignInCancelled =>
+      _km ? 'បានបោះបង់ការចូលជាមួយ Google' : 'Google sign-in cancelled';
   String get noAccountSignUp =>
       _km ? 'មិនទាន់មានគណនី? ចុះឈ្មោះនៅទីនេះ' : "Don't have an account? Sign up";
   String get haveAccountSignIn =>
@@ -579,6 +633,25 @@ class AppTexts {
   String get newPasswordField => _km ? 'លេខសម្ងាត់ថ្មី' : 'New password';
   String get changePassword => _km ? 'ប្តូរលេខសម្ងាត់' : 'Change password';
   String get sendCode => _km ? 'ផ្ញើលេខកូដ' : 'Send code';
+  String get signInRequiredTitle => _km ? 'ត្រូវការគណនី' : 'Sign in required';
+  String get signInToContribute => _km
+      ? 'អ្នកត្រូវចូលគណនីជាមុនសិន ដើម្បីរួមចំណែក។'
+      : 'Please sign in first to contribute.';
+
+  // Account verification (email OTP after register).
+  String get verifyAccountTitle => _km ? 'ផ្ទៀងផ្ទាត់គណនី' : 'Verify account';
+  String verifyAccountSubtitle(String email) => _km
+      ? 'យើងបានផ្ញើលេខកូដ ៦ ខ្ទង់ទៅកាន់អ៊ីមែល:\n$email'
+      : 'We sent a 6-digit code to:\n$email';
+  String get pleaseEnterCode =>
+      _km ? 'សូមបញ្ចូលលេខកូដ' : 'Please enter the code';
+  String get accountVerified =>
+      _km ? 'គណនីរបស់អ្នកត្រូវបានផ្ទៀងផ្ទាត់!' : 'Your account is verified!';
+  String get resendCode => _km ? 'ផ្ញើលេខកូដឡើងវិញ' : 'Resend code';
+  String resendCodeIn(int seconds) =>
+      _km ? 'ផ្ញើឡើងវិញក្នុងរយៈពេល $seconds វិនាទី' : 'Resend in $seconds s';
+  String get resendFailed =>
+      _km ? 'ការផ្ញើឡើងវិញបរាជ័យ' : 'Could not resend the code';
 
   // ─── Driver ────────────────────────────────────────────────────────────
   String get driverTitle => _km ? 'អ្នកបើកបរ' : 'Driver';
@@ -679,6 +752,9 @@ class AppTexts {
   String waitEstimated(int n) =>
       _km ? 'ចាំ​ ~$n នាទី (ការប៉ាន់ស្មាន)' : 'Wait ~$n min (estimated)';
   String rideMinutes(int n) => _km ? 'ជិះ ~$n នាទី' : 'Ride ~$n min';
+  // Upcoming-buses panel + expandable ride stop-list (route info card).
+  String busNumber(int n) => _km ? 'ឡានក្រុងទី $n' : 'Bus $n';
+  String stopsAway(int n) => _km ? 'នៅ $n ចំណតទៀត' : '$n stops away';
   String totalLegMinutes(int n) =>
       _km ? 'រយៈពេលសរុប ~$n នាទី' : 'Total ~$n min';
 

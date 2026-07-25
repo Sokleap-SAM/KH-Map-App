@@ -22,7 +22,7 @@ class AdminRouteEditScreen extends StatefulWidget {
 class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _codeCtrl;
-  late bool _isLine;
+  late bool _isLoop;
   late String _direction;
   late String _color;
   late String _status;
@@ -34,7 +34,9 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
     final r = widget.route;
     _nameCtrl = TextEditingController(text: r.name ?? '');
     _codeCtrl = TextEditingController(text: r.code ?? '');
-    _isLine = r.isLine;
+    // Backend `isLine`: true = directional line, false = loop. UI state is the
+    // inverse (`_isLoop`) to match the "Loop (circular)" toggle.
+    _isLoop = !r.isLine;
     _direction = r.direction ?? 'outbound';
     _color = r.color ?? '#2196F3';
     _status = r.status == 'inactive' ? 'inactive' : 'active';
@@ -57,7 +59,7 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
       return;
     }
     final code = _codeCtrl.text.trim().isEmpty ? null : _codeCtrl.text.trim();
-    final direction = _isLine ? null : _direction;
+    final direction = _isLoop ? null : _direction;
     setState(() => _saving = true);
     try {
       await AdminService().updateRoute(
@@ -65,7 +67,7 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
         name: name,
         code: code,
         color: _color,
-        isLine: _isLine,
+        isLine: !_isLoop,
         direction: direction,
         status: _status,
       );
@@ -78,7 +80,7 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
           id: widget.route.id,
           name: name,
           code: code,
-          isLine: _isLine,
+          isLine: !_isLoop,
           status: _status,
           stopCount: widget.route.stopCount,
           color: _color,
@@ -171,13 +173,13 @@ class _AdminRouteEditScreenState extends State<AdminRouteEditScreen> {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(t.loopCircular),
-            subtitle: Text(_isLine
+            subtitle: Text(_isLoop
                 ? t.departureEqualsTerminal
                 : t.directionalLine),
-            value: _isLine,
-            onChanged: (v) => setState(() => _isLine = v),
+            value: _isLoop,
+            onChanged: (v) => setState(() => _isLoop = v),
           ),
-          if (!_isLine) ...[
+          if (!_isLoop) ...[
             const SizedBox(height: 8),
             Text(t.direction,
                 style: const TextStyle(fontWeight: FontWeight.bold)),
