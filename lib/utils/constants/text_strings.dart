@@ -310,7 +310,7 @@ class AppTexts {
   String get showOnMap => _km ? 'បង្ហាញលើផែនទី' : 'Show on map';
   String statusArrow(String next) => _km ? 'ស្ថានភាព → $next' : 'Status → $next';
 
-  // Route type (mirrors AdminRoute.typeLabel).
+  // Localized route-type label (the AdminRoute model stays language-free).
   String adminRouteType(bool isLine, String? direction) {
     // Backend `isLine`: true = directional line, false = circular loop.
     if (!isLine) return _km ? 'រង្វិលជុំ' : 'Loop';
@@ -633,6 +633,10 @@ class AppTexts {
   String get newPasswordField => _km ? 'លេខសម្ងាត់ថ្មី' : 'New password';
   String get changePassword => _km ? 'ប្តូរលេខសម្ងាត់' : 'Change password';
   String get sendCode => _km ? 'ផ្ញើលេខកូដ' : 'Send code';
+  String get signInRequiredTitle => _km ? 'ត្រូវការគណនី' : 'Sign in required';
+  String get signInToContribute => _km
+      ? 'អ្នកត្រូវចូលគណនីជាមុនសិន ដើម្បីរួមចំណែក។'
+      : 'Please sign in first to contribute.';
 
   // Account verification (email OTP after register).
   String get verifyAccountTitle => _km ? 'ផ្ទៀងផ្ទាត់គណនី' : 'Verify account';

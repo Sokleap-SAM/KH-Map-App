@@ -5,6 +5,7 @@ import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/screens/login_screen.dart';
 import 'package:kh_map_app/services/auth_service.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
+import 'package:kh_map_app/utils/constants/image_strings.dart';
 import 'package:kh_map_app/utils/constants/text_strings.dart';
 import 'package:kh_map_app/utils/theme/app_palette.dart';
 import 'package:provider/provider.dart';
@@ -56,7 +57,8 @@ class _AccountScreenState extends State<AccountScreen> {
         final data = jsonDecode(response.body);
 
         setState(() {
-          userName = data['name'] ?? "No Name Found";
+          userName =
+              data['name'] ?? context.read<SettingsProvider>().t.noNameFound;
           isLoggedIn = true;
         });
       } else if (response.statusCode == 401) {
@@ -79,7 +81,9 @@ class _AccountScreenState extends State<AccountScreen> {
     if (!mounted) return;
     final claims = decodeJwtPayload(token);
     setState(() {
-      userName = (claims?['name'] as String?) ?? "Driver";
+      userName =
+          (claims?['name'] as String?) ??
+          context.read<SettingsProvider>().t.driverTitle;
       isLoggedIn = true;
     });
   }
@@ -156,7 +160,7 @@ class _AccountScreenState extends State<AccountScreen> {
                                   radius: 50,
                                   backgroundColor: Colors.transparent,
                                   backgroundImage: AssetImage(
-                                    'assets/images/defaultAccountIcon.png',
+                                    AppImages.defaultAccountIcon,
                                   ),
                                 ),
                               ),
@@ -426,12 +430,12 @@ class _AccountScreenState extends State<AccountScreen> {
       children: [
         GestureDetector(
           onTap: _handleGoogleSignIn,
-          child: _socialIcon('assets/images/google_icon.png'),
+          child: _socialIcon(AppImages.googleIcon),
         ),
         const SizedBox(width: 20),
-        _socialIcon('assets/images/apple_icon.png'),
+        _socialIcon(AppImages.appleIcon),
         const SizedBox(width: 20),
-        _socialIcon('assets/images/facebook_icon.png'),
+        _socialIcon(AppImages.facebookIcon),
       ],
     );
   }

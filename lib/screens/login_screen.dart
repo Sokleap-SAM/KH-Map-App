@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/providers/settings_provider.dart';
-import 'package:kh_map_app/utils/constants/colors.dart';
+import 'package:kh_map_app/utils/theme/app_palette.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import 'package:kh_map_app/screens/forgot_password_screen.dart';
 import 'package:kh_map_app/screens/verification_screen.dart';
+import 'package:kh_map_app/utils/constants/image_strings.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -163,13 +164,14 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Scaffold(
-      backgroundColor: AppColors.primaryColor,
+      backgroundColor: p.scaffold,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          icon: Icon(Icons.arrow_back_ios, color: p.textPrimary),
           onPressed: () => Navigator.pop(context), // Go back to Account Screen
         ),
       ),
@@ -180,8 +182,8 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Text(
               isLoginMode ? t.login : t.createAccount,
-              style: const TextStyle(
-                color: Color(0xFFE8B67D),
+              style: TextStyle(
+                color: p.accent,
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
               ),
@@ -189,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 10),
             Text(
               isLoginMode ? t.loginSubtitle : t.registerSubtitle,
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              style: TextStyle(color: p.textSecondary, fontSize: 14),
             ),
             const SizedBox(height: 40),
 
@@ -242,7 +244,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                   child: Text(
                     t.forgotPasswordLink,
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: p.textFaint, fontSize: 12),
                   ),
                 ),
               ),
@@ -278,15 +280,15 @@ class _LoginScreenState extends State<LoginScreen> {
             // 5. "or" divider
             Row(
               children: [
-                const Expanded(child: Divider(color: Colors.white24)),
+                Expanded(child: Divider(color: p.divider)),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Text(
                     t.orDivider,
-                    style: const TextStyle(color: Colors.white54),
+                    style: TextStyle(color: p.textFaint),
                   ),
                 ),
-                const Expanded(child: Divider(color: Colors.white24)),
+                Expanded(child: Divider(color: p.divider)),
               ],
             ),
             const SizedBox(height: 20),
@@ -298,23 +300,23 @@ class _LoginScreenState extends State<LoginScreen> {
               child: OutlinedButton.icon(
                 onPressed: _isLoading ? null : _handleGoogleSignIn,
                 icon: Image.asset(
-                  'assets/images/google_icon.png',
+                  AppImages.googleIcon,
                   width: 22,
                   height: 22,
                   errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.login, color: Colors.white),
+                      Icon(Icons.login, color: p.textPrimary),
                 ),
                 label: Text(
                   t.continueWithGoogle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: p.textPrimary,
                   ),
                 ),
                 style: OutlinedButton.styleFrom(
-                  backgroundColor: Colors.white.withAlpha(13),
-                  side: const BorderSide(color: Colors.white24),
+                  backgroundColor: p.surfaceAlt,
+                  side: BorderSide(color: p.border),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
                   ),
@@ -334,7 +336,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
                 child: Text(
                   isLoginMode ? t.noAccountSignUp : t.haveAccountSignIn,
-                  style: const TextStyle(color: Color(0xFFE8B67D)),
+                  style: TextStyle(color: p.accent),
                 ),
               ),
             ),
@@ -352,25 +354,26 @@ class _LoginScreenState extends State<LoginScreen> {
     bool isPassword = false,
     TextInputType keyboardType = TextInputType.text,
   }) {
+    final p = context.palette;
     return TextField(
       controller: controller,
       obscureText: isPassword,
       keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: p.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white54),
-        prefixIcon: Icon(icon, color: Colors.white54),
+        labelStyle: TextStyle(color: p.textFaint),
+        prefixIcon: Icon(icon, color: p.textFaint),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: Colors.white24),
+          borderSide: BorderSide(color: p.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: Color(0xFFE8B67D)),
+          borderSide: BorderSide(color: p.accent),
         ),
         filled: true,
-        fillColor: Colors.white.withAlpha(13),
+        fillColor: p.surfaceAlt,
       ),
     );
   }

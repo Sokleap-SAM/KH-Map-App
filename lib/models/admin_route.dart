@@ -30,17 +30,8 @@ class AdminRoute {
     required this.direction,
   });
 
-  /// Human label for the route's type.
-  /// loop → "Loop"; directional → "Line · outbound/inbound"; legacy → "Line".
-  String get typeLabel {
-    if (!isLine) return 'រង្វិលជុំ';
-    if (direction == 'inbound') {
-      return 'ទិសដៅ · ចូល';
-    } else if (direction == 'outbound') {
-      return 'ទិសដៅ · ចេញ';
-    }
-    return 'ទិសដៅ';
-  }
+  // The route's human type label is localized in the UI via
+  // `AppTexts.adminRouteType(isLine, direction)` — this model stays language-free.
 
   factory AdminRoute.fromJson(Map<String, dynamic> json) {
     int? count;

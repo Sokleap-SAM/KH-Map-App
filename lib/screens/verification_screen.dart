@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/services/auth_service.dart';
-import 'package:kh_map_app/utils/constants/colors.dart';
+import 'package:kh_map_app/utils/theme/app_palette.dart';
 import 'package:provider/provider.dart';
 
 /// Email-OTP verification, shown right after email/password [register] so the
@@ -104,13 +104,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Scaffold(
-      backgroundColor: AppColors.primaryColor,
+      backgroundColor: p.scaffold,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          icon: Icon(Icons.arrow_back_ios, color: p.textPrimary),
           onPressed: () => Navigator.pop(context, false),
         ),
       ),
@@ -121,8 +122,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
           children: [
             Text(
               t.verifyAccountTitle,
-              style: const TextStyle(
-                color: Color(0xFFE8B67D),
+              style: TextStyle(
+                color: p.accent,
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
               ),
@@ -130,8 +131,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
             const SizedBox(height: 15),
             Text(
               t.verifyAccountSubtitle(widget.email),
-              style: const TextStyle(
-                color: Colors.white70,
+              style: TextStyle(
+                color: p.textSecondary,
                 fontSize: 16,
                 height: 1.5,
               ),
@@ -143,14 +144,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
               child: Container(
                 padding: const EdgeInsets.all(25),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: p.surfaceAlt,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white12, width: 2),
+                  border: Border.all(color: p.border, width: 2),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.mark_email_unread_outlined,
                   size: 80,
-                  color: Color(0xFFE8B67D),
+                  color: p.accent,
                 ),
               ),
             ),
@@ -162,17 +163,17 @@ class _VerificationScreenState extends State<VerificationScreen> {
               controller: otpController,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: p.textPrimary,
                 fontSize: 22,
                 letterSpacing: 6,
                 fontWeight: FontWeight.bold,
               ),
               decoration: InputDecoration(
                 labelText: t.codeField,
-                labelStyle: const TextStyle(color: Colors.white54),
+                labelStyle: TextStyle(color: p.textFaint),
                 filled: true,
-                fillColor: Colors.white.withAlpha(13),
+                fillColor: p.surfaceAlt,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
                   borderSide: BorderSide.none,
@@ -217,9 +218,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 child: Text(
                   _canResend ? t.resendCode : t.resendCodeIn(_countdownSeconds),
                   style: TextStyle(
-                    color: _canResend
-                        ? const Color(0xFFE8B67D)
-                        : Colors.white30,
+                    color: _canResend ? p.accent : p.textFaintest,
                     fontSize: 14,
                   ),
                 ),

@@ -8,6 +8,7 @@ import '../../providers/map_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/transit_provider.dart';
 import '../../utils/constants/text_strings.dart';
+import '../../utils/theme/app_palette.dart';
 
 // Snap stops: collapsed (header only) · mid (summary) · fully expanded.
 const _kSnapSizes = [0.2, 0.5, 0.88];
@@ -40,20 +41,21 @@ class _RoutePlanErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
       child: Column(
         children: [
-          const Icon(
+          Icon(
             Icons.wifi_tethering_error_rounded,
-            color: Colors.white38,
+            color: p.textFaintest,
             size: 40,
           ),
           const SizedBox(height: 12),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
+            style: TextStyle(color: p.textSecondary, fontSize: 14),
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
@@ -190,6 +192,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
       snapSizes: _kSnapSizes,
       builder: (context, scrollController) {
         final t = context.watch<SettingsProvider>().t;
+        final p = context.palette;
         return Consumer<MapProvider>(
           builder: (context, provider, _) {
             final routePlan = provider.routePlan;
@@ -222,10 +225,12 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
             final isSaved = localSaved || providerFavoriteId != null;
 
             return Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: [
+              decoration: BoxDecoration(
+                color: p.surface,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+                boxShadow: const [
                   BoxShadow(
                     color: Colors.black45,
                     blurRadius: 16,
@@ -244,7 +249,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.grey[600],
+                        color: p.textFaint,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -259,15 +264,15 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                           planType == 'walk'
                               ? Icons.directions_walk
                               : Icons.directions_bus,
-                          color: Colors.white70,
+                          color: p.textSecondary,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             t.busShort,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: p.textPrimary,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
@@ -289,12 +294,12 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                                     providerFavoriteId,
                                   ),
                             icon: _busy
-                                ? const SizedBox(
+                                ? SizedBox(
                                     width: 20,
                                     height: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white54,
+                                      color: p.textFaint,
                                     ),
                                   )
                                 : Icon(
@@ -303,7 +308,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                                         : Icons.bookmark_add_outlined,
                                     color: isSaved
                                         ? const Color(0xFFD5AC79)
-                                        : Colors.white70,
+                                        : p.textSecondary,
                                     size: 20,
                                   ),
                             tooltip: isSaved
@@ -315,9 +320,9 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                         if (canSave) const SizedBox(width: 12),
                         IconButton(
                           onPressed: widget.onClear,
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.close,
-                            color: Colors.white70,
+                            color: p.textSecondary,
                             size: 20,
                           ),
                           tooltip: 'Clear route',
@@ -359,7 +364,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                     ),
                   ),
 
-                  const Divider(color: Color(0xFF2A2A2A), height: 1),
+                  Divider(color: p.divider, height: 1),
 
                   // ── Loading / error / no-route states ───────────────────
                   if (isLoading)
@@ -368,21 +373,18 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const SizedBox(
+                          SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white54,
+                              color: p.textFaint,
                             ),
                           ),
                           const SizedBox(width: 12),
                           Text(
                             t.findingRoute,
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 14,
-                            ),
+                            style: TextStyle(color: p.textFaint, fontSize: 14),
                           ),
                         ],
                       ),
@@ -398,10 +400,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                       child: Text(
                         routePlan.message ?? t.noRouteTryLater,
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 14,
-                        ),
+                        style: TextStyle(color: p.textFaint, fontSize: 14),
                       ),
                     )
                   else if (routePlan != null && routePlan.found) ...[
@@ -415,7 +414,7 @@ class _RouteInfoCardState extends State<RouteInfoCard> {
                       onTap: (i) => provider.setActiveOptionIndex(i),
                     ),
 
-                    const Divider(color: Color(0xFF333333), height: 1),
+                    Divider(color: p.divider, height: 1),
 
                     // ── Active option details ──────────────────────────────
                     RouteOptionDetails(
@@ -502,6 +501,7 @@ class _FasterRouteBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
@@ -543,7 +543,7 @@ class _FasterRouteBanner extends StatelessWidget {
           ),
           IconButton(
             onPressed: onDismiss,
-            icon: const Icon(Icons.close, size: 16, color: Colors.white54),
+            icon: Icon(Icons.close, size: 16, color: p.textFaint),
             padding: const EdgeInsets.all(4),
             constraints: const BoxConstraints(),
             tooltip: t.close,
@@ -681,6 +681,7 @@ class RouteOptionDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
+    final p = context.palette;
     // Which leg the user is on now, so only the active bus leg shows live ETA.
     final progress = showLiveProgress
         ? context.watch<MapProvider>().routeProgress
@@ -743,7 +744,7 @@ class RouteOptionDetails extends StatelessWidget {
             ),
           ),
 
-        const Divider(color: Color(0xFF2A2A2A), height: 1),
+        Divider(color: p.divider, height: 1),
 
         // Segment list with a vertical progress spine + live "you are here" dot.
         Padding(
@@ -870,6 +871,7 @@ class _SpineRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return SizedBox(
       width: 30,
       child: CustomPaint(
@@ -880,6 +882,7 @@ class _SpineRail extends StatelessWidget {
           isBus: isBus,
           endpointColor: endpointColor,
           youAreHereFraction: youAreHereFraction,
+          aheadColor: p.textFaintest,
         ),
         child: const SizedBox.expand(),
       ),
@@ -893,6 +896,7 @@ class _SpinePainter extends CustomPainter {
     required this.isFirst,
     required this.isLast,
     required this.isBus,
+    required this.aheadColor,
     this.endpointColor,
     this.youAreHereFraction,
   });
@@ -901,12 +905,12 @@ class _SpinePainter extends CustomPainter {
   final bool isFirst;
   final bool isLast;
   final bool isBus;
+  final Color aheadColor;
   final Color? endpointColor;
   final double? youAreHereFraction;
 
   static const _travelled = Color(0xFF64B5F6);
   static const _busColor = Color(0xFF1565C0);
-  static const _ahead = Color(0xFF3A3A3A);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -935,15 +939,15 @@ class _SpinePainter extends CustomPainter {
     }
 
     if (!isFirst) {
-      line(0, nodeY, aboveTravelled ? _travelled : _ahead);
+      line(0, nodeY, aboveTravelled ? _travelled : aheadColor);
     }
     if (!isLast) {
-      final color = belowTravelled ? (isBus ? _busColor : _travelled) : _ahead;
+      final color = belowTravelled ? (isBus ? _busColor : _travelled) : aheadColor;
       line(nodeY, size.height, color, dashed: !isBus && !belowTravelled);
     }
 
     final nodeColor =
-        endpointColor ?? (state == _RailState.upcoming ? _ahead : _travelled);
+        endpointColor ?? (state == _RailState.upcoming ? aheadColor : _travelled);
     canvas.drawCircle(Offset(cx, nodeY), nodeR, Paint()..color = nodeColor);
 
     final f = youAreHereFraction;
@@ -964,6 +968,7 @@ class _SpinePainter extends CustomPainter {
       old.isFirst != isFirst ||
       old.isLast != isLast ||
       old.isBus != isBus ||
+      old.aheadColor != aheadColor ||
       old.endpointColor != endpointColor ||
       old.youAreHereFraction != youAreHereFraction;
 }
@@ -977,6 +982,7 @@ class _DestinationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Stack(
       children: [
         Positioned(
@@ -1003,7 +1009,7 @@ class _DestinationRow extends StatelessWidget {
                   child: Text(
                     label,
                     style: TextStyle(
-                      color: arrived ? Colors.white : Colors.white70,
+                      color: arrived ? p.textPrimary : p.textSecondary,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1026,14 +1032,15 @@ class _SummaryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: Colors.white54),
+        Icon(icon, size: 14, color: p.textFaint),
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(color: Colors.white70, fontSize: 12),
+          style: TextStyle(color: p.textSecondary, fontSize: 12),
         ),
       ],
     );
@@ -1057,13 +1064,14 @@ class _PlanTypeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1565C0) : const Color(0xFF2A2A2A),
+          color: selected ? const Color(0xFF1565C0) : p.surfaceAlt,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -1072,13 +1080,13 @@ class _PlanTypeChip extends StatelessWidget {
             Icon(
               icon,
               size: 14,
-              color: selected ? Colors.white : Colors.white54,
+              color: selected ? Colors.white : p.textFaint,
             ),
             const SizedBox(width: 5),
             Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.white : Colors.white54,
+                color: selected ? Colors.white : p.textFaint,
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
               ),
@@ -1106,6 +1114,7 @@ class _WalkSegmentTile extends StatelessWidget {
     final settings = context.watch<SettingsProvider>();
     final lang = settings.languageCode;
     final t = settings.t;
+    final p = context.palette;
     final frac = remainingFraction;
     final showRemaining = frac != null && frac < 0.999;
     final dist = seg.distanceMeters;
@@ -1128,7 +1137,7 @@ class _WalkSegmentTile extends StatelessWidget {
       dense: true,
       leading: Icon(
         isTransfer ? Icons.transfer_within_a_station : Icons.directions_walk,
-        color: isTransfer ? Colors.orangeAccent : Colors.white54,
+        color: isTransfer ? Colors.orangeAccent : p.textFaint,
         size: 20,
       ),
       title: Row(
@@ -1153,14 +1162,14 @@ class _WalkSegmentTile extends StatelessWidget {
           ],
           Text(
             titleText,
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+            style: TextStyle(color: p.textPrimary, fontSize: 14),
           ),
         ],
       ),
       subtitle: seg.from != null && seg.to != null
           ? Text(
               '${seg.from!.localizedName(lang)} → ${seg.to!.localizedName(lang)}',
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: p.textFaint, fontSize: 12),
             )
           : null,
       isThreeLine: false,
@@ -1206,6 +1215,7 @@ class _BusSegmentTileState extends State<_BusSegmentTile> {
     final settings = context.watch<SettingsProvider>();
     final lang = settings.languageCode;
     final t = settings.t;
+    final p = context.palette;
     final routeCode = seg.route?.code;
     final routeName = seg.route?.name ?? routeCode ?? 'Bus';
     final wait = seg.waitMinutes;
@@ -1234,9 +1244,9 @@ class _BusSegmentTileState extends State<_BusSegmentTile> {
       children: [
         ListTile(
           dense: true,
-          leading: const Icon(
+          leading: Icon(
             Icons.directions_bus,
-            color: Colors.white70,
+            color: p.textSecondary,
             size: 20,
           ),
           trailing: canViewDetail
@@ -1297,8 +1307,8 @@ class _BusSegmentTileState extends State<_BusSegmentTile> {
               Flexible(
                 child: Text(
                   routeName,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: p.textPrimary,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
@@ -1333,12 +1343,12 @@ class _BusSegmentTileState extends State<_BusSegmentTile> {
               if (seg.boardAt != null)
                 Text(
                   t.boardAtStop(seg.boardAt!.localizedName(lang)),
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: p.textFaint, fontSize: 12),
                 ),
               if (seg.alightAt != null)
                 Text(
                   t.alightAtStop(seg.alightAt!.localizedName(lang)),
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: p.textFaint, fontSize: 12),
                 ),
               // Live "bus arrives in N" (bus → board stop) wins over the static
               // estimate — the deadline to reach the stop, so the user can hurry.
@@ -1358,7 +1368,7 @@ class _BusSegmentTileState extends State<_BusSegmentTile> {
                 else if (wait != null)
                   Text(
                     live ? t.busArrivesIn(wait) : t.busArrivesInEstimated(wait),
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: p.textFaint, fontSize: 12),
                   ),
               if (seg.rideMinutes != null || seg.distanceMeters != null)
                 Text(
@@ -1368,7 +1378,7 @@ class _BusSegmentTileState extends State<_BusSegmentTile> {
                     if (seg.distanceMeters != null)
                       _formatDistance(seg.distanceMeters!),
                   ].join(' · '),
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: p.textFaint, fontSize: 12),
                 ),
               // Once aboard: live "reach your stop in N min".
               if (liveAlightSeconds != null)
@@ -1385,7 +1395,7 @@ class _BusSegmentTileState extends State<_BusSegmentTile> {
               if (seg.totalLegMinutes != null)
                 Text(
                   t.totalLegMinutes(seg.totalLegMinutes!),
-                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                  style: TextStyle(color: p.textFaintest, fontSize: 11),
                 ),
             ],
           ),
@@ -1442,6 +1452,7 @@ class _UpcomingBuses extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     // Lead-bus "N stops away" from the live trip position (MQTT).
     int? stopsAway;
     final boardIdx = boardStopIndex;
@@ -1465,11 +1476,18 @@ class _UpcomingBuses extends StatelessWidget {
         minutes: leadMinutes,
         stopsAway: stopsAway,
         isLead: true,
+        p: p,
       ),
     ];
     for (var i = 1; i < etas.length && i < 3; i++) {
       rows.add(
-        _busRow(index: i + 1, minutes: etas[i], stopsAway: null, isLead: false),
+        _busRow(
+          index: i + 1,
+          minutes: etas[i],
+          stopsAway: null,
+          isLead: false,
+          p: p,
+        ),
       );
     }
 
@@ -1477,7 +1495,7 @@ class _UpcomingBuses extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(56, 0, 16, 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF262626),
+        color: p.surfaceAlt,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(children: rows),
@@ -1489,11 +1507,12 @@ class _UpcomingBuses extends StatelessWidget {
     required int minutes,
     required int? stopsAway,
     required bool isLead,
+    required AppPalette p,
   }) {
     final urgent = isLead && minutes <= 3;
     final Color color = isLead
         ? (urgent ? Colors.greenAccent : const Color(0xFF4ADE80))
-        : Colors.white54;
+        : p.textFaint;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
@@ -1502,7 +1521,7 @@ class _UpcomingBuses extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             t.busNumber(index),
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
+            style: TextStyle(color: p.textSecondary, fontSize: 12),
           ),
           const Spacer(),
           Text(
@@ -1554,6 +1573,7 @@ class _RideStopList extends StatelessWidget {
       t.stopsCount(count),
       if (rideMin != null) t.minutesApprox(rideMin),
     ].join(' · ');
+    final p = context.palette;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1586,7 +1606,7 @@ class _RideStopList extends StatelessWidget {
         ),
         AnimatedCrossFade(
           firstChild: const SizedBox(width: double.infinity),
-          secondChild: _stopColumn(),
+          secondChild: _stopColumn(p),
           crossFadeState: expanded
               ? CrossFadeState.showSecond
               : CrossFadeState.showFirst,
@@ -1596,21 +1616,26 @@ class _RideStopList extends StatelessWidget {
     );
   }
 
-  Widget _stopColumn() {
+  Widget _stopColumn(AppPalette p) {
     return Padding(
       padding: const EdgeInsets.only(left: 56, right: 16, bottom: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (seg.boardAt != null) _stopRow(seg.boardAt!, anchor: true),
-          for (final s in seg.intermediateStops) _stopRow(s, anchor: false),
-          if (seg.alightAt != null) _stopRow(seg.alightAt!, anchor: true),
+          if (seg.boardAt != null) _stopRow(seg.boardAt!, anchor: true, p: p),
+          for (final s in seg.intermediateStops)
+            _stopRow(s, anchor: false, p: p),
+          if (seg.alightAt != null) _stopRow(seg.alightAt!, anchor: true, p: p),
         ],
       ),
     );
   }
 
-  Widget _stopRow(SegmentStop s, {required bool anchor}) {
+  Widget _stopRow(
+    SegmentStop s, {
+    required bool anchor,
+    required AppPalette p,
+  }) {
     final eta = anchor ? null : s.cumulativeMinutesFromBoard;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1620,7 +1645,7 @@ class _RideStopList extends StatelessWidget {
             width: anchor ? 10 : 7,
             height: anchor ? 10 : 7,
             decoration: BoxDecoration(
-              color: anchor ? const Color(0xFF64B5F6) : Colors.white30,
+              color: anchor ? const Color(0xFF64B5F6) : p.textFaintest,
               shape: BoxShape.circle,
             ),
           ),
@@ -1629,7 +1654,7 @@ class _RideStopList extends StatelessWidget {
             child: Text(
               s.localizedName(lang),
               style: TextStyle(
-                color: anchor ? Colors.white : Colors.white60,
+                color: anchor ? p.textPrimary : p.textFaint,
                 fontSize: 13,
                 fontWeight: anchor ? FontWeight.w700 : FontWeight.w400,
               ),
@@ -1638,7 +1663,7 @@ class _RideStopList extends StatelessWidget {
           if (eta != null)
             Text(
               t.minutesApprox(eta),
-              style: const TextStyle(color: Colors.white38, fontSize: 12),
+              style: TextStyle(color: p.textFaintest, fontSize: 12),
             ),
         ],
       ),
