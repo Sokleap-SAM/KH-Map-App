@@ -10,6 +10,7 @@ import '../models/place.dart';
 import '../models/route_plan.dart';
 import '../models/route_progress.dart';
 import '../models/route_search_selection.dart';
+import '../models/trip.dart';
 import '../models/trip_eta.dart';
 import '../services/location_service.dart';
 import '../services/place_service.dart';
@@ -217,6 +218,50 @@ class MapProvider extends ChangeNotifier {
   /// somewhere past the stop. Tracked per trip via [_boardEtaTripId].
   bool _busSeenAtBoardStop = false;
   String? _boardEtaTripId;
+
+  // ── Live-bus co-location (fed from TransitProvider via [updateLiveTrips]) ──
+  // Riding is confirmed by the *real* bus, not just GPS-on-road: the user left
+  // the board stop with the bus and stays within [_coLocationMeters] of it —
+  // so walking along the same road as the route can't read as "riding".
+  List<Trip> _liveTrips = const [];
+
+  /// Identifies the bus leg being tracked (routeId:board>alight), so the
+  /// co-location latches reset when the user advances to a different bus leg.
+  String? _coBusLegKey;
+
+  /// User came within [_boardProximityMeters] of the active leg's board stop.
+  bool _reachedBoardStop = false;
+
+  /// Trip locked once boarding is confirmed, so tracking stays on the exact bus
+  /// the user boarded even as other buses on the same route move around.
+  String? _boardedTripId;
+
+  /// Latest user↔bus distance (metres) for the tracked leg; null when there's
+  /// no live bus. Drives the co-location decisions.
+  double? _userBusMeters;
+
+  /// When "still aboard past the alight stop" began — a missed alight must be
+  /// *sustained* for [_missedAlightSustain] before it reroutes, so a brief
+  /// overlap while getting off can't false-trigger it.
+  DateTime? _pastAlightSince;
+
+  static const double _boardProximityMeters = 10;
+  static const double _coLocationMeters = 20;
+  static const Duration _missedAlightSustain = Duration(seconds: 6);
+
+  // ── Auto route simulation (walk 5 km/h → ride 25 km/h along the plan) ──────
+  Timer? _simTimer;
+  bool _routeSimActive = false;
+  int _simSegIndex = 0;
+  double _simDistIntoSeg = 0; // metres into the current segment's polyline
+  DateTime _simLastTick = DateTime.now();
+
+  /// Wall-clock acceleration so a long trip is watchable in a couple of minutes
+  /// while keeping the walk:ride speed *ratio* realistic. Set to 1 for real time.
+  static const double _simSpeedFactor = 8;
+  static const Duration _simTickInterval = Duration(milliseconds: 400);
+
+  bool get isRouteSimulating => _routeSimActive;
 
   /// Debounce for missed-bus re-plans so a stubbornly-behind bus can't trigger
   /// a re-plan storm. One-shot notice (the missed route's code) for the UI.
@@ -674,6 +719,7 @@ class MapProvider extends ChangeNotifier {
     _lastShadowAt = null;
     _dismissedFasterId = null;
     _clearFasterSuggestion();
+    _resetCoLocation();
     _stopProgressTicker();
     await _fetchRoutePlan(origin: resolvedOrigin, destination: destination);
     _startProgressTicker();
@@ -723,7 +769,10 @@ class MapProvider extends ChangeNotifier {
       }
     }
     final seg = idx == null ? null : option.segments[idx];
-    final tripId = seg?.tripId;
+    // Prefer the live bus resolved by routeId over the plan's frozen tripId, so
+    // a bus assigned after the plan was made still drives the ETA.
+    final tripId =
+        (seg == null ? null : _resolveLiveTrip(seg)?.id) ?? seg?.tripId;
     final alightStop = seg?.alightAt?.stopId;
     if (idx == null || tripId == null || alightStop == null) {
       _clearBusLegEta();
@@ -753,7 +802,8 @@ class MapProvider extends ChangeNotifier {
       _liveEtaFetchedAt = DateTime.now();
       _updateProgress();
       _maybeHandleMissedBus(seg);
-      _maybeHandleMissedStop(seg);
+      // Missed-alight now runs every tick inside _updateProgress (it needs the
+      // sustained co-location window), so it is not called again here.
     } catch (_) {
       // best-effort — keep last-known ETA
     }
@@ -814,10 +864,35 @@ class MapProvider extends ChangeNotifier {
   /// only fires when they genuinely stayed aboard. Recovers by re-planning from
   /// the current (past) position, so the planner routes them back.
   void _maybeHandleMissedStop(RouteSegment busLeg) {
-    final riding = _routeProgress?.phase == RoutePhase.riding;
-    final alightEta = _liveAlightEtaSec;
-    final overshot =
-        riding && alightEta != null && alightEta <= 0 && !_liveAlightAtStop;
+    if (_routeProgress?.phase != RoutePhase.riding) {
+      _pastAlightSince = null;
+      return;
+    }
+
+    final alightIdx = busLeg.alightAt?.stopIndex;
+    final trip = _resolveLiveTrip(busLeg);
+
+    bool overshot;
+    if (trip != null && alightIdx != null && _userBusMeters != null) {
+      // Live path: the bus has left the alight stop AND the user is still
+      // co-located with it — i.e. they stayed aboard. Require this to be
+      // sustained ([_missedAlightSustain]) so a brief overlap while alighting
+      // (or a bus briefly stuck alongside a parallel walk) can't trigger it.
+      final stillAboard = trip.currentStopIndex > alightIdx &&
+          _userBusMeters! <= _coLocationMeters;
+      if (stillAboard) {
+        _pastAlightSince ??= DateTime.now();
+        overshot = DateTime.now().difference(_pastAlightSince!) >=
+            _missedAlightSustain;
+      } else {
+        _pastAlightSince = null;
+        overshot = false;
+      }
+    } else {
+      // No live bus — fall back to the ETA-based signal (single-shot).
+      final alightEta = _liveAlightEtaSec;
+      overshot = alightEta != null && alightEta <= 0 && !_liveAlightAtStop;
+    }
     if (!overshot) return;
 
     final now = DateTime.now();
@@ -826,6 +901,7 @@ class MapProvider extends ChangeNotifier {
       return;
     }
     _lastMissedReplanAt = now;
+    _pastAlightSince = null;
     _passedStopReroute = true;
     notifyListeners();
     // No route bias — recovery may need a different line to come back.
@@ -841,6 +917,7 @@ class MapProvider extends ChangeNotifier {
     // leg tracking so progress projects onto the new route from its start.
     _lastActiveSegment = 0;
     _routeProgress = null;
+    _resetCoLocation();
     _refreshInProgress = true;
     try {
       // Keep the committed journey shape where a later trip exists (sticky +
@@ -993,16 +1070,126 @@ class MapProvider extends ChangeNotifier {
     _fasterSavingMinutes = null;
   }
 
+  /// Pushed by the map UI whenever [TransitProvider] emits new live positions,
+  /// so riding/co-location tracks the real bus in near-real-time (MQTT ~1 s)
+  /// rather than only on the GPS/ETA cadence.
+  void updateLiveTrips(List<Trip> trips) {
+    _liveTrips = trips;
+    if (_isRoutingActive) _updateProgress();
+  }
+
+  /// The live bus currently serving [leg], matched by **routeId** against the
+  /// live feed — not the plan's frozen `tripId` — so a bus assigned after the
+  /// plan was made is picked up automatically. A trip locked by boarding wins;
+  /// otherwise the one furthest along toward boarding that hasn't yet passed
+  /// the alight stop.
+  Trip? _resolveLiveTrip(RouteSegment leg) {
+    final routeId = leg.route?.id;
+    if (routeId == null || _liveTrips.isEmpty) return null;
+    final alightIdx = leg.alightAt?.stopIndex;
+    final locked = _boardedTripId;
+    if (locked != null) {
+      for (final t in _liveTrips) {
+        if (t.id == locked && t.routeId == routeId) return t;
+      }
+    }
+    Trip? best;
+    for (final t in _liveTrips) {
+      if (t.routeId != routeId) continue;
+      if (alightIdx != null && t.currentStopIndex > alightIdx) continue;
+      if (best == null || t.currentStopIndex > best.currentStopIndex) best = t;
+    }
+    return best;
+  }
+
+  String _busLegKey(RouteSegment leg) =>
+      '${leg.route?.id}:${leg.boardAt?.stopIndex}>${leg.alightAt?.stopIndex}';
+
+  /// The bus leg the user is currently on, or null when the active leg is a
+  /// walk (or nothing is being tracked).
+  RouteSegment? _trackedBusLeg() {
+    final option = activeOption;
+    final prog = _routeProgress;
+    if (option == null || prog == null) return null;
+    final i = prog.activeSegmentIndex;
+    if (i < 0 || i >= option.segments.length) return null;
+    final seg = option.segments[i];
+    return seg.isBus ? seg : null;
+  }
+
+  void _resetCoLocation() {
+    _coBusLegKey = null;
+    _reachedBoardStop = false;
+    _boardedTripId = null;
+    _pastAlightSince = null;
+    _userBusMeters = null;
+  }
+
+  /// Phase for a bus leg. Prefers live co-location with the real bus; falls back
+  /// to the GPS-on-road heuristic when no live bus is available for this leg.
+  ///
+  /// Riding is confirmed only when the user reached the board stop
+  /// (≤ [_boardProximityMeters]), the matched bus has left the board stop, and
+  /// the user stays within [_coLocationMeters] of it — so walking down the same
+  /// road as the route can't read as "riding". Once confirmed, the exact trip
+  /// is locked ([_boardedTripId]).
+  RoutePhase _busLegPhase(RouteSegment leg, LatLng pos, double fraction) {
+    // Reset the co-location latches when we move onto a different bus leg.
+    final key = _busLegKey(leg);
+    if (key != _coBusLegKey) {
+      _coBusLegKey = key;
+      _reachedBoardStop = false;
+      _boardedTripId = null;
+      _pastAlightSince = null;
+    }
+
+    final boardIdx = leg.boardAt?.stopIndex;
+    final boardCoord = leg.boardAt?.coordinates;
+    if (boardCoord != null &&
+        _distance(pos, boardCoord) <= _boardProximityMeters) {
+      _reachedBoardStop = true;
+    }
+
+    final trip = _resolveLiveTrip(leg);
+    final busPos = trip?.currentLocation;
+    _userBusMeters = busPos == null ? null : _distance(pos, busPos);
+
+    if (trip != null && busPos != null && boardIdx != null) {
+      final coLocated = _userBusMeters! <= _coLocationMeters;
+      final boarded = _boardedTripId == trip.id;
+      final busLeftBoard = trip.currentStopIndex > boardIdx;
+      if (coLocated &&
+          (busLeftBoard || boarded) &&
+          (_reachedBoardStop || boarded)) {
+        _boardedTripId = trip.id; // lock onto the exact bus the user boarded
+        return RoutePhase.riding;
+      }
+      return RoutePhase.waiting;
+    }
+
+    // No live bus for this leg — fall back to the road-projection heuristic.
+    return fraction < 0.02 ? RoutePhase.waiting : RoutePhase.riding;
+  }
+
   /// Recomputes [_routeProgress] from the latest GPS fix against the active
   /// option and notifies listeners only when the displayed values change.
   /// Purely local — no `/plan` call.
   void _updateProgress() {
     if (!_isRoutingActive) return;
-    final prevSeg = _routeProgress?.activeSegmentIndex;
+    final prev = _routeProgress;
+    final prevSeg = prev?.activeSegmentIndex;
     final next = _computeProgress();
-    if (next == null && _routeProgress == null) return;
-    if (next != null && next.sameAs(_routeProgress)) return;
+    // Adopt immediately so the co-location check below sees the fresh phase.
     _routeProgress = next;
+
+    // Missed-alight is co-location + *sustained*, so it must run every tick
+    // (not only on the 15 s ETA poll) to track the sustain window.
+    final busLeg = _trackedBusLeg();
+    if (busLeg != null) _maybeHandleMissedStop(busLeg);
+
+    // Notify only when the displayed values actually change.
+    if (next == null && prev == null) return;
+    if (next != null && next.sameAs(prev)) return;
     notifyListeners();
     // Advancing to a new leg (e.g. boarding) — refresh the live bus ETA now
     // instead of waiting for the 15 s tick, and re-check for a faster route
@@ -1116,7 +1303,7 @@ class MapProvider extends ChangeNotifier {
     if (isLast && (bestFraction >= 0.98 || metersLeft < 25)) {
       phase = RoutePhase.arrived;
     } else if (active.isBus) {
-      phase = bestFraction < 0.02 ? RoutePhase.waiting : RoutePhase.riding;
+      phase = _busLegPhase(active, pos, bestFraction);
     } else {
       phase = RoutePhase.walking;
     }
@@ -1284,13 +1471,135 @@ class MapProvider extends ChangeNotifier {
 
   /// Exits simulation mode; the next real GPS fix resumes control of the marker.
   void stopSimulatingLocation() {
+    _stopRouteSim();
     if (!_simulatingLocation) return;
     _simulatingLocation = false;
     notifyListeners();
   }
 
+  /// One-tap auto-drive: animates the simulated "current location" along the
+  /// active plan — walk legs at ~5 km/h, bus legs at ~25 km/h (accelerated by
+  /// [_simSpeedFactor]) — from the origin to the destination, so the whole
+  /// walking → waiting → riding → arrived flow can be watched without tapping.
+  void startRouteSimulation() {
+    final option = activeOption;
+    if (!_isRoutingActive || option == null || option.segments.isEmpty) return;
+    _resetCoLocation();
+    _lastActiveSegment = 0;
+    _routeProgress = null;
+    _simSegIndex = 0;
+    _simDistIntoSeg = 0;
+    _simLastTick = DateTime.now();
+    _simulatingLocation = true;
+    _routeSimActive = true;
+    final startPoly = _segmentPolyline(option.segments.first);
+    if (startPoly.isNotEmpty) _currentPosition = startPoly.first;
+    notifyListeners();
+    _updateProgress();
+    _simTimer?.cancel();
+    _simTimer = Timer.periodic(_simTickInterval, (_) => _simStep());
+  }
+
+  /// Stops the auto-drive and exits simulation mode.
+  void stopRouteSimulation() {
+    _stopRouteSim();
+    _simulatingLocation = false;
+    notifyListeners();
+  }
+
+  void _stopRouteSim() {
+    _simTimer?.cancel();
+    _simTimer = null;
+    _routeSimActive = false;
+  }
+
+  void _simStep() {
+    final option = activeOption;
+    if (!_routeSimActive || !_isRoutingActive || option == null) {
+      _stopRouteSim();
+      return;
+    }
+    final segs = option.segments;
+    final now = DateTime.now();
+    final dt = now.difference(_simLastTick).inMilliseconds / 1000.0;
+    _simLastTick = now;
+
+    var advance =
+        _simSegIndex < segs.length
+        ? _speedMps(segs[_simSegIndex]) * _simSpeedFactor * dt
+        : 0.0;
+
+    // Walk the cursor forward, carrying overflow into later segments.
+    while (advance > 0 && _simSegIndex < segs.length) {
+      final poly = _segmentPolyline(segs[_simSegIndex]);
+      final len = _polylineLength(poly);
+      if (poly.length < 2 || len <= 0) {
+        _simSegIndex++;
+        _simDistIntoSeg = 0;
+        continue;
+      }
+      final room = len - _simDistIntoSeg;
+      if (advance < room) {
+        _simDistIntoSeg += advance;
+        advance = 0;
+      } else {
+        advance -= room;
+        _simSegIndex++;
+        _simDistIntoSeg = 0;
+      }
+    }
+
+    if (_simSegIndex >= segs.length) {
+      final lastPoly = _segmentPolyline(segs.last);
+      if (lastPoly.isNotEmpty) _currentPosition = lastPoly.last;
+      _stopRouteSim();
+      notifyListeners();
+      _updateProgress();
+      return;
+    }
+
+    _currentPosition =
+        _pointAlong(_segmentPolyline(segs[_simSegIndex]), _simDistIntoSeg);
+    notifyListeners();
+    _updateProgress();
+  }
+
+  double _speedMps(RouteSegment seg) {
+    const walkMps = 5000.0 / 3600.0; // 5 km/h
+    const busMps = 25000.0 / 3600.0; // 25 km/h
+    return seg.isBus ? busMps : walkMps;
+  }
+
+  double _polylineLength(List<LatLng> pts) {
+    var d = 0.0;
+    for (var i = 1; i < pts.length; i++) {
+      d += _distance(pts[i - 1], pts[i]);
+    }
+    return d;
+  }
+
+  /// The point [dist] metres along [pts], clamped to its ends.
+  LatLng _pointAlong(List<LatLng> pts, double dist) {
+    if (pts.isEmpty) return _currentPosition ?? const LatLng(0, 0);
+    if (pts.length == 1) return pts.first;
+    var acc = 0.0;
+    for (var i = 1; i < pts.length; i++) {
+      final segLen = _distance(pts[i - 1], pts[i]);
+      if (acc + segLen >= dist) {
+        final t = segLen <= 0 ? 0.0 : (dist - acc) / segLen;
+        return LatLng(
+          pts[i - 1].latitude + (pts[i].latitude - pts[i - 1].latitude) * t,
+          pts[i - 1].longitude + (pts[i].longitude - pts[i - 1].longitude) * t,
+        );
+      }
+      acc += segLen;
+    }
+    return pts.last;
+  }
+
   void clearRouting() {
     _stopProgressTicker();
+    _stopRouteSim();
     _routeProgress = null;
     _lastActiveSegment = 0;
     _lastMissedReplanAt = null;
@@ -1299,6 +1608,7 @@ class MapProvider extends ChangeNotifier {
     _lastShadowAt = null;
     _dismissedFasterId = null;
     _clearFasterSuggestion();
+    _resetCoLocation();
     _activeFavoriteId = null;
     _showBusLines = true;
     _isRoutingActive = false;

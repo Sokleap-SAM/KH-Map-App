@@ -86,6 +86,10 @@ class AppTexts {
       _km ? 'បានកំណត់ទីតាំងក្លែងធ្វើ' : 'Simulated location set';
   String get stopSimulating =>
       _km ? 'ឈប់ក្លែងធ្វើទីតាំង' : 'Stop simulating';
+  String get autoSimulate =>
+      _km ? 'ក្លែងធ្វើដំណើរស្វ័យប្រវត្តិ' : 'Auto-simulate trip';
+  String get autoSimulateStarted =>
+      _km ? 'កំពុងក្លែងធ្វើដំណើរ…' : 'Simulating the trip…';
   String get liveLocationRestored =>
       _km ? 'បានប្រើទីតាំងពិតវិញ' : 'Live location restored';
 
@@ -744,6 +748,9 @@ class AppTexts {
   String waitEstimated(int n) =>
       _km ? 'ចាំ​ ~$n នាទី (ការប៉ាន់ស្មាន)' : 'Wait ~$n min (estimated)';
   String rideMinutes(int n) => _km ? 'ជិះ ~$n នាទី' : 'Ride ~$n min';
+  // Upcoming-buses panel + expandable ride stop-list (route info card).
+  String busNumber(int n) => _km ? 'ឡានក្រុងទី $n' : 'Bus $n';
+  String stopsAway(int n) => _km ? 'នៅ $n ចំណតទៀត' : '$n stops away';
   String totalLegMinutes(int n) =>
       _km ? 'រយៈពេលសរុប ~$n នាទី' : 'Total ~$n min';
 

@@ -64,22 +64,61 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   bool _seededFilterFromRoutes = false;
   final Set<String> _favoritePlaceIds = {};
 
+  // Cached provider refs + memoized MQTT route set for the live-tracking wiring:
+  // TransitProvider positions feed MapProvider's co-location riding detection,
+  // and the active trip's routes stay subscribed even if unchecked in the filter.
+  MapProvider? _mapProvider;
+  TransitProvider? _transitProvider;
+  Set<String> _lastMqttRoutes = {};
+
   /// Pushes the current filter to TransitProvider, which opens/closes the
   /// matching MQTT topic subscriptions. Safe to call repeatedly; the provider
   /// only acts on the diff.
   void _syncMqttSubscriptions() {
-    context.read<TransitProvider>().setSubscribedRoutes(
-      Set<String>.from(_selectedRouteIds),
-    );
+    final routes = Set<String>.from(_selectedRouteIds);
+    // During a trip, always track the committed journey's bus-leg routes — even
+    // if the user unchecked them in the filter — so live tracking never breaks.
+    final map = _mapProvider;
+    if (map != null && map.isRoutingActive) {
+      final opt = map.activeOption;
+      if (opt != null) {
+        for (final seg in opt.segments) {
+          final id = seg.route?.id;
+          if (seg.isBus && id != null) routes.add(id);
+        }
+      }
+    }
+    if (routes.length == _lastMqttRoutes.length &&
+        routes.containsAll(_lastMqttRoutes)) {
+      return;
+    }
+    _lastMqttRoutes = routes;
+    (_transitProvider ?? context.read<TransitProvider>())
+        .setSubscribedRoutes(routes);
   }
+
+  // Feed live bus positions into MapProvider on every MQTT tick (co-location
+  // riding detection).
+  void _onTransitTrips() {
+    _mapProvider?.updateLiveTrips(_transitProvider?.trips ?? const []);
+  }
+
+  // Re-sync subscriptions when routing starts/stops or the active option
+  // changes, so the trip's routes get added/removed. Memoized, so the frequent
+  // progress-tick notifications are cheap no-ops.
+  void _onRoutingChanged() => _syncMqttSubscriptions();
 
   @override
   void initState() {
     super.initState();
-    context.read<MapProvider>().init();
-    context.read<TransitProvider>().init();
+    _mapProvider = context.read<MapProvider>();
+    _transitProvider = context.read<TransitProvider>();
+    _mapProvider!.init();
+    _transitProvider!.init();
     _loadFavorites();
     AuthService.tokenNotifier.addListener(_onAuthChanged);
+    _transitProvider!.addListener(_onTransitTrips);
+    _mapProvider!.addListener(_onRoutingChanged);
   }
 
   void _onAuthChanged() {
@@ -134,6 +173,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     AuthService.tokenNotifier.removeListener(_onAuthChanged);
+    _transitProvider?.removeListener(_onTransitTrips);
+    _mapProvider?.removeListener(_onRoutingChanged);
     _mapController.dispose();
     super.dispose();
   }
@@ -1530,6 +1571,36 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
+                // One-tap auto-drive: walk 5 km/h → ride 25 km/h along the plan.
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: FloatingActionButton(
+                    heroTag: 'sim_auto',
+                    mini: true,
+                    backgroundColor: provider.isRouteSimulating
+                        ? const Color(0xFF22C55E)
+                        : const Color(0xFF1A2B4C),
+                    tooltip: t.autoSimulate,
+                    onPressed: () {
+                      if (provider.isRouteSimulating) {
+                        provider.stopRouteSimulation();
+                        _snack(t.liveLocationRestored);
+                      } else {
+                        provider.startRouteSimulation();
+                        _snack(t.autoSimulateStarted);
+                      }
+                    },
+                    child: Icon(
+                      provider.isRouteSimulating
+                          ? Icons.stop
+                          : Icons.play_arrow,
+                      color: provider.isRouteSimulating
+                          ? Colors.white
+                          : const Color(0xFFE8B67D),
+                      size: 20,
+                    ),
+                  ),
+                ),
                 FloatingActionButton(
                   heroTag: 'sim_pick',
                   mini: true,
