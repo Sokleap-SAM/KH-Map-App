@@ -16,16 +16,34 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController otpController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  final TextEditingController confirmPasswordController = TextEditingController();
 
-  bool _isCodeSent = false; // Toggles between Step 1 and Step 2
+  bool _isCodeSent = false;
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    emailController.dispose();
+    otpController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // STEP 1: SEND OTP CODE
+  // ---------------------------------------------------------------------------
   void _handleSendCode() async {
     final t = context.read<SettingsProvider>().t;
+    final email = emailController.text.trim().toLowerCase();
+
+    if (email.isEmpty) {
+      _showMessage('Please enter your email address.');
+      return;
+    }
+
     setState(() => _isLoading = true);
-    bool success = await _authService.sendForgotPasswordOtp(
-      emailController.text,
-    );
+    bool success = await _authService.sendForgotPasswordOtp(email);
     if (!mounted) return;
     setState(() => _isLoading = false);
 
@@ -37,20 +55,34 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // STEP 2: RESET PASSWORD WITH OTP
+  // ---------------------------------------------------------------------------
   void _handleResetPassword() async {
     final t = context.read<SettingsProvider>().t;
+    final email = emailController.text.trim().toLowerCase();
+    final otp = otpController.text.trim();
+    final newPassword = passwordController.text.trim();
+    final confirmPassword = confirmPasswordController.text.trim();
+
+    if (otp.isEmpty || newPassword.isEmpty) {
+      _showMessage('Please enter both the OTP code and new password.');
+      return;
+    }
+
+    if (newPassword != confirmPassword) {
+      _showMessage(t.passwordsDoNotMatch);
+      return;
+    }
+
     setState(() => _isLoading = true);
-    bool success = await _authService.resetPassword(
-      emailController.text,
-      otpController.text,
-      passwordController.text,
-    );
+    bool success = await _authService.resetPassword(email, otp, newPassword);
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (success) {
       _showMessage(t.passwordChanged);
-      Navigator.pop(context); // Go back to Login
+      Navigator.pop(context); // Return to LoginScreen
     } else {
       _showMessage(t.invalidCode);
     }
@@ -64,6 +96,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
     final p = context.palette;
+
     return Scaffold(
       backgroundColor: p.scaffold,
       appBar: AppBar(
@@ -96,10 +129,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               controller: emailController,
               label: t.emailField,
               icon: Icons.email_outlined,
-              enabled: !_isCodeSent, // Lock email after code is sent
+              enabled: !_isCodeSent,
+              keyboardType: TextInputType.emailAddress,
             ),
 
-            // STEP 2: Enter OTP and New Password (Shows only after code is sent)
+            // STEP 2: Enter OTP, New Password & Confirm Password
             if (_isCodeSent) ...[
               const SizedBox(height: 20),
               _buildTextField(
@@ -115,11 +149,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 icon: Icons.lock_outline,
                 isPassword: true,
               ),
+              const SizedBox(height: 20),
+              _buildTextField(
+                controller: confirmPasswordController,
+                label: t.confirmPasswordField,
+                icon: Icons.lock_reset_outlined,
+                isPassword: true,
+              ),
             ],
 
             const SizedBox(height: 40),
 
-            // Action Button
+            // Submit Button
             SizedBox(
               width: double.infinity,
               height: 55,
@@ -138,7 +179,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     ? const CircularProgressIndicator(color: Colors.black)
                     : Text(
                         _isCodeSent ? t.changePassword : t.sendCode,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
               ),
             ),
