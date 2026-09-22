@@ -74,11 +74,14 @@ class AuthService {
   // ===========================================================================
 
   Future<LoginResult> login(String email, String password) async {
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanPassword = password.trim();
+
     final url = Uri.parse("$baseUrl/users/login");
     final response = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"email": email, "password": password}),
+      body: jsonEncode({"email": cleanEmail, "password": cleanPassword}),
     );
 
     if (response.statusCode == 201 || response.statusCode == 200) {
