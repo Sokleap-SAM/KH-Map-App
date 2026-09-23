@@ -121,15 +121,6 @@ class TransitService {
     return Trip.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  Future<Trip> advanceTrip(String id) async {
-    final uri = Uri.parse('$_baseUrl/transit/trips/$id/advance');
-    final response = await http.post(uri).timeout(const Duration(seconds: 10));
-    if (response.statusCode != 200) {
-      throw Exception('Failed to advance trip');
-    }
-    return Trip.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
   Future<RoutePlanResult> fetchRoutePlan({
     required double originLat,
     required double originLng,
@@ -151,7 +142,8 @@ class TransitService {
         'destLng': destLng.toString(),
         'destLat': destLat.toString(),
         'type': type,
-        if (preferRouteIds.isNotEmpty) 'preferRouteIds': preferRouteIds.join(','),
+        if (preferRouteIds.isNotEmpty)
+          'preferRouteIds': preferRouteIds.join(','),
       },
     );
     final response = await http.get(uri).timeout(timeout);
@@ -172,9 +164,9 @@ class TransitService {
     required String tripId,
     required String stopId,
   }) async {
-    final uri = Uri.parse('$_baseUrl/transit/eta').replace(
-      queryParameters: {'tripId': tripId, 'stopId': stopId},
-    );
+    final uri = Uri.parse(
+      '$_baseUrl/transit/eta',
+    ).replace(queryParameters: {'tripId': tripId, 'stopId': stopId});
     final response = await http.get(uri).timeout(const Duration(seconds: 10));
     if (response.statusCode == 404) return null;
     if (response.statusCode != 200) {

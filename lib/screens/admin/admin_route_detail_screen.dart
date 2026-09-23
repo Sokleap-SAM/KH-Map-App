@@ -105,7 +105,6 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
     }
   }
 
-
   @override
   void initState() {
     super.initState();
@@ -115,9 +114,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
 
   Future<void> _editRoute() async {
     final updated = await Navigator.of(context).push<AdminRoute>(
-      MaterialPageRoute(
-        builder: (_) => AdminRouteEditScreen(route: _summary),
-      ),
+      MaterialPageRoute(builder: (_) => AdminRouteEditScreen(route: _summary)),
     );
     if (updated != null && mounted) {
       setState(() {
@@ -162,8 +159,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
   List<List<LatLng>> _segmentLines() {
     final out = <List<LatLng>>[
       for (final s in _stops)
-        if (s.segmentPath != null && s.segmentPath!.length >= 2)
-          s.segmentPath!,
+        if (s.segmentPath != null && s.segmentPath!.length >= 2) s.segmentPath!,
     ];
     if (out.isEmpty && _stops.length >= 2) {
       return [
@@ -173,8 +169,9 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
     return out;
   }
 
-  LatLng get _center =>
-      _stops.isNotEmpty ? _stops.first.location : const LatLng(11.5564, 104.9282);
+  LatLng get _center => _stops.isNotEmpty
+      ? _stops.first.location
+      : const LatLng(11.5564, 104.9282);
 
   Future<void> _append() async {
     final routeId = await Navigator.of(context).push<String?>(
@@ -234,8 +231,9 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       final msg = e is AdminApiException ? e.message : e.toString();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
     }
   }
 
@@ -243,12 +241,13 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
   Future<Place?> _pickPlace() async {
     List<Place>? places;
     try {
-      places = await _admin.fetchPlaces();
+      places = await _admin.fetchStops();
     } catch (e) {
       if (mounted) {
         final msg = e is AdminApiException ? e.message : e.toString();
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
       }
       return null;
     }
@@ -265,10 +264,12 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
             final items = q.isEmpty
                 ? all
                 : all
-                    .where((p) =>
-                        p.nameInKhmer.toLowerCase().contains(q) ||
-                        p.nameInLatin.toLowerCase().contains(q))
-                    .toList();
+                      .where(
+                        (p) =>
+                            p.nameInKhmer.toLowerCase().contains(q) ||
+                            p.nameInLatin.toLowerCase().contains(q),
+                      )
+                      .toList();
             return SizedBox(
               height: MediaQuery.of(ctx).size.height * 0.7,
               child: Column(
@@ -394,8 +395,9 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       final msg = e is AdminApiException ? e.message : e.toString();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
     }
   }
 
@@ -413,8 +415,9 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       final msg = e is AdminApiException ? e.message : e.toString();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_t.failedWith(msg))));
     }
   }
 
@@ -675,10 +678,7 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
               ),
               IconButton(
                 tooltip: _t.viewDetail,
-                icon: Icon(
-                  Icons.visibility,
-                  color: context.palette.subtitle,
-                ),
+                icon: Icon(Icons.visibility, color: context.palette.subtitle),
                 onPressed: () => _viewStopPlace(s),
               ),
               // Edit the incoming segment (previous stop → this stop). The
@@ -765,52 +765,52 @@ class _AdminRouteDetailScreenState extends State<AdminRouteDetailScreen> {
                       : (_) => _toggleSelected(stop),
                 )
               : PopupMenuButton<String>(
-            tooltip: t.options,
-            onSelected: (v) {
-              switch (v) {
-                case 'fix':
-                  _fixSegment(i);
-                case 'place':
-                  _changePlace(stop);
-                case 'delete':
-                  _deleteStop(stop);
-              }
-            },
-            itemBuilder: (_) => [
-              // First stop has no incoming segment to fix.
-              if (i > 0)
-                PopupMenuItem(
-                  value: 'fix',
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.route),
-                    title: Text(t.fixRoad),
-                  ),
+                  tooltip: t.options,
+                  onSelected: (v) {
+                    switch (v) {
+                      case 'fix':
+                        _fixSegment(i);
+                      case 'place':
+                        _changePlace(stop);
+                      case 'delete':
+                        _deleteStop(stop);
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    // First stop has no incoming segment to fix.
+                    if (i > 0)
+                      PopupMenuItem(
+                        value: 'fix',
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.route),
+                          title: Text(t.fixRoad),
+                        ),
+                      ),
+                    PopupMenuItem(
+                      value: 'place',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.swap_horiz),
+                        title: Text(t.changePlace),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.delete, color: Colors.red),
+                        title: Text(
+                          t.delete,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              PopupMenuItem(
-                value: 'place',
-                child: ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.swap_horiz),
-                  title: Text(t.changePlace),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'delete',
-                child: ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.delete, color: Colors.red),
-                  title: Text(
-                    t.delete,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                ),
-              ),
-            ],
-          ),
         );
       },
     );

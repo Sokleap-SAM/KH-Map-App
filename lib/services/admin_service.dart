@@ -7,8 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/admin_dashboard.dart';
 import '../models/admin_route.dart';
+import '../models/app_user.dart';
+import '../models/bus.dart';
 import '../models/place.dart';
 import '../models/place_category.dart';
+import '../models/trip.dart';
 
 /// Typed exception carrying the backend's machine-readable message so the UI
 /// can surface it. Mirrors DriverApiException.
@@ -132,7 +135,7 @@ class AdminService {
 
   /// GET /places/stops — every Bus Stop place (category populated), the set
   /// managed in the Stops tab.
-  Future<List<Place>> fetchPlaces() async {
+  Future<List<Place>> fetchStops() async {
     final r = await http
         .get(Uri.parse('$_baseUrl/places/stops'), headers: await _authHeaders())
         .timeout(const Duration(seconds: 10));
@@ -207,34 +210,6 @@ class AdminService {
     return Place.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
   }
 
-  /// POST /places/stops — create a bus stop. multipart/form-data body:
-  /// `nameInKhmer`, optional `nameInLatin`, `location` (JSON string
-  /// `[lng, lat]`), optional `photos` files. The backend auto-assigns the
-  /// "Bus Stop" category.
-  Future<Place> createPlace({
-    required String nameInKhmer,
-    required String nameInLatin,
-    required double longitude,
-    required double latitude,
-    List<http.MultipartFile>? photos,
-  }) async {
-    final req = http.MultipartRequest(
-      'POST',
-      Uri.parse('$_baseUrl/places/stops'),
-    );
-    final token = await _token();
-    if (token != null) req.headers['Authorization'] = 'Bearer $token';
-    req.fields['nameInKhmer'] = nameInKhmer;
-    req.fields['nameInLatin'] = nameInLatin;
-    req.fields['location'] = jsonEncode([longitude, latitude]);
-    if (photos != null) req.files.addAll(photos);
-
-    final streamed = await req.send().timeout(const Duration(seconds: 30));
-    final r = await http.Response.fromStream(streamed);
-    if (!_ok(r.statusCode)) _throwFor(r);
-    return Place.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
-  }
-
   /// PATCH /places/:id — edit a place. multipart/form-data so new `photos`
   /// files can be appended (the controller wraps this route in a photos
   /// FilesInterceptor). Only the provided fields are sent.
@@ -302,6 +277,350 @@ class AdminService {
     if (r.statusCode != 200) _throwFor(r);
     final data = jsonDecode(r.body) as List;
     return data.whereType<Map<String, dynamic>>().map(Place.fromJson).toList();
+  }
+
+  // ───────────────────────────── Users ──────────────────────────────────────
+
+  /// GET /users — paginated, filterable by role/status, searchable by name or
+  /// email. Empty filters are omitted entirely: the backend validates `role`
+  /// and `status` against enums, so sending `role=` would 400 rather than mean
+  /// "any".
+  Future<UserPage> fetchUsers({
+    int page = 1,
+    int limit = 20,
+    String? role,
+    String? status,
+    String? search,
+  }) async {
+    final query = <String, String>{
+      'page': '$page',
+      'limit': '$limit',
+      if (role != null && role.isNotEmpty) 'role': role,
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+    };
+    final r = await http
+        .get(
+          Uri.parse('$_baseUrl/users').replace(queryParameters: query),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) _throwFor(r);
+    final body = jsonDecode(r.body);
+    // Tolerate a plain array from an older build of the endpoint.
+    if (body is List) {
+      final users = body
+          .whereType<Map<String, dynamic>>()
+          .map(AppUser.fromJson)
+          .toList();
+      return UserPage(
+        data: users,
+        total: users.length,
+        page: 1,
+        limit: users.length,
+        totalPages: 1,
+      );
+    }
+    return UserPage.fromJson(body as Map<String, dynamic>);
+  }
+
+  /// GET /users/:id
+  Future<AppUser> fetchUser(String id) async {
+    final r = await http
+        .get(Uri.parse('$_baseUrl/users/$id'), headers: await _authHeaders())
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) _throwFor(r);
+    return AppUser.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
+  /// POST /users/admin — create an already-verified account, skipping the email
+  /// OTP round trip. This is how a driver is onboarded.
+  Future<AppUser> createUser({
+    required String name,
+    required String email,
+    required String password,
+    String? role,
+  }) async {
+    final r = await http
+        .post(
+          Uri.parse('$_baseUrl/users/admin'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode({
+            'name': name,
+            'email': email,
+            'password': password,
+            if (role != null && role.isNotEmpty) 'role': role,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (!_ok(r.statusCode)) _throwFor(r);
+    return AppUser.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
+  /// PATCH /users/:id — partial update; only the fields passed are sent, so an
+  /// omitted password is left alone rather than blanked.
+  ///
+  /// A role change routes through the backend's `setRole` logic, which also
+  /// unassigns a demoted driver's bus on both sides of the relation.
+  Future<AppUser> updateUser(
+    String id, {
+    String? name,
+    String? email,
+    String? password,
+    String? role,
+    String? status,
+    bool? isVerified,
+  }) async {
+    final body = <String, dynamic>{
+      if (name != null && name.isNotEmpty) 'name': name,
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (password != null && password.isNotEmpty) 'password': password,
+      if (role != null && role.isNotEmpty) 'role': role,
+      if (status != null && status.isNotEmpty) 'status': status,
+      'isVerified': ?isVerified,
+    };
+    final r = await http
+        .patch(
+          Uri.parse('$_baseUrl/users/$id'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (!_ok(r.statusCode)) _throwFor(r);
+    return AppUser.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
+  /// PATCH /users/admin/users/:id/role — change only the role.
+  ///
+  /// Same server-side `setRole` logic the `role` field of [updateUser] routes
+  /// through (so a demoted driver's bus is unassigned on both sides either
+  /// way). This exists as a one-field call for the list's quick action, where
+  /// opening the whole edit form to flip one dropdown is overkill.
+  Future<AppUser> setUserRole(String id, String role) async {
+    final r = await http
+        .patch(
+          Uri.parse('$_baseUrl/users/admin/users/$id/role'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode({'role': role}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (!_ok(r.statusCode)) _throwFor(r);
+    return AppUser.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
+  /// DELETE /users/:id. The backend refuses to delete you, the last admin, or a
+  /// driver mid-trip — each comes back as a 400/409 whose message the UI shows
+  /// verbatim, since only the backend knows which rule tripped.
+  Future<void> deleteUser(String id) async {
+    final r = await http
+        .delete(
+          Uri.parse('$_baseUrl/users/$id'),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (!_ok(r.statusCode) && r.statusCode != 204) _throwFor(r);
+  }
+
+  // ───────────────────────────── Trips ──────────────────────────────────────
+
+  /// GET /transit/trips — every trip ever, each carrying its route's full
+  /// `allStops` array. Unpaginated and unbounded: only for the admin table, and
+  /// expect it to grow slow. Prefer [fetchActiveTrips] for anything live.
+  Future<List<Trip>> fetchAllTrips() async {
+    final r = await http
+        .get(
+          Uri.parse('$_baseUrl/transit/trips'),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 30));
+    if (r.statusCode != 200) _throwFor(r);
+    final data = jsonDecode(r.body) as List;
+    return data.whereType<Map<String, dynamic>>().map(Trip.fromJson).toList();
+  }
+
+  /// GET /transit/trips/active — `scheduled` + `in-progress` only.
+  Future<List<Trip>> fetchActiveTrips() async {
+    final r = await http
+        .get(
+          Uri.parse('$_baseUrl/transit/trips/active'),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (r.statusCode != 200) _throwFor(r);
+    final data = jsonDecode(r.body) as List;
+    return data.whereType<Map<String, dynamic>>().map(Trip.fromJson).toList();
+  }
+
+  /// POST /transit/trips — schedule a trip for [routeId] on [busId].
+  ///
+  /// The backend seeds it at stop index 0 with the first stop's coordinates, so
+  /// it shows on rider maps immediately as a parked bus. Fails with
+  /// `400 "Route has no stops defined"` when the route has no stops yet.
+  Future<Trip> createTrip({
+    required String routeId,
+    required String busId,
+    String? status,
+  }) async {
+    final r = await http
+        .post(
+          Uri.parse('$_baseUrl/transit/trips'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode({
+            'route': routeId,
+            'bus': busId,
+            'status': ?status,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (!_ok(r.statusCode)) _throwFor(r);
+    return Trip.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
+  /// PATCH /transit/trips/:id — in practice only [status] is used from the admin
+  /// UI (cancel / complete a trip by hand). Moving to `in-progress` stamps
+  /// `startedAt` server-side; back to `scheduled` resets the timestamps.
+  Future<Trip> updateTrip(
+    String id, {
+    String? status,
+    int? currentStopIndex,
+    int? nextStopIndex,
+    int? passengerCount,
+  }) async {
+    final r = await http
+        .patch(
+          Uri.parse('$_baseUrl/transit/trips/$id'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode({
+            'status': ?status,
+            'currentStopIndex': ?currentStopIndex,
+            'nextStopIndex': ?nextStopIndex,
+            'passengerCount': ?passengerCount,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (!_ok(r.statusCode)) _throwFor(r);
+    return Trip.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
+  /// DELETE /transit/trips/:id — also clears the trip's Redis live state and
+  /// drops it from the route's geo set, so the bus vanishes from rider maps.
+  Future<void> deleteTrip(String id) async {
+    final r = await http
+        .delete(
+          Uri.parse('$_baseUrl/transit/trips/$id'),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (!_ok(r.statusCode) && r.statusCode != 204) _throwFor(r);
+  }
+
+  // ───────────────────────────── Buses ──────────────────────────────────────
+
+  /// GET /transit/buses — the whole fleet, unpaginated.
+  Future<List<Bus>> fetchBuses() async {
+    final r = await http
+        .get(
+          Uri.parse('$_baseUrl/transit/buses'),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) _throwFor(r);
+    final data = jsonDecode(r.body) as List;
+    return data.whereType<Map<String, dynamic>>().map(Bus.fromJson).toList();
+  }
+
+  /// POST /transit/buses.
+  ///
+  /// `busNumber` and `licensePlate` are unique indexes, and a collision surfaces
+  /// as a raw Mongo `E11000` rather than a friendly 409 — see [isDuplicateKey].
+  Future<Bus> createBus({
+    required String busNumber,
+    required String licensePlate,
+    required int capacity,
+    String? status,
+  }) async {
+    final r = await http
+        .post(
+          Uri.parse('$_baseUrl/transit/buses'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode({
+            'busNumber': busNumber,
+            'licensePlate': licensePlate,
+            'capacity': capacity,
+            'status': ?status,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (!_ok(r.statusCode)) _throwFor(r);
+    return Bus.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
+  /// PATCH /transit/buses/:id — every field optional.
+  ///
+  /// `assignedDriverId` is deliberately absent: it belongs to
+  /// [assignDriverBus], which keeps both sides of the relation in sync.
+  Future<Bus> updateBus(
+    String id, {
+    String? busNumber,
+    String? licensePlate,
+    int? capacity,
+    String? status,
+  }) async {
+    final r = await http
+        .patch(
+          Uri.parse('$_baseUrl/transit/buses/$id'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode({
+            'busNumber': ?busNumber,
+            'licensePlate': ?licensePlate,
+            'capacity': ?capacity,
+            'status': ?status,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (!_ok(r.statusCode)) _throwFor(r);
+    return Bus.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
+  /// DELETE /transit/buses/:id.
+  ///
+  /// Unguarded server-side — it will happily delete a bus with active trips or
+  /// an assigned driver, leaving `User.assignedBusId` dangling. The UI checks
+  /// for both before offering this.
+  Future<void> deleteBus(String id) async {
+    final r = await http
+        .delete(
+          Uri.parse('$_baseUrl/transit/buses/$id'),
+          headers: await _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (!_ok(r.statusCode) && r.statusCode != 204) _throwFor(r);
+  }
+
+  /// True when a failure is a Mongo duplicate-key error, so the UI can say
+  /// "that bus number is taken" instead of showing a raw E11000 dump.
+  static bool isDuplicateKey(Object e) =>
+      e is AdminApiException && e.message.contains('E11000');
+
+  // ─────────────────────── Driver ↔ bus assignment ──────────────────────────
+
+  /// PATCH /users/admin/drivers/:id/assign-bus — [driverId] is the driver's
+  /// **user** id. Pass a null [busId] to unassign, which also forces the
+  /// driver's shift status to `off`.
+  ///
+  /// This is the only way to touch the link: it writes both `User.assignedBusId`
+  /// and `Bus.assignedDriverId`. Reassigning a bus that already has a driver is
+  /// refused with 409 rather than being implicit — unassign first.
+  Future<AppUser> assignDriverBus(String driverId, String? busId) async {
+    final r = await http
+        .patch(
+          Uri.parse('$_baseUrl/users/admin/drivers/$driverId/assign-bus'),
+          headers: await _authHeaders(json: true),
+          body: jsonEncode({'busId': busId}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (!_ok(r.statusCode)) _throwFor(r);
+    return AppUser.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
   }
 
   /// GET /places/requests/history — every request an admin has approved or

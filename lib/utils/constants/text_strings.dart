@@ -250,6 +250,181 @@ class AppTexts {
 
   // Admin shell tabs (places/routes reuse placesTab/routesTab; account reuses navAccount).
   String get adminDashboardTab => _km ? 'ផ្ទាំង' : 'Dashboard';
+  String get usersTab => _km ? 'អ្នកប្រើ' : 'Users';
+
+  // ─── Management hub (admin) ────────────────────────────────────────────
+  String get managementTab => _km ? 'គ្រប់គ្រង' : 'Manage';
+  String get managementTitle => _km ? 'ការគ្រប់គ្រង' : 'Management';
+  String get userManagement => _km ? 'គ្រប់គ្រងអ្នកប្រើ' : 'User management';
+  String get userManagementDesc => _km
+      ? 'បង្កើត កែសម្រួល និងកំណត់តួនាទីអ្នកប្រើ'
+      : 'Create, edit and assign user roles';
+  String get tripManagement => _km ? 'គ្រប់គ្រងដំណើរ' : 'Trip management';
+  String get tripManagementDesc => _km
+      ? 'កំណត់ពេលដំណើរ និងគ្រប់គ្រងស្ថានភាព'
+      : 'Schedule trips and control their status';
+  String get busManagement => _km ? 'គ្រប់គ្រងឡានក្រុង' : 'Bus management';
+  String get busManagementDesc => _km
+      ? 'គ្រប់គ្រងក្រុមឡាន និងចាត់តាំងអ្នកបើកបរ'
+      : 'Manage the fleet and assign drivers';
+
+  // ─── Trip management (admin) ───────────────────────────────────────────
+  String get manageTrips => _km ? 'គ្រប់គ្រងដំណើរ' : 'Manage trips';
+  String get newTrip => _km ? 'ដំណើរថ្មី' : 'New trip';
+  String get createTrip => _km ? 'បង្កើតដំណើរ' : 'Create trip';
+  String get noTrips => _km ? 'រកមិនឃើញដំណើរ' : 'No trips found';
+  String get activeOnly => _km ? 'កំពុងដំណើរការ' : 'Active only';
+  String get tripCreated => _km ? 'បានបង្កើតដំណើរ' : 'Trip created';
+  String get tripUpdated => _km ? 'បានធ្វើបច្ចុប្បន្នភាពដំណើរ' : 'Trip updated';
+  String get tripDeleted => _km ? 'បានលុបដំណើរ' : 'Trip deleted';
+  String get deleteTripTitle => _km ? 'លុបដំណើរ' : 'Delete trip';
+  String get deleteTripWarning => _km
+      ? 'ដំណើរនេះនឹងបាត់ពីផែនទីអ្នកប្រើភ្លាមៗ។'
+      : 'This removes the bus from rider maps immediately.';
+  // (`changeStatus` already exists in the route-management section.)
+  String get routeField => _km ? 'ផ្លូវ' : 'Route';
+  String get busField => _km ? 'ឡានក្រុង' : 'Bus';
+  String get routeRequired => _km ? 'សូមជ្រើសរើសផ្លូវ' : 'Select a route';
+  String get busRequired => _km ? 'សូមជ្រើសរើសឡានក្រុង' : 'Select a bus';
+  String get routeHasNoStops => _km
+      ? 'ផ្លូវនេះមិនទាន់មានចំណត សូមបន្ថែមចំណតជាមុនសិន'
+      : 'This route has no stops yet — add stops before scheduling a trip';
+  String get tripStatusScheduled => _km ? 'បានកំណត់ពេល' : 'Scheduled';
+  String get tripStatusInProgress => _km ? 'កំពុងដំណើរ' : 'In progress';
+  String get tripStatusCompleted => _km ? 'បានបញ្ចប់' : 'Completed';
+  String get tripStatusCancelled => _km ? 'បានលុបចោល' : 'Cancelled';
+  String stopProgress(int index, int total) =>
+      _km ? 'ចំណត $index / $total' : 'Stop $index of $total';
+  String get noDriverYet => _km ? 'មិនទាន់មានអ្នកបើកបរ' : 'No driver yet';
+  String get searchTripsHint => _km
+      ? 'ស្វែងរកតាមផ្លូវ ឬឡានក្រុង'
+      : 'Search by route or bus';
+
+  // ─── Bus management (admin) ────────────────────────────────────────────
+  String get manageBuses => _km ? 'គ្រប់គ្រងឡានក្រុង' : 'Manage buses';
+  String get newBus => _km ? 'ឡានក្រុងថ្មី' : 'New bus';
+  String get createBus => _km ? 'បង្កើតឡានក្រុង' : 'Create bus';
+  String get editBus => _km ? 'កែសម្រួលឡានក្រុង' : 'Edit bus';
+  String get noBuses => _km ? 'រកមិនឃើញឡានក្រុង' : 'No buses found';
+  String get busCreated => _km ? 'បានបង្កើតឡានក្រុង' : 'Bus created';
+  String get busUpdated => _km ? 'បានធ្វើបច្ចុប្បន្នភាព' : 'Bus updated';
+  String get busDeleted => _km ? 'បានលុបឡានក្រុង' : 'Bus deleted';
+  String get deleteBusTitle => _km ? 'លុបឡានក្រុង' : 'Delete bus';
+  String get busNumberField => _km ? 'លេខឡានក្រុង' : 'Bus number';
+  String get licensePlateField => _km ? 'ស្លាកលេខ' : 'License plate';
+  String get capacityField => _km ? 'ចំណុះ' : 'Capacity';
+  String get seats => _km ? 'កៅអី' : 'seats';
+  String get searchBusesHint => _km
+      ? 'ស្វែងរកតាមលេខឡាន ស្លាកលេខ ឬអ្នកបើកបរ'
+      : 'Search by bus number, plate or driver';
+  String busesOnMap(int shown, int total) => _km
+      ? 'លើផែនទី $shown / $total'
+      : '$shown of $total on map';
+  // (`showOnMap` already exists further down.)
+  String get busNumberRequired =>
+      _km ? 'តម្រូវឲ្យបញ្ចូលលេខឡានក្រុង' : 'Bus number is required';
+  String get licensePlateRequired =>
+      _km ? 'តម្រូវឲ្យបញ្ចូលស្លាកលេខ' : 'License plate is required';
+  String get capacityInvalid =>
+      _km ? 'ចំណុះត្រូវជាលេខធំជាងសូន្យ' : 'Capacity must be a number above zero';
+  String get duplicateBusKey => _km
+      ? 'លេខឡានក្រុង ឬស្លាកលេខនេះមានរួចហើយ'
+      : 'That bus number or license plate is already taken';
+  String get busStatusInService => _km ? 'កំពុងប្រើ' : 'In service';
+  String get busStatusOutOfService => _km ? 'ឈប់ប្រើ' : 'Out of service';
+  String get busStatusMaintenance => _km ? 'ជួសជុល' : 'Maintenance';
+  String get assignDriver => _km ? 'ចាត់តាំងអ្នកបើកបរ' : 'Assign driver';
+  String get unassignDriver => _km ? 'ដកអ្នកបើកបរចេញ' : 'Unassign driver';
+  String get driverAssigned => _km ? 'បានចាត់តាំងអ្នកបើកបរ' : 'Driver assigned';
+  String get driverUnassigned =>
+      _km ? 'បានដកអ្នកបើកបរចេញ' : 'Driver unassigned';
+  String get unassigned => _km ? 'មិនទាន់ចាត់តាំង' : 'Unassigned';
+  String get noDriversAvailable =>
+      _km ? 'គ្មានអ្នកបើកបរទំនេរ' : 'No available drivers';
+  String get busInUseTitle => _km ? 'ឡានក្រុងកំពុងប្រើ' : 'Bus is in use';
+  String busInUseBody(int trips) => _km
+      ? 'ឡានក្រុងនេះមានដំណើរកំពុងដំណើរការ $trips។ សូមបញ្ចប់ ឬលុបចោលវាជាមុនសិន។'
+      : 'This bus has $trips active trip(s). Complete or cancel them first.';
+  String get busHasDriverWarning => _km
+      ? 'ឡានក្រុងនេះមានអ្នកបើកបរ។ ការលុបនឹងធ្វើឲ្យតំណភ្ជាប់ខូច — សូមដកអ្នកបើកបរចេញជាមុនសិន។'
+      : 'This bus has an assigned driver. Deleting it leaves a dangling link — '
+          'unassign the driver first.';
+  String get busAlreadyAssigned => _km
+      ? 'ឡានក្រុងនេះមានអ្នកបើកបររួចហើយ សូមដកចេញជាមុនសិន'
+      : 'That bus already has a driver — unassign them first';
+  String get preferOutOfService => _km
+      ? 'ណែនាំ៖ ប្ដូរទៅ "ឈប់ប្រើ" ជំនួសការលុប ដើម្បីរក្សាប្រវត្តិដំណើរ'
+      : 'Tip: switch to "Out of service" instead of deleting, to keep trip '
+          'history readable';
+
+  // ─── User management (admin) ───────────────────────────────────────────
+  String get manageUsers => _km ? 'គ្រប់គ្រងអ្នកប្រើ' : 'Manage users';
+  String get newUser => _km ? 'អ្នកប្រើថ្មី' : 'New user';
+  String get editUser => _km ? 'កែសម្រួលអ្នកប្រើ' : 'Edit user';
+  String get createUser => _km ? 'បង្កើតអ្នកប្រើ' : 'Create user';
+  String get noUsers => _km ? 'រកមិនឃើញអ្នកប្រើ' : 'No users found';
+  String get searchUsersHint =>
+      _km ? 'ស្វែងរកតាមឈ្មោះ ឬអ៊ីមែល' : 'Search by name or email';
+  String get deleteUserTitle => _km ? 'លុបអ្នកប្រើ' : 'Delete user';
+  String deleteUserConfirm(String name) =>
+      _km ? 'លុប "$name" មែនទេ?' : 'Delete "$name"?';
+  String get userCreated => _km ? 'បានបង្កើតអ្នកប្រើ' : 'User created';
+  String get userUpdated => _km ? 'បានធ្វើបច្ចុប្បន្នភាព' : 'User updated';
+  String get userDeleted => _km ? 'បានលុបអ្នកប្រើ' : 'User deleted';
+  String get cannotDeleteSelf =>
+      _km ? 'អ្នកមិនអាចលុបគណនីខ្លួនឯងបានទេ' : "You can't delete your own account";
+  String get changeRole => _km ? 'ប្ដូរតួនាទី' : 'Change role';
+  String get roleUpdated => _km ? 'បានប្ដូរតួនាទី' : 'Role updated';
+  String get demoteSelfTitle =>
+      _km ? 'ប្ដូរតួនាទីខ្លួនឯង?' : 'Change your own role?';
+  String get demoteSelfWarning => _km
+      ? 'អ្នកនឹងបាត់សិទ្ធិគ្រប់គ្រង បន្ទាប់ពីចូលប្រើម្ដងទៀត។ មានតែអ្នកគ្រប់គ្រងផ្សេងទេ ដែលអាចប្ដូរវាមកវិញបាន។'
+      : 'You will lose admin access the next time you sign in. Only another '
+          'admin can undo this.';
+  String usersFound(int n) => _km ? 'អ្នកប្រើ $n នាក់' : '$n user(s)';
+  String pageOf(int page, int total) =>
+      _km ? 'ទំព័រ $page / $total' : 'Page $page of $total';
+
+  // User fields. (`nameField`, `emailField`, `passwordField` already exist.)
+  String get roleField => _km ? 'តួនាទី' : 'Role';
+  String get statusField => _km ? 'ស្ថានភាព' : 'Status';
+  String get verifiedField => _km ? 'បានផ្ទៀងផ្ទាត់' : 'Verified';
+  String get unverified => _km ? 'មិនទាន់ផ្ទៀងផ្ទាត់' : 'Unverified';
+  String get roleUser => _km ? 'អ្នកប្រើ' : 'User';
+  String get roleDriver => _km ? 'អ្នកបើកបរ' : 'Driver';
+  String get roleAdmin => _km ? 'អ្នកគ្រប់គ្រង' : 'Admin';
+  String get statusOn => _km ? 'កំពុងបម្រើ' : 'On shift';
+  String get statusOff => _km ? 'ឈប់សម្រាក' : 'Off shift';
+  String get nameRequired => _km ? 'តម្រូវឲ្យបញ្ចូលឈ្មោះ' : 'Name is required';
+  String get emailRequired => _km ? 'តម្រូវឲ្យបញ្ចូលអ៊ីមែល' : 'Email is required';
+  String get emailInvalid => _km ? 'អ៊ីមែលមិនត្រឹមត្រូវ' : 'Enter a valid email';
+  String get passwordRequired =>
+      _km ? 'តម្រូវឲ្យបញ្ចូលលេខសម្ងាត់' : 'Password is required';
+  String get passwordTooShort => _km
+      ? 'លេខសម្ងាត់ត្រូវមានយ៉ាងតិច ៨ តួ'
+      : 'Password must be at least 8 characters';
+  String get passwordOptionalHint => _km
+      ? 'ទុកចោលបើមិនចង់ប្ដូរលេខសម្ងាត់'
+      : 'Leave blank to keep the current password';
+
+  // ─── My profile (self-service) ─────────────────────────────────────────
+  String get editProfile => _km ? 'កែសម្រួលប្រវត្តិរូប' : 'Edit profile';
+  String get profileUpdated =>
+      _km ? 'បានធ្វើបច្ចុប្បន្នភាពប្រវត្តិរូប' : 'Profile updated';
+  // (`changePassword` already exists in the forgot-password section.)
+  String get currentPassword => _km ? 'លេខសម្ងាត់បច្ចុប្បន្ន' : 'Current password';
+  String get newPassword => _km ? 'លេខសម្ងាត់ថ្មី' : 'New password';
+  String get confirmNewPassword =>
+      _km ? 'បញ្ជាក់លេខសម្ងាត់ថ្មី' : 'Confirm new password';
+  String get currentPasswordRequired => _km
+      ? 'តម្រូវឲ្យបញ្ចូលលេខសម្ងាត់បច្ចុប្បន្ន ដើម្បីប្ដូរលេខសម្ងាត់'
+      : 'Enter your current password to change it';
+  String get currentPasswordWrong =>
+      _km ? 'លេខសម្ងាត់បច្ចុប្បន្នមិនត្រឹមត្រូវ' : 'Current password is incorrect';
+  String get emailNotEditable => _km
+      ? 'អ៊ីមែលមិនអាចប្ដូរបានទេ សូមទាក់ទងអ្នកគ្រប់គ្រង'
+      : 'Email can’t be changed here — contact an admin';
+  String get nothingToSave => _km ? 'គ្មានការផ្លាស់ប្ដូរ' : 'Nothing to save';
 
   // Dashboard.
   String get adminDashboardTitle => _km ? 'ផ្ទាំងគ្រប់គ្រង' : 'Dashboard';

@@ -5,12 +5,14 @@ import '../../providers/settings_provider.dart';
 import '../../utils/constants/colors.dart';
 import '../account_screen.dart';
 import 'admin_dashboard_screen.dart';
+import 'admin_management_screen.dart';
 import 'admin_places_screen.dart';
 import 'admin_routes_screen.dart';
 
-/// Admin shell: Dashboard home, Places + Routes management, plus Account (kept
-/// for logout). Reuses the existing AccountScreen unchanged, same as the driver
-/// shell.
+/// Admin shell: Dashboard home, Places + Routes (map-driven, used constantly),
+/// a Management hub for the record-keeping screens (users, trips, buses), plus
+/// Account (kept for logout). Reuses the existing AccountScreen unchanged, same
+/// as the driver shell.
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
 
@@ -25,6 +27,7 @@ class _AdminShellState extends State<AdminShell> {
     AdminDashboardScreen(),
     AdminPlacesScreen(),
     AdminRoutesScreen(),
+    AdminManagementScreen(),
     AccountScreen(),
   ];
 
@@ -57,6 +60,11 @@ class _AdminShellState extends State<AdminShell> {
             icon: const Icon(Icons.route_outlined),
             activeIcon: const Icon(Icons.route),
             label: t.routesTab,
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.tune_outlined),
+            activeIcon: const Icon(Icons.tune),
+            label: t.managementTab,
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.person_outline),

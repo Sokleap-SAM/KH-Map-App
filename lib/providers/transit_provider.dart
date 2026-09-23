@@ -281,11 +281,6 @@ class TransitProvider extends ChangeNotifier {
     await refresh();
   }
 
-  Future<void> advanceTrip(String id) async {
-    await _service.advanceTrip(id);
-    await refresh();
-  }
-
   @override
   void dispose() {
     _metadataTimer?.cancel();

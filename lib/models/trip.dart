@@ -1,5 +1,25 @@
 import 'package:latlong2/latlong.dart';
 
+/// Lifecycle states of a trip (`TripStatus`).
+class TripStatuses {
+  static const String scheduled = 'scheduled';
+  static const String inProgress = 'in-progress';
+  static const String completed = 'completed';
+  static const String cancelled = 'cancelled';
+
+  static const List<String> all = [
+    scheduled,
+    inProgress,
+    completed,
+    cancelled,
+  ];
+
+  /// The two states `/transit/trips/active` returns.
+  static const List<String> active = [scheduled, inProgress];
+
+  const TripStatuses._();
+}
+
 class Trip {
   final String id;
   final String routeId;
@@ -34,6 +54,23 @@ class Trip {
   /// re-derives ETA locally via [etaToNextStopSeconds].
   final int? etaSeconds;
 
+  // ── Admin/management fields ───────────────────────────────────────────────
+  // Unused by the rider map; read by the admin trip screens.
+
+  final String? busLicensePlate;
+
+  /// Stamped only when a driver *starts* the trip, so it stays null on a
+  /// scheduled trip even when the bus has a driver.
+  final String? driverId;
+
+  /// The bus's assigned driver — who *will* drive this trip. For a scheduled
+  /// trip this is the only link that exists; [driverId] is still null.
+  final String? busAssignedDriverId;
+
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final DateTime? createdAt;
+
   Trip({
     required this.id,
     required this.routeId,
@@ -56,6 +93,12 @@ class Trip {
     this.recordedAt,
     this.notDepartingUntilMs,
     this.etaSeconds,
+    this.busLicensePlate,
+    this.driverId,
+    this.busAssignedDriverId,
+    this.startedAt,
+    this.completedAt,
+    this.createdAt,
   });
 
   Trip copyWith({
@@ -90,6 +133,14 @@ class Trip {
       recordedAt: recordedAt ?? this.recordedAt,
       notDepartingUntilMs: notDepartingUntilMs ?? this.notDepartingUntilMs,
       etaSeconds: etaSeconds ?? this.etaSeconds,
+      // Not patchable by MQTT, but must be carried forward — this runs on every
+      // position message, and anything omitted here is silently dropped.
+      busLicensePlate: busLicensePlate,
+      driverId: driverId,
+      busAssignedDriverId: busAssignedDriverId,
+      startedAt: startedAt,
+      completedAt: completedAt,
+      createdAt: createdAt,
     );
   }
 
@@ -121,11 +172,29 @@ class Trip {
     final busRaw = json['bus'];
     String busId;
     String? busNumberFromObj;
+    String? busLicensePlate;
+    String? busAssignedDriverId;
     if (busRaw is Map) {
       busId = busRaw['_id'] as String? ?? '';
       busNumberFromObj = busRaw['busNumber'] as String?;
+      busLicensePlate = busRaw['licensePlate'] as String?;
+      final assigned = busRaw['assignedDriverId'];
+      busAssignedDriverId = assigned is Map
+          ? assigned['_id'] as String?
+          : assigned as String?;
     } else {
       busId = busRaw as String? ?? '';
+    }
+
+    // Stamped only when a driver starts the trip; may be expanded or a bare id.
+    final driverRaw = json['driver'];
+    final driverId = driverRaw is Map
+        ? driverRaw['_id'] as String?
+        : driverRaw as String?;
+
+    DateTime? parseDate(String key) {
+      final raw = json[key] as String?;
+      return raw == null ? null : DateTime.tryParse(raw);
     }
 
     LatLng? currentLocation;
@@ -163,6 +232,12 @@ class Trip {
       allStops: List<String>.from(json['allStops'] ?? []),
       notDepartingUntilMs: (json['notDepartingUntilMs'] as num?)?.toInt(),
       etaSeconds: (json['etaSeconds'] as num?)?.toInt(),
+      busLicensePlate: busLicensePlate,
+      driverId: driverId,
+      busAssignedDriverId: busAssignedDriverId,
+      startedAt: parseDate('startedAt'),
+      completedAt: parseDate('completedAt'),
+      createdAt: parseDate('createdAt'),
     );
   }
 
