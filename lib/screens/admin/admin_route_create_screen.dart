@@ -159,7 +159,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
 
   Future<void> _loadPlaces() async {
     try {
-      final places = await AdminService().fetchPlaces();
+      final places = await AdminService().fetchStops();
       if (!mounted) return;
       setState(() {
         _places = places;
@@ -181,9 +181,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
 
   void _doneMetadata() {
     if (_nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t.routeNameRequired)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_t.routeNameRequired)));
       return;
     }
     setState(() => _step = 2);
@@ -195,9 +195,11 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
     if (_filter.isEmpty) return _places;
     final q = _filter.toLowerCase();
     return _places
-        .where((p) =>
-            p.nameInKhmer.toLowerCase().contains(q) ||
-            p.nameInLatin.toLowerCase().contains(q))
+        .where(
+          (p) =>
+              p.nameInKhmer.toLowerCase().contains(q) ||
+              p.nameInLatin.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -219,9 +221,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
 
   void _doneSequence() {
     if (_sequence.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t.pickAtLeastOneStop)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_t.pickAtLeastOneStop)));
       return;
     }
     final lang = context.read<SettingsProvider>().languageCode;
@@ -370,9 +372,7 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            widget.isAppend ? _t.stopsAppended : _t.routeCreated,
-          ),
+          content: Text(widget.isAppend ? _t.stopsAppended : _t.routeCreated),
         ),
       );
       Navigator.of(context).pop(routeId);
@@ -551,8 +551,9 @@ class _AdminRouteCreateScreenState extends State<AdminRouteCreateScreen> {
                         child: Text(
                           t.directionPairingNote,
                           style: TextStyle(
-                              fontSize: 11,
-                              color: context.palette.textFaint),
+                            fontSize: 11,
+                            color: context.palette.textFaint,
+                          ),
                         ),
                       ),
                     ],

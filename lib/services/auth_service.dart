@@ -6,7 +6,13 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Outcome of a "Continue with Google" attempt, so the UI can tell a real
+/// failure apart from the user simply dismissing the Google prompt.
 enum GoogleAuthOutcome { success, cancelled, failed }
+
+/// Outcome of an email/password login. [unverified] means the account exists
+/// but its email was never confirmed (backend 401 + `UNVERIFIED_ACCOUNT`), so
+/// the UI should route to the OTP verification screen rather than error out.
 enum LoginResult { success, unverified, failed }
 
 class AuthService {
@@ -150,6 +156,8 @@ class AuthService {
     }
   }
 
+  // Exchange a Firebase ID token for the app's JWT. Stores the returned
+  // access_token exactly like [login] so the rest of the app is unchanged.
   Future<bool> firebaseLogin(String idToken) async {
     final url = Uri.parse("$baseUrl/users/firebase-login");
     final response = await http.post(

@@ -96,7 +96,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
     final p = context.palette;
-
     return Scaffold(
       backgroundColor: p.scaffold,
       appBar: AppBar(

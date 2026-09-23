@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/providers/settings_provider.dart';
 import 'package:kh_map_app/screens/login_screen.dart';
+import 'package:kh_map_app/screens/profile_edit_screen.dart';
 import 'package:kh_map_app/services/auth_service.dart';
 import 'package:kh_map_app/utils/constants/colors.dart';
 import 'package:kh_map_app/utils/constants/image_strings.dart';
@@ -192,7 +193,9 @@ class _AccountScreenState extends State<AccountScreen> {
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                const SizedBox(height: 25),
+                                const SizedBox(height: 15),
+                                _buildEditProfileButton(settings.t),
+                                const SizedBox(height: 15),
                                 _buildLogoutButton(settings.t),
                               ],
 
@@ -357,6 +360,40 @@ class _AccountScreenState extends State<AccountScreen> {
         child: Text(
           t.login,
           style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  /// Opens the self-service profile editor. Re-fetches on return so a changed
+  /// name shows immediately instead of after the next app start.
+  Widget _buildEditProfileButton(AppTexts t) {
+    return GestureDetector(
+      onTap: () async {
+        final saved = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => const ProfileEditScreen()),
+        );
+        if (saved == true) _fetchProfile();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFAAB8DA),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              t.editProfile,
+              style: const TextStyle(
+                color: Colors.black87,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Icon(Icons.edit, size: 18, color: Colors.black87),
+          ],
         ),
       ),
     );

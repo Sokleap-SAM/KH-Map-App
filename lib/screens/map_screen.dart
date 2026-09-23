@@ -58,6 +58,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   double _currentZoom = 13.0;
+
   /// While true, the next map tap sets a simulated "current location" for
   /// testing the route planner instead of dropping a pin.
   bool _simulatePickMode = false;
@@ -94,8 +95,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       return;
     }
     _lastMqttRoutes = routes;
-    (_transitProvider ?? context.read<TransitProvider>())
-        .setSubscribedRoutes(routes);
+    (_transitProvider ?? context.read<TransitProvider>()).setSubscribedRoutes(
+      routes,
+    );
   }
 
   // Feed live bus positions into MapProvider on every MQTT tick (co-location
@@ -431,8 +433,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   void _showPlaceDetail(BuildContext context, Place place) {
     final String cat = (place.category?.name ?? '').toLowerCase();
     // Scan both names so the check works in either language.
-    final String name =
-        '${place.nameInKhmer} ${place.nameInLatin}'.toLowerCase();
+    final String name = '${place.nameInKhmer} ${place.nameInLatin}'
+        .toLowerCase();
 
     // Extremely robust check: covers categories or names containing 'bus' or 'stop'
     if (cat.contains('bus') ||
@@ -554,8 +556,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             return Container(
               decoration: BoxDecoration(
                 color: p.surface,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(32)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(32),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -661,7 +664,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 Center(
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(
-                                        vertical: 40),
+                                      vertical: 40,
+                                    ),
                                     child: Text(
                                       "No active buses at this stop",
                                       style: TextStyle(
@@ -744,10 +748,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         child: Center(
           child: Text(
             trip.routeNumber ?? '?',
-            style: TextStyle(
-              color: p.textPrimary,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.bold),
           ),
         ),
       ),
@@ -759,11 +760,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         "To: ${trip.direction}",
         style: TextStyle(color: p.textFaint, fontSize: 11),
       ),
-      trailing: Icon(
-        Icons.arrow_forward_ios,
-        color: p.textFaintest,
-        size: 14,
-      ),
+      trailing: Icon(Icons.arrow_forward_ios, color: p.textFaintest, size: 14),
       onTap: () {
         Navigator.pop(context);
         _showBusDetails(trip);
@@ -1058,10 +1055,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           ),
                           subtitle: Text(
                             route.name ?? '',
-                            style: TextStyle(
-                              color: p.textFaint,
-                              fontSize: 11,
-                            ),
+                            style: TextStyle(color: p.textFaint, fontSize: 11),
                           ),
                           value: isSelected,
                           onChanged: (val) {
@@ -1116,8 +1110,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             return Container(
               decoration: BoxDecoration(
                 color: p.surface,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(28)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
               ),
               child: Column(
                 children: [
@@ -1188,10 +1183,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     size: 20,
                   ),
                   const SizedBox(width: 15),
-                  Text(
-                    tx.startColon,
-                    style: TextStyle(color: p.textSecondary),
-                  ),
+                  Text(tx.startColon, style: TextStyle(color: p.textSecondary)),
                   Expanded(
                     child: Text(
                       trip.allStops.first,
@@ -1809,37 +1801,37 @@ class _TripStopsListState extends State<TripStopsList> {
     super.dispose();
   }
 
-  double _calculateSegmentProgress(Trip trip, List<String> allStops) {
-    if (trip.currentLocation == null || trip.nextStopIndex <= 0) return 0.0;
+  // double _calculateSegmentProgress(Trip trip, List<String> allStops) {
+  //   if (trip.currentLocation == null || trip.nextStopIndex <= 0) return 0.0;
 
-    // We need the coordinates of the previous stop and the next stop
-    // Since we only have names in 'allStops', we should look at the
-    // 'routeStops' from the provider to get LatLngs.
-    final provider = context.read<TransitProvider>();
-    final stops = provider.routeStops[trip.routeId] ?? [];
+  //   // We need the coordinates of the previous stop and the next stop
+  //   // Since we only have names in 'allStops', we should look at the
+  //   // 'routeStops' from the provider to get LatLngs.
+  //   final provider = context.read<TransitProvider>();
+  //   final stops = provider.routeStops[trip.routeId] ?? [];
 
-    if (stops.length <= trip.nextStopIndex) return 0.0;
+  //   if (stops.length <= trip.nextStopIndex) return 0.0;
 
-    final LatLng prevStopLoc = stops[trip.nextStopIndex - 1].location;
-    final LatLng nextStopLoc = stops[trip.nextStopIndex].location;
-    final LatLng busLoc = trip.currentLocation!;
+  //   final LatLng prevStopLoc = stops[trip.nextStopIndex - 1].location;
+  //   final LatLng nextStopLoc = stops[trip.nextStopIndex].location;
+  //   final LatLng busLoc = trip.currentLocation!;
 
-    final Distance distance = const Distance();
+  //   final Distance distance = const Distance();
 
-    double totalSegmentDist = distance.as(
-      LengthUnit.Meter,
-      prevStopLoc,
-      nextStopLoc,
-    );
-    double busDistFromStart = distance.as(
-      LengthUnit.Meter,
-      prevStopLoc,
-      busLoc,
-    );
+  //   double totalSegmentDist = distance.as(
+  //     LengthUnit.Meter,
+  //     prevStopLoc,
+  //     nextStopLoc,
+  //   );
+  //   double busDistFromStart = distance.as(
+  //     LengthUnit.Meter,
+  //     prevStopLoc,
+  //     busLoc,
+  //   );
 
-    if (totalSegmentDist == 0) return 0.0;
-    return (busDistFromStart / totalSegmentDist).clamp(0.0, 1.0);
-  }
+  //   if (totalSegmentDist == 0) return 0.0;
+  //   return (busDistFromStart / totalSegmentDist).clamp(0.0, 1.0);
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -2360,10 +2352,7 @@ class _InfoBox extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(color: p.textFaint, fontSize: 10),
-          ),
+          Text(label, style: TextStyle(color: p.textFaint, fontSize: 10)),
           const SizedBox(height: 5),
           content,
         ],
@@ -2444,7 +2433,7 @@ class _DrivingBusConnectorState extends State<DrivingBusConnector>
               // The Track (Static Blue Line)
               Container(
                 width: 2.5,
-                color: const Color(0xFF1976D2).withOpacity(0.3),
+                color: const Color(0xFF1976D2).withAlpha(77), // 0.3 * 255
               ),
 
               // The Moving Bus
@@ -2487,7 +2476,8 @@ class LiveSimulationConnector extends StatefulWidget {
   });
 
   @override
-  State<LiveSimulationConnector> createState() => _LiveSimulationConnectorState();
+  State<LiveSimulationConnector> createState() =>
+      _LiveSimulationConnectorState();
 }
 
 class _LiveSimulationConnectorState extends State<LiveSimulationConnector>
@@ -2511,7 +2501,9 @@ class _LiveSimulationConnectorState extends State<LiveSimulationConnector>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.isPassed) return Container(width: 2.5, color: const Color(0xFF1976D2));
+    if (widget.isPassed) {
+      return Container(width: 2.5, color: const Color(0xFF1976D2));
+    }
     if (!widget.isLoading) return Container(width: 2, color: Colors.white10);
 
     return Stack(
@@ -2536,13 +2528,19 @@ class _LiveSimulationConnectorState extends State<LiveSimulationConnector>
                   border: Border.all(color: Colors.white, width: 1.5),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.blue.withOpacity(0.4 * _pulseController.value),
+                      color: Colors.blue.withAlpha(
+                        (0.4 * _pulseController.value * 255).round(),
+                      ),
                       blurRadius: 8 * _pulseController.value,
                       spreadRadius: 4 * _pulseController.value,
-                    )
+                    ),
                   ],
                 ),
-                child: const Icon(Icons.directions_bus, size: 10, color: Colors.white),
+                child: const Icon(
+                  Icons.directions_bus,
+                  size: 10,
+                  color: Colors.white,
+                ),
               ),
             );
           },

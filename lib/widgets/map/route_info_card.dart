@@ -1516,6 +1516,9 @@ class _UpcomingBuses extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
+        // Top-aligned: when the ETA group wraps onto two lines, the bus label
+        // stays level with the ETA line instead of floating between them.
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(Icons.directions_bus, size: 14, color: color),
           const SizedBox(width: 8),
@@ -1523,22 +1526,40 @@ class _UpcomingBuses extends StatelessWidget {
             t.busNumber(index),
             style: TextStyle(color: p.textSecondary, fontSize: 12),
           ),
-          const Spacer(),
-          Text(
-            urgent ? t.busArrivingNow : t.minutesApprox(minutes),
-            style: TextStyle(
-              color: color,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
+          const SizedBox(width: 8),
+          // The ETA group takes whatever width is left and wraps rather than
+          // overflowing. Khmer strings run far wider than English
+          // ("នៅ 13 ចំណតទៀត" vs "13 stops away"), so on a narrow phone the
+          // stops-away text drops under the ETA; where it fits, the row stays
+          // on one line. The ETA comes first, so it's never the part that moves.
+          Expanded(
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 2,
+              children: [
+                Text(
+                  urgent ? t.busArrivingNow : t.minutesApprox(minutes),
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (stopsAway != null)
+                  Text(
+                    t.stopsAway(stopsAway),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color.withAlpha(200),
+                      fontSize: 12,
+                    ),
+                  ),
+              ],
             ),
           ),
-          if (stopsAway != null) ...[
-            const SizedBox(width: 8),
-            Text(
-              t.stopsAway(stopsAway),
-              style: TextStyle(color: color.withAlpha(200), fontSize: 12),
-            ),
-          ],
         ],
       ),
     );

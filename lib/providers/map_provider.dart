@@ -1086,6 +1086,7 @@ class MapProvider extends ChangeNotifier {
   Trip? _resolveLiveTrip(RouteSegment leg) {
     final routeId = leg.route?.id;
     if (routeId == null || _liveTrips.isEmpty) return null;
+    final boardIdx = leg.boardAt?.stopIndex;
     final alightIdx = leg.alightAt?.stopIndex;
     final locked = _boardedTripId;
     if (locked != null) {
@@ -1097,9 +1098,20 @@ class MapProvider extends ChangeNotifier {
     for (final t in _liveTrips) {
       if (t.routeId != routeId) continue;
       if (alightIdx != null && t.currentStopIndex > alightIdx) continue;
+      // A bus that has already left the board stop is uncatchable — it must not
+      // drive the "arrives in" ETA. Only buses at or approaching the board stop
+      // count; among those, the one furthest along arrives soonest.
+      if (boardIdx != null && t.currentStopIndex > boardIdx) continue;
       if (best == null || t.currentStopIndex > best.currentStopIndex) best = t;
     }
     return best;
+  }
+
+  Trip? _tripById(String id) {
+    for (final t in _liveTrips) {
+      if (t.id == id) return t;
+    }
+    return null;
   }
 
   String _busLegKey(RouteSegment leg) =>
@@ -1143,31 +1155,52 @@ class MapProvider extends ChangeNotifier {
       _pastAlightSince = null;
     }
 
+    final routeId = leg.route?.id;
     final boardIdx = leg.boardAt?.stopIndex;
+    final alightIdx = leg.alightAt?.stopIndex;
     final boardCoord = leg.boardAt?.coordinates;
     if (boardCoord != null &&
         _distance(pos, boardCoord) <= _boardProximityMeters) {
       _reachedBoardStop = true;
     }
 
-    final trip = _resolveLiveTrip(leg);
-    final busPos = trip?.currentLocation;
-    _userBusMeters = busPos == null ? null : _distance(pos, busPos);
-
-    if (trip != null && busPos != null && boardIdx != null) {
-      final coLocated = _userBusMeters! <= _coLocationMeters;
-      final boarded = _boardedTripId == trip.id;
-      final busLeftBoard = trip.currentStopIndex > boardIdx;
-      if (coLocated &&
-          (busLeftBoard || boarded) &&
-          (_reachedBoardStop || boarded)) {
-        _boardedTripId = trip.id; // lock onto the exact bus the user boarded
-        return RoutePhase.riding;
-      }
-      return RoutePhase.waiting;
+    // Already boarded → stay on the locked trip until the leg changes or the
+    // missed-alight recovery fires.
+    if (_boardedTripId != null) {
+      final bp = _tripById(_boardedTripId!)?.currentLocation;
+      _userBusMeters = bp == null ? null : _distance(pos, bp);
+      return RoutePhase.riding;
     }
 
-    // No live bus for this leg — fall back to the road-projection heuristic.
+    // Boarding: the user is aboard once they're co-located with an on-route bus
+    // that has *left* the board stop (but not passed alight) — it pulled away
+    // with them. Scanned directly (not via [_resolveLiveTrip], which ignores
+    // departed buses) so the moment of departure is caught.
+    if (routeId != null && boardIdx != null && _reachedBoardStop) {
+      for (final t in _liveTrips) {
+        if (t.routeId != routeId) continue;
+        final bp = t.currentLocation;
+        if (bp == null) continue;
+        final leftBoard = t.currentStopIndex > boardIdx;
+        final beforeAlight =
+            alightIdx == null || t.currentStopIndex <= alightIdx;
+        if (leftBoard && beforeAlight && _distance(pos, bp) <= _coLocationMeters) {
+          _boardedTripId = t.id;
+          _userBusMeters = _distance(pos, bp);
+          return RoutePhase.riding;
+        }
+      }
+    }
+
+    // Not aboard → track the next *catchable* bus for the live ETA. A bus that
+    // has already left the board stop is excluded, so a departed bus can never
+    // show as "arriving".
+    final next = _resolveLiveTrip(leg);
+    final np = next?.currentLocation;
+    _userBusMeters = np == null ? null : _distance(pos, np);
+    if (next != null) return RoutePhase.waiting;
+
+    // No live bus for this leg — fall back to the GPS-on-road heuristic.
     return fraction < 0.02 ? RoutePhase.waiting : RoutePhase.riding;
   }
 
