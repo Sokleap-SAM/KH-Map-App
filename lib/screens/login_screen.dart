@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:kh_map_app/providers/settings_provider.dart';
-import 'package:kh_map_app/utils/theme/app_palette.dart';
-import 'package:provider/provider.dart';
-import '../services/auth_service.dart';
 import 'package:kh_map_app/screens/forgot_password_screen.dart';
 import 'package:kh_map_app/screens/verification_screen.dart';
+import 'package:kh_map_app/services/auth_service.dart';
 import 'package:kh_map_app/utils/constants/image_strings.dart';
+import 'package:kh_map_app/utils/theme/app_palette.dart';
+import 'package:provider/provider.dart';
+import 'dart:convert';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,79 +17,100 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final AuthService _authService = AuthService();
-  final TextEditingController confirmPasswordController =
-      TextEditingController();
+
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController confirmPasswordController = TextEditingController();
+
   bool _isLoading = false;
   bool isLoginMode = true;
 
+  @override
+  void dispose() {
+    nameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // SUBMIT HANDLER (LOGIN / REGISTER)
+  // ---------------------------------------------------------------------------
   void _handleSubmit() async {
     final t = context.read<SettingsProvider>().t;
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+    final name = nameController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showError('Please enter both email and password.');
+      return;
+    }
+
     if (!isLoginMode) {
-      if (passwordController.text != confirmPasswordController.text) {
+      if (name.isEmpty) {
+        _showError('Please enter your name.');
+        return;
+      }
+      if (password != confirmPasswordController.text.trim()) {
         _showError(t.passwordsDoNotMatch);
         return;
       }
     }
+
     setState(() => _isLoading = true);
 
     try {
       if (isLoginMode) {
-        final result = await _authService.login(
-          emailController.text,
-          passwordController.text,
-        );
+        // --- LOGIN MODE ---
+        final result = await _authService.login(email, password);
         if (!mounted) return;
 
         if (result == LoginResult.success) {
-          Navigator.pop(context, true);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(t.loginSuccess)));
+          _finishAuth(t.loginSuccess);
         } else if (result == LoginResult.unverified) {
-          // Account exists but the email was never verified — route to the OTP
-          // screen, then finish signing in once verified.
+          // Unverified account — route to OTP verification
           final ok = await _verifyThenLogin();
           if (!mounted) return;
-          if (ok) _finishAuth();
+          if (ok) _finishAuth(t.success);
         } else {
-          // No account (or wrong credentials) — fall back to registering.
-          final response = await _authService.register(
-            nameController.text,
-            emailController.text,
-            passwordController.text,
-          );
-          if (!mounted) return;
-
-          if (response.statusCode == 201) {
-            final ok = await _verifyThenLogin();
-            if (!mounted) return;
-            if (ok) {
-              _finishAuth();
-            } else {
-              setState(() => isLoginMode = true);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(t.registerSuccess)),
-              );
-            }
-          } else {
-            _showError(t.registerFailedEmailExists);
-          }
+          // Show explicit login failure without auto-registering
+          _showError('Invalid email or password.');
         }
       } else {
-        final response = await _authService.register(
-          nameController.text,
-          emailController.text,
-          passwordController.text,
-        );
+        // --- REGISTER MODE ---
+        final response = await _authService.register(name, email, password);
         if (!mounted) return;
 
-        if (response.statusCode == 201) {
-          // New account created — make them verify the email (OTP) before login.
+        if (response.statusCode == 201 || response.statusCode == 200) {
           final ok = await _verifyThenLogin();
           if (!mounted) return;
-          if (ok) _finishAuth();
+          if (ok) {
+            _finishAuth(t.success);
+          } else {
+            setState(() => isLoginMode = true);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(t.registerSuccess)),
+            );
+          }
         } else {
-          _showError(t.registerFailed);
+          String errorMessage = t.registerFailed;
+        try {
+          final body = jsonDecode(response.body);
+          if (body['message'] != null) {
+            if (body['message'] is List) {
+              // Joins multiple validation errors into a clean string
+              errorMessage = (body['message'] as List).join('\n');
+            } else {
+              errorMessage = body['message'].toString();
+            }
+          }
+        } catch (_) {
+            errorMessage = 'Error (${response.statusCode}): ${response.body}';
+          }
+          _showError(errorMessage);
         }
       }
     } catch (e) {
@@ -99,31 +121,29 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _finishAuth() {
-    Navigator.pop(
-      context,
-      true,
-    ); // Returns 'true' to AccountScreen to fetch profile
+  // ---------------------------------------------------------------------------
+  // HELPER METHODS
+  // ---------------------------------------------------------------------------
+  void _finishAuth(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.read<SettingsProvider>().t.success)),
+      SnackBar(content: Text(message)),
     );
+    Navigator.pop(context, true);
   }
 
-  // After a successful email/password register, make the user verify the email
-  // via the OTP screen, then sign them in. Returns true only when the email was
-  // verified AND the subsequent login succeeded.
   Future<bool> _verifyThenLogin() async {
     if (!mounted) return false;
     final verified = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => VerificationScreen(email: emailController.text),
+        builder: (context) => VerificationScreen(email: emailController.text.trim()),
       ),
     );
     if (verified != true || !mounted) return false;
+
     final result = await _authService.login(
-      emailController.text,
-      passwordController.text,
+      emailController.text.trim(),
+      passwordController.text.trim(),
     );
     return result == LoginResult.success;
   }
@@ -132,8 +152,9 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // Google 1-click: Firebase sign-in → exchange for app JWT. Same success path
-  // as email/password login (pop back to AccountScreen with `true`).
+  // ---------------------------------------------------------------------------
+  // GOOGLE SIGN-IN
+  // ---------------------------------------------------------------------------
   void _handleGoogleSignIn() async {
     final t = context.read<SettingsProvider>().t;
     setState(() => _isLoading = true);
@@ -142,12 +163,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       switch (outcome) {
         case GoogleAuthOutcome.success:
-          Navigator.pop(context, true);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(t.loginSuccess)));
+          _finishAuth(t.loginSuccess);
         case GoogleAuthOutcome.cancelled:
-          break; // User backed out — stay on the screen, say nothing.
+          break;
         case GoogleAuthOutcome.failed:
           _showError(t.googleSignInFailed);
       }
@@ -156,15 +174,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Controllers to get the text from inputs
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-
+  // ---------------------------------------------------------------------------
+  // BUILD UI
+  // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().t;
     final p = context.palette;
+
     return Scaffold(
       backgroundColor: p.scaffold,
       appBar: AppBar(
@@ -172,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios, color: p.textPrimary),
-          onPressed: () => Navigator.pop(context), // Go back to Account Screen
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SingleChildScrollView(
@@ -195,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 40),
 
-            // 1. Name Field (Only shows during Registration)
+            // 1. Name Field (Only in Registration)
             if (!isLoginMode) ...[
               _buildTextField(
                 controller: nameController,
@@ -230,6 +247,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 isPassword: true,
               ),
             ],
+
+            // Forgot Password Link
             if (isLoginMode)
               Align(
                 alignment: Alignment.centerRight,
@@ -250,14 +269,12 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             const SizedBox(height: 40),
 
-            // 4. Main Button
+            // 4. Main Submit Button
             SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                onPressed: () {
-                  _isLoading ? null : _handleSubmit();
-                },
+                onPressed: _isLoading ? null : _handleSubmit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF91A5D4),
                   foregroundColor: Colors.black,
@@ -265,19 +282,21 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderRadius: BorderRadius.circular(15),
                   ),
                 ),
-                child: Text(
-                  isLoginMode ? t.signIn : t.signUp,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.black)
+                    : Text(
+                        isLoginMode ? t.signIn : t.signUp,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ),
 
             const SizedBox(height: 20),
 
-            // 5. "or" divider
+            // 5. "or" Divider
             Row(
               children: [
                 Expanded(child: Divider(color: p.divider)),
@@ -293,7 +312,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 20),
 
-            // 6. Continue with Google (Firebase 1-click)
+            // 6. Google Sign-In Button
             SizedBox(
               width: double.infinity,
               height: 55,
@@ -326,7 +345,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
             const SizedBox(height: 20),
 
-            // 7. Toggle Switch
+            // 7. Toggle Mode Button
             Center(
               child: TextButton(
                 onPressed: () {
@@ -346,7 +365,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Helper function to create clean text fields
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,

@@ -23,6 +23,7 @@ dependencies:
   mqtt_client: ^10.5.1
   firebase_core: ^4.12.1
   firebase_auth: ^6.5.6
+  google_sign_in: ^6.2.1
 
 dev_dependencies:
   flutter_test:
