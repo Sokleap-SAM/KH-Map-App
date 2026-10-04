@@ -158,6 +158,10 @@ class _AdminBusesScreenState extends State<AdminBusesScreen> {
 
   void _handlePosition(BusPosition pos) {
     if (!mounted) return;
+    // Retained messages can replay the last fix of a long-finished trip.
+    if (DateTime.now().difference(pos.recordedAt) > const Duration(minutes: 2)) {
+      return;
+    }
     _livePositions[pos.busId] = pos.location;
     // Coalesce the burst into one repaint.
     if (_repaintThrottle?.isActive ?? false) return;
@@ -169,9 +173,11 @@ class _AdminBusesScreenState extends State<AdminBusesScreen> {
   /// Where to draw [bus]: the freshest live fix, else the trip's HTTP snapshot,
   /// else nowhere (no active trip, or no position reported yet).
   LatLng? _locationFor(Bus bus) {
-    final live = _livePositions[bus.id];
-    if (live != null) return live;
-    return _activeTripFor(bus)?.currentLocation;
+    // The active-trips list is the authority on what's live — a cached MQTT
+    // fix for a bus whose trip ended must not keep it on the map.
+    final trip = _activeTripFor(bus);
+    if (trip == null) return null;
+    return _livePositions[bus.id] ?? trip.currentLocation;
   }
 
   Trip? _activeTripFor(Bus bus) {

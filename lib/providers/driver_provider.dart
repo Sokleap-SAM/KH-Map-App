@@ -29,7 +29,7 @@ class DriverProvider extends ChangeNotifier {
   DriverProvider({DriverService? service, TransitService? transit})
     : _service = service ?? DriverService(),
       _transit = transit ?? TransitService() {
-    _mqtt = DriverMqttPublisher(onAuthFailure: _onMqttAuthFailure);
+    _mqtt = DriverMqttPublisher();
     _locationPub = DriverLocationPublisher(publisher: _mqtt);
   }
 
@@ -302,7 +302,9 @@ class DriverProvider extends ChangeNotifier {
     try {
       await _mqtt.connect(creds);
     } on DriverMqttAuthFailure {
-      // Rotate creds once and try again.
+      // Rotate creds once and try again. This is the ONLY place that
+      // re-issues on failure: every call to the credentials endpoint
+      // invalidates the previous password, so a second fetcher would fight it.
       final fresh = await _fetchAndCacheCreds();
       if (fresh != null) {
         try {
@@ -344,14 +346,6 @@ class DriverProvider extends ChangeNotifier {
 
   Future<void> loadCachedCredentials() async {
     await _loadCachedCreds();
-  }
-
-  void _onMqttAuthFailure() {
-    // Fired from inside the publisher's connect path; defer the credential
-    // rotation so we don't re-enter connect synchronously.
-    Future.microtask(() async {
-      await _fetchAndCacheCreds();
-    });
   }
 
   Future<void> _startPublishLoop() async {

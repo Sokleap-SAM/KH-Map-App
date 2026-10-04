@@ -2254,8 +2254,16 @@ class _LiveEtaBoxState extends State<_LiveEtaBox> {
     }
   }
 
-  void _onDetail(Map<String, dynamic> json) {
+  void _onDetail(Map<String, dynamic>? json) {
     if (!mounted) return;
+    if (json == null) {
+      // Trip ended — drop the stale snapshot instead of showing its ETA.
+      setState(() {
+        _snapshot = null;
+        _snapshotLoaded = true;
+      });
+      return;
+    }
     try {
       final snap = TripEtaSnapshot.fromJson(json);
       setState(() {

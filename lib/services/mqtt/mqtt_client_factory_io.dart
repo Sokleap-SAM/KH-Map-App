@@ -7,6 +7,11 @@ import 'package:mqtt_client/mqtt_server_client.dart';
 /// concatenating `host` and `port`. The scheme (`ws://` or `wss://`) MUST be
 /// embedded in the host string — passing a bare hostname yields a malformed
 /// URL like `10.0.2.2:9001` and the WebSocket handshake fails.
+///
+/// Never set `client.secure` here: in `MqttServerClient.connect` it overrides
+/// `useWebSocket` and switches to raw TLS over TCP, which then tries to
+/// resolve `wss://host` as a hostname and fails. TLS for `wss://` comes from
+/// the scheme alone.
 MqttClient createMqttClient(String url, String clientId) {
   final uri = Uri.parse(url);
   final scheme = uri.scheme.isEmpty ? 'ws' : uri.scheme.toLowerCase();
@@ -16,7 +21,6 @@ MqttClient createMqttClient(String url, String clientId) {
 
   final client = MqttServerClient.withPort(host, clientId, port);
   client.useWebSocket = true;
-  client.secure = scheme == 'wss';
   client.websocketProtocols = MqttClientConstants.protocolsSingleDefault;
   client.logging(on: false);
   return client;
