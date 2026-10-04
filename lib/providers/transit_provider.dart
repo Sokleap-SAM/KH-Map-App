@@ -46,6 +46,12 @@ class TransitProvider extends ChangeNotifier {
   static const Duration _staleCheckInterval = Duration(seconds: 2);
   static const Duration _staleAfter = Duration(seconds: 10);
 
+  /// Retained messages replay the last position of trips that may have ended
+  /// long ago. Ignore positions older than this (by server `recordedAt`).
+  /// Kept generous so a device clock that's off by a bit doesn't drop live
+  /// buses — `/transit/trips/active` stays the authority on what's live.
+  static const Duration _retainedMaxAge = Duration(minutes: 2);
+
   // ── Line routes / stops / colors ──────────────────────────────────────────
   // Routes carry their own `color` field now; this is only the fallback for
   // legacy routes that have no color set.
@@ -225,13 +231,20 @@ class TransitProvider extends ChangeNotifier {
     }
 
     for (final id in toAdd) {
-      _routeSubs[id] = _mqtt.subscribeToRoute(id, _handlePosition);
+      _routeSubs[id] = _mqtt.subscribeToRoute(
+        id,
+        _handlePosition,
+        // A trip on this route ended (retained message cleared). The topic
+        // has no tripId, so let the active-trips list decide what to drop.
+        onCleared: _maybeRequestMetadataRefresh,
+      );
     }
 
     if (toAdd.isNotEmpty || toRemove.isNotEmpty) notifyListeners();
   }
 
   void _handlePosition(BusPosition pos) {
+    if (DateTime.now().difference(pos.recordedAt) > _retainedMaxAge) return;
     final idx = _trips.indexWhere((t) => t.id == pos.tripId);
     if (idx == -1) {
       // First time we've heard about this trip — debounce a metadata
